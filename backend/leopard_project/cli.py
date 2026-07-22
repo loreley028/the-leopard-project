@@ -7,6 +7,7 @@ from pathlib import Path
 
 from .config import CONFIG_DIR
 from .mappings import approve_research_version
+from .provider_validation import run_validation
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -18,6 +19,11 @@ def build_parser() -> argparse.ArgumentParser:
     approve.add_argument("--version", required=True)
     approve.add_argument("--effective-date", type=date.fromisoformat)
     approve.add_argument("--output", type=Path, help="write a new versioned preview; never updates the seed in place")
+    providers = commands.add_parser("providers")
+    provider_commands = providers.add_subparsers(dest="provider_command", required=True)
+    validate = provider_commands.add_parser("validate-live")
+    validate.add_argument("--scope", choices=("representative", "all"), default="representative")
+    validate.add_argument("--output-dir", type=Path)
     return parser
 
 
@@ -35,6 +41,10 @@ def main(argv: list[str] | None = None) -> int:
             args.output.write_text(json.dumps(approved, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
         eligible = sum(1 for row in approved["mappings"] if row["included_in_daily_job"])
         print(json.dumps({"new_version": approved["mapping_version"], "approved": 66, "daily_job_eligible": eligible}, ensure_ascii=False))
+        return 0
+    if args.command == "providers" and args.provider_command == "validate-live":
+        coverage = run_validation(scope=args.scope, output_dir=args.output_dir)
+        print(json.dumps(coverage["summary"], ensure_ascii=False, default=str))
         return 0
     return 2
 

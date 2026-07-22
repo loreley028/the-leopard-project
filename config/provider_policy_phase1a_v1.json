@@ -1,0 +1,51 @@
+{
+  "schema_version": 1,
+  "policy_version": "phase1a-v1-20260722",
+  "effective_date": "2026-07-22",
+  "provider_roles": {
+    "tushare_ths_daily": "candidate_primary",
+    "ths_public_validation": "diagnostic_provider",
+    "akshare_ths": "diagnostic_provider"
+  },
+  "production_primary_approved": false,
+  "production_primary_admission": [
+    "account_permission_verified",
+    "all_66_symbol_conversions_verified",
+    "full_live_scan_passed",
+    "five_consecutive_trading_days_dual_source_reconciled",
+    "freshness_checks_passed",
+    "field_and_unit_contract_approved"
+  ],
+  "symbol_mappings": {
+    "HSTECH": {
+      "market": "HK",
+      "ths_public_validation": "HS2083",
+      "tushare_ths_daily": "HKTECH"
+    }
+  },
+  "proxy_mappings": {
+    "hotel_catering": {
+      "canonical_sector": "酒店餐饮",
+      "provider_symbol": "881160",
+      "mapping_type": "proxy",
+      "data_status": "proxy",
+      "temporary": true,
+      "constituent_equal_weight_881161_enabled": false,
+      "replacement_rule": "future changes require a new mapping version and effective date"
+    }
+  },
+  "history_policy": {
+    "full_history_sessions": 120,
+    "short_history_status": "history_insufficient",
+    "exclude_short_history_from_full_history_rankings": true,
+    "fill_missing_history": false
+  },
+  "liquidity_policy": {
+    "amount_required": false,
+    "store_volume_separately": true,
+    "store_turnover_rate_separately": true,
+    "derive_amount": false,
+    "volume_comparison": "same_symbol_ma5_and_ma20",
+    "cross_symbol_absolute_volume_ranking": false
+  }
+}

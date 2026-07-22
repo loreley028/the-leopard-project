@@ -5,7 +5,7 @@ from decimal import Decimal
 from enum import StrEnum
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
 class MappingStatus(StrEnum):
@@ -31,6 +31,15 @@ class DataStatus(StrEnum):
     PROXY = "proxy"
     INSUFFICIENT = "insufficient_data"
     MISSING = "missing"
+    HISTORY_INSUFFICIENT = "history_insufficient"
+    STALE_SNAPSHOT = "stale_snapshot"
+    PROVIDER_ANOMALY = "provider_anomaly"
+
+
+class LiquidityStatus(StrEnum):
+    COMPLETE = "complete"
+    PARTIAL = "partial"
+    UNAVAILABLE = "unavailable"
 
 
 class Market(StrEnum):
@@ -97,12 +106,25 @@ class DailyBar(BaseModel):
     pre_close: Decimal
     change: Decimal
     pct_change: Decimal
-    volume: Decimal
-    amount: Decimal
+    volume: Decimal | None = None
+    turnover_rate: Decimal | None = None
+    amount: Decimal | None = None
+    liquidity_status: LiquidityStatus
     provider: str
     fetched_at: datetime
     source_payload_hash: str
     data_status: DataStatus = DataStatus.NORMAL
+
+    @model_validator(mode="after")
+    def validate_liquidity_status(self) -> "DailyBar":
+        expected = (
+            LiquidityStatus.COMPLETE if self.volume is not None and self.amount is not None
+            else LiquidityStatus.PARTIAL if any(value is not None for value in (self.volume, self.turnover_rate, self.amount))
+            else LiquidityStatus.UNAVAILABLE
+        )
+        if self.liquidity_status != expected:
+            raise ValueError(f"liquidity_status must be {expected.value} for available liquidity fields")
+        return self
 
 
 class IndicatorSnapshot(BaseModel):
@@ -122,6 +144,10 @@ class IndicatorSnapshot(BaseModel):
     amount_change_pct: Decimal | None = None
     amount_vs_5d_avg: Decimal | None = None
     amount_vs_20d_avg: Decimal | None = None
+    volume_vs_5d_avg: Decimal | None = None
+    volume_vs_20d_avg: Decimal | None = None
+    volume_label_5d: str | None = None
+    volume_label_20d: str | None = None
     volume_label: str | None = None
     high_20d: Decimal | None = None
     low_20d: Decimal | None = None

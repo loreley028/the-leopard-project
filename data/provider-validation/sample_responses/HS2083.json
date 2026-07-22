@@ -1,0 +1,28 @@
+{
+  "sector_name": "恒生科技",
+  "original_mapping": "HS2083",
+  "provider_symbol": "HS2083",
+  "market": "HK",
+  "provider_name": "ths_public_validation",
+  "fetched_at": "2026-07-22T05:42:44.151925+00:00",
+  "source_payload_hash": "eeb91f18e13ea9b14442a4775491ed00d93d7428b06d15e8680d4ab6af81aef7",
+  "audit": {
+    "row_count": 133,
+    "latest_trade_date": "2026-07-21",
+    "at_least_120": true,
+    "dates_sorted": true,
+    "duplicate_dates": 0,
+    "null_fields": 0,
+    "ohlc_valid": true,
+    "price_change_consistent": true,
+    "deterministic_hash": "2239e394eb01a14ff9eb9f703b55714ebb96cc977117f814f5e6141d9487661b",
+    "has_amount": false,
+    "liquidity_statuses": [
+      "partial"
+    ]
+  },
+  "field_note": "HSTECH canonical symbol; HS2083 provider symbol; amount optional and absent",
+  "primary_classification": "cross_market_special",
+  "snapshot_anomaly": null,
+  "eligible_for_normal_write": true
+}

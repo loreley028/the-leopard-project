@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from decimal import Decimal
+from datetime import date
 from typing import Iterable, Mapping, Sequence
 
 from .models import DailyBar, DataStatus, IndicatorSnapshot
@@ -37,11 +38,19 @@ def distance_from_average(value: Decimal, average: Decimal | None) -> Decimal | 
     return percent_change(value, average)
 
 
-def amount_ratio(amounts: Sequence[Decimal], sessions: int) -> Decimal | None:
-    average = moving_average(amounts, sessions)
+def optional_ratio(values: Sequence[Decimal | None], sessions: int) -> Decimal | None:
+    window = values[-sessions:]
+    if len(window) < sessions or any(value is None for value in window):
+        return None
+    complete = [value for value in window if value is not None]
+    average = moving_average(complete, sessions)
     if average in (None, Decimal("0")):
         return None
-    return amounts[-1] / average
+    return complete[-1] / average
+
+
+def amount_ratio(amounts: Sequence[Decimal | None], sessions: int) -> Decimal | None:
+    return optional_ratio(amounts, sessions)
 
 
 def classify_volume(ratio: Decimal | None, high: Decimal = Decimal("1.2"), low: Decimal = Decimal("0.8")) -> str | None:
@@ -76,6 +85,7 @@ def calculate_indicators(
     bars = tuple(sorted(bars, key=lambda bar: bar.trade_date))
     closes = [bar.close for bar in bars]
     amounts = [bar.amount for bar in bars]
+    volumes = [bar.volume for bar in bars]
     current = bars[-1]
     ma5 = moving_average(closes, 5)
     ma10 = moving_average(closes, 10)
@@ -83,9 +93,11 @@ def calculate_indicators(
     ma60 = moving_average(closes, 60)
     high_20d = max(closes[-20:]) if len(closes) >= 20 else None
     low_20d = min(closes[-20:]) if len(closes) >= 20 else None
-    ratio20 = amount_ratio(amounts, 20)
+    amount_ratio20 = amount_ratio(amounts, 20)
+    volume_ratio5 = optional_ratio(volumes, 5)
+    volume_ratio20 = optional_ratio(volumes, 20)
     crossed_above, crossed_below = crossed_ma20(closes)
-    complete = len(bars) >= 61
+    complete = len(bars) >= 120
     return IndicatorSnapshot(
         trade_date=current.trade_date,
         pct_change_1d=percent_change(current.close, current.pre_close),
@@ -99,17 +111,21 @@ def calculate_indicators(
         ma60=ma60,
         distance_ma20_pct=distance_from_average(current.close, ma20),
         distance_ma60_pct=distance_from_average(current.close, ma60),
-        amount_change_pct=percent_change(amounts[-1], amounts[-2]) if len(amounts) >= 2 else None,
+        amount_change_pct=percent_change(amounts[-1], amounts[-2]) if len(amounts) >= 2 and amounts[-1] is not None and amounts[-2] is not None else None,
         amount_vs_5d_avg=amount_ratio(amounts, 5),
-        amount_vs_20d_avg=ratio20,
-        volume_label=classify_volume(ratio20, volume_high, volume_low),
+        amount_vs_20d_avg=amount_ratio20,
+        volume_vs_5d_avg=volume_ratio5,
+        volume_vs_20d_avg=volume_ratio20,
+        volume_label_5d=classify_volume(volume_ratio5, volume_high, volume_low),
+        volume_label_20d=classify_volume(volume_ratio20, volume_high, volume_low),
+        volume_label=classify_volume(volume_ratio20, volume_high, volume_low),
         high_20d=high_20d,
         low_20d=low_20d,
         new_high_20d=current.close == high_20d if high_20d is not None else None,
         new_low_20d=current.close == low_20d if low_20d is not None else None,
         crossed_above_ma20=crossed_above,
         crossed_below_ma20=crossed_below,
-        data_status=DataStatus.NORMAL if complete else DataStatus.INSUFFICIENT,
+        data_status=DataStatus.NORMAL if complete else DataStatus.HISTORY_INSUFFICIENT,
     )
 
 
@@ -125,6 +141,20 @@ def competition_ranks(values: Mapping[str, Decimal | None], *, descending: bool 
         previous_value = value
         previous_rank = rank
     return result
+
+
+def complete_history_ranks(
+    values: Mapping[str, Decimal | None],
+    history_lengths: Mapping[str, int],
+    *,
+    minimum_sessions: int = 120,
+    descending: bool = True,
+) -> dict[str, int]:
+    eligible = {
+        key: value for key, value in values.items()
+        if history_lengths.get(key, 0) >= minimum_sessions
+    }
+    return competition_ranks(eligible, descending=descending)
 
 
 def weighted_return(returns: Iterable[Decimal], weights: Iterable[Decimal]) -> Decimal:
@@ -163,4 +193,34 @@ def build_weighted_index(
     for index in range(1, count):
         daily = weighted_return((component_returns[symbol][index] for symbol in symbols), weights)
         levels.append(levels[-1] * (Decimal("1") + daily))
+    return tuple(levels)
+
+
+def build_weighted_index_by_date(
+    component_returns: Mapping[str, Mapping[date, Decimal]],
+    component_weights: Mapping[str, Decimal],
+    *,
+    baseline: Decimal = Decimal("1000"),
+) -> tuple[tuple[date, Decimal], ...]:
+    """Build on the strict date intersection; a missing component is never hidden."""
+    if set(component_returns) != set(component_weights):
+        raise ValueError("returns and weights must contain the same component symbols")
+    if not component_returns or any(not series for series in component_returns.values()):
+        raise ValueError("every component must provide a non-empty return series")
+    if sum(component_weights.values(), Decimal("0")) != Decimal("1"):
+        raise ValueError("component weights must sum to 1")
+    common_dates = set.intersection(*(set(series) for series in component_returns.values()))
+    if not common_dates:
+        raise ValueError("component return series have no common dates")
+    symbols = tuple(sorted(component_returns))
+    levels: list[tuple[date, Decimal]] = []
+    current = baseline
+    for position, day in enumerate(sorted(common_dates)):
+        if position:
+            daily = weighted_return(
+                (component_returns[symbol][day] for symbol in symbols),
+                (component_weights[symbol] for symbol in symbols),
+            )
+            current *= Decimal("1") + daily
+        levels.append((day, current))
     return tuple(levels)

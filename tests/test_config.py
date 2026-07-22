@@ -76,6 +76,17 @@ class ConfigurationTests(unittest.TestCase):
         self.assertEqual(mapping.primary_symbol, "HS2083")
         self.assertIn("HSTECH", mapping.backup_symbols)
 
+    def test_phase1a_provider_policy_fixes_proxy_and_optional_amount_rules(self) -> None:
+        policy = json.loads((CONFIG_DIR / "provider_policy_phase1a_v1.json").read_text(encoding="utf-8"))
+        hotel = policy["proxy_mappings"]["hotel_catering"]
+        self.assertEqual(hotel["canonical_sector"], "酒店餐饮")
+        self.assertEqual(hotel["provider_symbol"], "881160")
+        self.assertEqual(hotel["mapping_type"], "proxy")
+        self.assertEqual(hotel["data_status"], "proxy")
+        self.assertFalse(hotel["constituent_equal_weight_881161_enabled"])
+        self.assertFalse(policy["liquidity_policy"]["amount_required"])
+        self.assertFalse(policy["production_primary_approved"])
+
     def test_batch_approval_creates_new_version_without_overwrite(self) -> None:
         source_path = CONFIG_DIR / "sector_mappings_v2_3.json"
         original = json.loads(source_path.read_text(encoding="utf-8"))

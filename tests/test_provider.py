@@ -5,7 +5,7 @@ import unittest
 from datetime import date
 from pathlib import Path
 
-from leopard_project.models import Market
+from leopard_project.models import LiquidityStatus, Market
 from leopard_project.providers import FakeProvider, ProviderError
 
 
@@ -55,6 +55,18 @@ class FakeProviderTests(unittest.TestCase):
             "volume": "3", "amount": "4",
         }
         self.assertEqual(self.provider.normalize_bar(raw, Market.CN_A), self.provider.normalize_bar(raw, Market.CN_A))
+
+    def test_amount_is_optional_and_is_never_inferred(self) -> None:
+        raw = {
+            "symbol": "X", "symbol_name": "X", "trade_date": "2026-07-20",
+            "open": "1", "high": "2", "low": "1", "close": "2", "pre_close": "1",
+            "volume": "300", "turnover_rate": "1.5", "avg_price": "1.8",
+        }
+        bar = self.provider.normalize_bar(raw, Market.CN_A)
+        self.assertIsNone(bar.amount)
+        self.assertEqual(bar.volume, 300)
+        self.assertEqual(bar.turnover_rate, 1.5)
+        self.assertEqual(bar.liquidity_status, LiquidityStatus.PARTIAL)
 
 
 if __name__ == "__main__":

@@ -1,0 +1,26 @@
+{
+  "sector_name": "半导体",
+  "original_mapping": "881121",
+  "provider_symbol": "881121",
+  "market": "CN_A",
+  "provider_name": "ths_public_validation",
+  "fetched_at": "2026-07-22T05:42:35.791038+00:00",
+  "source_payload_hash": "7dab3c4c97e8ad50609a2a96c6801efa19684fe698533067365d44eff49fbd8e",
+  "audit": {
+    "row_count": 131,
+    "latest_trade_date": "2026-07-21",
+    "at_least_120": true,
+    "dates_sorted": true,
+    "duplicate_dates": 0,
+    "null_fields": 0,
+    "ohlc_valid": true,
+    "price_change_consistent": true,
+    "deterministic_hash": "c3f6e633b4c92107fb2c255d118b8100584258163887c65a16bc9f586358fada",
+    "has_amount": true,
+    "liquidity_statuses": [
+      "complete"
+    ]
+  },
+  "field_note": "OHLC, volume and amount direct; pre_close and pct_change derived from adjacent close",
+  "primary_classification": "direct_full"
+}

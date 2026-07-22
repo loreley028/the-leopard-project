@@ -5,7 +5,7 @@ from datetime import date, datetime, timezone
 from decimal import Decimal
 from typing import Iterable, Mapping, Sequence
 
-from ..models import DailyBar, DataStatus, Market
+from ..models import DailyBar, DataStatus, LiquidityStatus, Market
 from .base import MarketDataProvider, ProviderError, ProviderErrorCategory, SymbolValidation
 
 
@@ -31,7 +31,7 @@ class FakeProvider(MarketDataProvider):
         return tuple(bar for bar in self._bars if bar.symbol in requested and bar.market == market and bar.trade_date == trade_date)
 
     def normalize_bar(self, raw: Mapping[str, object], market: Market) -> DailyBar:
-        required = {"symbol", "symbol_name", "trade_date", "open", "high", "low", "close", "pre_close", "volume", "amount"}
+        required = {"symbol", "symbol_name", "trade_date", "open", "high", "low", "close", "pre_close", "volume"}
         missing = sorted(required - raw.keys())
         if missing:
             raise ProviderError(ProviderErrorCategory.MALFORMED_RESPONSE, f"missing fields: {', '.join(missing)}", retryable=False)
@@ -40,6 +40,14 @@ class FakeProvider(MarketDataProvider):
         change = close - pre_close
         pct_change = Decimal("0") if pre_close == 0 else (close / pre_close - 1) * Decimal("100")
         payload_hash = hashlib.sha256(repr(sorted(raw.items())).encode()).hexdigest()
+        volume = None if raw.get("volume") in (None, "") else Decimal(str(raw["volume"]))
+        amount = None if raw.get("amount") in (None, "") else Decimal(str(raw["amount"]))
+        turnover_rate = None if raw.get("turnover_rate") in (None, "") else Decimal(str(raw["turnover_rate"]))
+        liquidity_status = (
+            LiquidityStatus.COMPLETE if volume is not None and amount is not None
+            else LiquidityStatus.PARTIAL if any(value is not None for value in (volume, turnover_rate, amount))
+            else LiquidityStatus.UNAVAILABLE
+        )
         return DailyBar(
             symbol=str(raw["symbol"]),
             symbol_name=str(raw["symbol_name"]),
@@ -52,8 +60,10 @@ class FakeProvider(MarketDataProvider):
             pre_close=pre_close,
             change=change,
             pct_change=pct_change,
-            volume=Decimal(str(raw["volume"])),
-            amount=Decimal(str(raw["amount"])),
+            volume=volume,
+            turnover_rate=turnover_rate,
+            amount=amount,
+            liquidity_status=liquidity_status,
             provider=self.provider_key,
             fetched_at=datetime(2026, 7, 22, 8, 30, tzinfo=timezone.utc),
             source_payload_hash=payload_hash,

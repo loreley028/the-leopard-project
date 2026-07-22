@@ -18,6 +18,8 @@ class ProviderErrorCategory(StrEnum):
     NO_DATA = "no_data"
     MALFORMED_RESPONSE = "malformed_response"
     PROVIDER_UNAVAILABLE = "provider_unavailable"
+    TIMEOUT = "timeout"
+    NAME_MISMATCH = "name_mismatch"
 
 
 class ProviderError(RuntimeError):

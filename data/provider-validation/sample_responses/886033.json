@@ -1,0 +1,26 @@
+{
+  "sector_name": "CPO",
+  "original_mapping": "886033",
+  "provider_symbol": "886033",
+  "market": "CN_A",
+  "provider_name": "ths_public_validation",
+  "fetched_at": "2026-07-22T05:42:36.621958+00:00",
+  "source_payload_hash": "5bd0b9ab3c6fd96876e365b6af7d7051c58f166db522605b9fbb45a8ffba8eb7",
+  "audit": {
+    "row_count": 131,
+    "latest_trade_date": "2026-07-21",
+    "at_least_120": true,
+    "dates_sorted": true,
+    "duplicate_dates": 0,
+    "null_fields": 0,
+    "ohlc_valid": true,
+    "price_change_consistent": true,
+    "deterministic_hash": "ee08227727f0945fd92bc493d24869a5f62570dc75794c4db042789846a05464",
+    "has_amount": true,
+    "liquidity_statuses": [
+      "complete"
+    ]
+  },
+  "field_note": "OHLC, volume and amount direct; pre_close and pct_change derived from adjacent close",
+  "primary_classification": "direct_full"
+}

@@ -26,4 +26,4 @@ The first effective observation is fixed at 1000. Subsequent levels multiply the
 - `CUSTOM_FOOD_BEVERAGE`: `881134` 50% + `881133` 50%.
 - `CUSTOM_PV_STORAGE`: `881279` 50% + `885921` 50%.
 - `CUSTOM_OIL_PETROCHEM`: `881180` 50% + `881107` 50%.
-- `CUSTOM_HOTEL_CATERING`: equal-weight available constituents of `881161`; unavailable/delisted members are excluded with re-normalization and an anomaly. If constituents cannot be obtained, `881160` may be used only with `data_status=proxy`.
+- `CUSTOM_HOTEL_CATERING`: Phase 1A policy supersedes the research candidate for the first implementation. Use `881160` only as an explicit temporary proxy with `data_status=proxy`; do not implement the `881161` constituent equal-weight index. A later methodology change requires a new mapping version and effective date.

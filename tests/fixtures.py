@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
 
-from leopard_project.models import DailyBar, DataStatus, Market
+from leopard_project.models import DailyBar, DataStatus, LiquidityStatus, Market
 
 
 def make_bars(count: int = 61, *, descending: bool = False, amount_step: int = 10) -> tuple[DailyBar, ...]:
@@ -27,6 +27,7 @@ def make_bars(count: int = 61, *, descending: bool = False, amount_step: int = 1
                 pct_change=(close / pre_close - 1) * Decimal("100"),
                 volume=Decimal(1000 + index),
                 amount=Decimal(1000 + index * amount_step),
+                liquidity_status=LiquidityStatus.COMPLETE,
                 provider="fixture",
                 fetched_at=datetime(2026, 7, 22, tzinfo=timezone.utc),
                 source_payload_hash=f"hash-{index}",
