@@ -1,0 +1,28 @@
+[
+  {
+    "symbol": "881121",
+    "symbol_name": "半导体",
+    "market": "CN_A",
+    "trade_date": "2026-07-20",
+    "open": "100",
+    "high": "103",
+    "low": "99",
+    "close": "102",
+    "pre_close": "100",
+    "volume": "1000000",
+    "amount": "200000000"
+  },
+  {
+    "symbol": "HS2083",
+    "symbol_name": "恒生科技",
+    "market": "HK",
+    "trade_date": "2026-07-20",
+    "open": "5000",
+    "high": "5100",
+    "low": "4980",
+    "close": "5075",
+    "pre_close": "5000",
+    "volume": "3000000",
+    "amount": "900000000"
+  }
+]

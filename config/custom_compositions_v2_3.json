@@ -1,0 +1,63 @@
+{
+  "schema_version": 1,
+  "mapping_version": "v2.3-20260722",
+  "baseline": 1000,
+  "compositions": [
+    {
+      "sector_key": "hotel_catering",
+      "symbol": "CUSTOM_HOTEL_CATERING",
+      "method": "constituent_equal_weight_return",
+      "constituent_source_symbol": "881161",
+      "proxy_symbol": "881160",
+      "proxy_status": "proxy",
+      "missing_member_policy": "exclude unavailable members and renormalize equal weights; emit anomaly",
+      "delisted_member_policy": "exclude from first unavailable trading day; emit anomaly",
+      "note": "Use 881161 constituents. Proxy use must be explicit and never silent."
+    },
+    {
+      "sector_key": "food_beverage",
+      "symbol": "CUSTOM_FOOD_BEVERAGE",
+      "method": "weighted_return",
+      "components": [
+        {
+          "symbol": "881134",
+          "weight": 0.5
+        },
+        {
+          "symbol": "881133",
+          "weight": 0.5
+        }
+      ]
+    },
+    {
+      "sector_key": "photovoltaic_energy_storage",
+      "symbol": "CUSTOM_PV_STORAGE",
+      "method": "weighted_return",
+      "components": [
+        {
+          "symbol": "881279",
+          "weight": 0.5
+        },
+        {
+          "symbol": "885921",
+          "weight": 0.5
+        }
+      ]
+    },
+    {
+      "sector_key": "oil_petrochemical",
+      "symbol": "CUSTOM_OIL_PETROCHEM",
+      "method": "weighted_return",
+      "components": [
+        {
+          "symbol": "881180",
+          "weight": 0.5
+        },
+        {
+          "symbol": "881107",
+          "weight": 0.5
+        }
+      ]
+    }
+  ]
+}

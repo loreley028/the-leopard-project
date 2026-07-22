@@ -1,0 +1,717 @@
+{
+  "schema_version": 1,
+  "configuration_version": "v2.3-20260722",
+  "display_name": "The Leopard Project",
+  "slug": "the-leopard-project",
+  "source": "大盘猎豹直播总结PDF制作规范_V2.3_20260722.md + 01_板块主清单",
+  "groups": [
+    {
+      "group_order": 1,
+      "group_name": "科技硬件与通信",
+      "sectors": [
+        {
+          "overall_order": 1,
+          "group_order": 1,
+          "within_group_order": 1,
+          "sector_key": "pcb",
+          "sector_name": "PCB",
+          "source_version": "V2.3.0 / 2026-07-22",
+          "physical_delete_allowed": false,
+          "note": "初始基准板块"
+        },
+        {
+          "overall_order": 2,
+          "group_order": 1,
+          "within_group_order": 2,
+          "sector_key": "semiconductor",
+          "sector_name": "半导体",
+          "source_version": "V2.3.0 / 2026-07-22",
+          "physical_delete_allowed": false,
+          "note": "初始基准板块"
+        },
+        {
+          "overall_order": 3,
+          "group_order": 1,
+          "within_group_order": 3,
+          "sector_key": "electronic_components",
+          "sector_name": "元器件",
+          "source_version": "V2.3.0 / 2026-07-22",
+          "physical_delete_allowed": false,
+          "note": "初始基准板块"
+        },
+        {
+          "overall_order": 4,
+          "group_order": 1,
+          "within_group_order": 4,
+          "sector_key": "cpo",
+          "sector_name": "CPO",
+          "source_version": "V2.3.0 / 2026-07-22",
+          "physical_delete_allowed": false,
+          "note": "初始基准板块"
+        },
+        {
+          "overall_order": 5,
+          "group_order": 1,
+          "within_group_order": 5,
+          "sector_key": "consumer_electronics",
+          "sector_name": "消费电子",
+          "source_version": "V2.3.0 / 2026-07-22",
+          "physical_delete_allowed": false,
+          "note": "初始基准板块"
+        },
+        {
+          "overall_order": 6,
+          "group_order": 1,
+          "within_group_order": 6,
+          "sector_key": "communication_equipment",
+          "sector_name": "通信设备",
+          "source_version": "V2.3.0 / 2026-07-22",
+          "physical_delete_allowed": false,
+          "note": "初始基准板块"
+        },
+        {
+          "overall_order": 7,
+          "group_order": 1,
+          "within_group_order": 7,
+          "sector_key": "computing_power_rental",
+          "sector_name": "算力租赁",
+          "source_version": "V2.3.0 / 2026-07-22",
+          "physical_delete_allowed": false,
+          "note": "初始基准板块"
+        },
+        {
+          "overall_order": 8,
+          "group_order": 1,
+          "within_group_order": 8,
+          "sector_key": "liquid_cooling",
+          "sector_name": "液冷",
+          "source_version": "V2.3.0 / 2026-07-22",
+          "physical_delete_allowed": false,
+          "note": "初始基准板块"
+        },
+        {
+          "overall_order": 9,
+          "group_order": 1,
+          "within_group_order": 9,
+          "sector_key": "telecom_services",
+          "sector_name": "通信服务",
+          "source_version": "V2.3.0 / 2026-07-22",
+          "physical_delete_allowed": false,
+          "note": "初始基准板块"
+        },
+        {
+          "overall_order": 10,
+          "group_order": 1,
+          "within_group_order": 10,
+          "sector_key": "mlcc",
+          "sector_name": "MLCC",
+          "source_version": "V2.3.0 / 2026-07-22",
+          "physical_delete_allowed": false,
+          "note": "初始基准板块"
+        },
+        {
+          "overall_order": 11,
+          "group_order": 1,
+          "within_group_order": 11,
+          "sector_key": "advanced_packaging",
+          "sector_name": "先进封装",
+          "source_version": "V2.3.0 / 2026-07-22",
+          "physical_delete_allowed": false,
+          "note": "初始基准板块"
+        },
+        {
+          "overall_order": 12,
+          "group_order": 1,
+          "within_group_order": 12,
+          "sector_key": "optical_fiber_theme",
+          "sector_name": "光纤题材",
+          "source_version": "V2.3.0 / 2026-07-22",
+          "physical_delete_allowed": false,
+          "note": "初始基准板块"
+        },
+        {
+          "overall_order": 13,
+          "group_order": 1,
+          "within_group_order": 13,
+          "sector_key": "glass_substrate",
+          "sector_name": "玻璃基板",
+          "source_version": "V2.3.0 / 2026-07-22",
+          "physical_delete_allowed": false,
+          "note": "初始基准板块"
+        }
+      ]
+    },
+    {
+      "group_order": 2,
+      "group_name": "科技软件、传媒与互联网",
+      "sectors": [
+        {
+          "overall_order": 14,
+          "group_order": 2,
+          "within_group_order": 1,
+          "sector_key": "ai_applications",
+          "sector_name": "AI 应用",
+          "source_version": "V2.3.0 / 2026-07-22",
+          "physical_delete_allowed": false,
+          "note": "初始基准板块"
+        },
+        {
+          "overall_order": 15,
+          "group_order": 2,
+          "within_group_order": 2,
+          "sector_key": "software_development",
+          "sector_name": "软件开发",
+          "source_version": "V2.3.0 / 2026-07-22",
+          "physical_delete_allowed": false,
+          "note": "初始基准板块"
+        },
+        {
+          "overall_order": 16,
+          "group_order": 2,
+          "within_group_order": 3,
+          "sector_key": "gaming",
+          "sector_name": "游戏",
+          "source_version": "V2.3.0 / 2026-07-22",
+          "physical_delete_allowed": false,
+          "note": "初始基准板块"
+        },
+        {
+          "overall_order": 17,
+          "group_order": 2,
+          "within_group_order": 4,
+          "sector_key": "media",
+          "sector_name": "传媒",
+          "source_version": "V2.3.0 / 2026-07-22",
+          "physical_delete_allowed": false,
+          "note": "初始基准板块"
+        },
+        {
+          "overall_order": 18,
+          "group_order": 2,
+          "within_group_order": 5,
+          "sector_key": "computer_sector",
+          "sector_name": "计算机",
+          "source_version": "V2.3.0 / 2026-07-22",
+          "physical_delete_allowed": false,
+          "note": "初始基准板块"
+        },
+        {
+          "overall_order": 19,
+          "group_order": 2,
+          "within_group_order": 6,
+          "sector_key": "it_services",
+          "sector_name": "IT 服务",
+          "source_version": "V2.3.0 / 2026-07-22",
+          "physical_delete_allowed": false,
+          "note": "初始基准板块"
+        },
+        {
+          "overall_order": 20,
+          "group_order": 2,
+          "within_group_order": 7,
+          "sector_key": "cinema",
+          "sector_name": "影视院线",
+          "source_version": "V2.3.0 / 2026-07-22",
+          "physical_delete_allowed": false,
+          "note": "初始基准板块"
+        },
+        {
+          "overall_order": 21,
+          "group_order": 2,
+          "within_group_order": 8,
+          "sector_key": "advertising",
+          "sector_name": "广告",
+          "source_version": "V2.3.0 / 2026-07-22",
+          "physical_delete_allowed": false,
+          "note": "初始基准板块"
+        },
+        {
+          "overall_order": 22,
+          "group_order": 2,
+          "within_group_order": 9,
+          "sector_key": "hang_seng_tech",
+          "sector_name": "恒生科技",
+          "source_version": "V2.3.0 / 2026-07-22",
+          "physical_delete_allowed": false,
+          "note": "初始基准板块"
+        }
+      ]
+    },
+    {
+      "group_order": 3,
+      "group_name": "医药、消费与服务",
+      "sectors": [
+        {
+          "overall_order": 23,
+          "group_order": 3,
+          "within_group_order": 1,
+          "sector_key": "innovative_drug_medicine",
+          "sector_name": "创新药/医药",
+          "source_version": "V2.3.0 / 2026-07-22",
+          "physical_delete_allowed": false,
+          "note": "初始基准板块"
+        },
+        {
+          "overall_order": 24,
+          "group_order": 3,
+          "within_group_order": 2,
+          "sector_key": "baijiu",
+          "sector_name": "白酒",
+          "source_version": "V2.3.0 / 2026-07-22",
+          "physical_delete_allowed": false,
+          "note": "初始基准板块"
+        },
+        {
+          "overall_order": 25,
+          "group_order": 3,
+          "within_group_order": 3,
+          "sector_key": "hotel_catering",
+          "sector_name": "酒店餐饮",
+          "source_version": "V2.3.0 / 2026-07-22",
+          "physical_delete_allowed": false,
+          "note": "初始基准板块"
+        },
+        {
+          "overall_order": 26,
+          "group_order": 3,
+          "within_group_order": 4,
+          "sector_key": "agriculture_breeding",
+          "sector_name": "农业/养殖",
+          "source_version": "V2.3.0 / 2026-07-22",
+          "physical_delete_allowed": false,
+          "note": "初始基准板块"
+        },
+        {
+          "overall_order": 27,
+          "group_order": 3,
+          "within_group_order": 5,
+          "sector_key": "medical_services",
+          "sector_name": "医疗服务",
+          "source_version": "V2.3.0 / 2026-07-22",
+          "physical_delete_allowed": false,
+          "note": "初始基准板块"
+        },
+        {
+          "overall_order": 28,
+          "group_order": 3,
+          "within_group_order": 6,
+          "sector_key": "medical_devices",
+          "sector_name": "医疗器械",
+          "source_version": "V2.3.0 / 2026-07-22",
+          "physical_delete_allowed": false,
+          "note": "初始基准板块"
+        },
+        {
+          "overall_order": 29,
+          "group_order": 3,
+          "within_group_order": 7,
+          "sector_key": "traditional_chinese_medicine",
+          "sector_name": "中药",
+          "source_version": "V2.3.0 / 2026-07-22",
+          "physical_delete_allowed": false,
+          "note": "初始基准板块"
+        },
+        {
+          "overall_order": 30,
+          "group_order": 3,
+          "within_group_order": 8,
+          "sector_key": "tourism",
+          "sector_name": "旅游",
+          "source_version": "V2.3.0 / 2026-07-22",
+          "physical_delete_allowed": false,
+          "note": "初始基准板块"
+        },
+        {
+          "overall_order": 31,
+          "group_order": 3,
+          "within_group_order": 9,
+          "sector_key": "retail",
+          "sector_name": "零售",
+          "source_version": "V2.3.0 / 2026-07-22",
+          "physical_delete_allowed": false,
+          "note": "初始基准板块"
+        },
+        {
+          "overall_order": 32,
+          "group_order": 3,
+          "within_group_order": 10,
+          "sector_key": "white_goods",
+          "sector_name": "白色家电",
+          "source_version": "V2.3.0 / 2026-07-22",
+          "physical_delete_allowed": false,
+          "note": "初始基准板块"
+        },
+        {
+          "overall_order": 33,
+          "group_order": 3,
+          "within_group_order": 11,
+          "sector_key": "food_beverage",
+          "sector_name": "食品饮料",
+          "source_version": "V2.3.0 / 2026-07-22",
+          "physical_delete_allowed": false,
+          "note": "初始基准板块"
+        },
+        {
+          "overall_order": 34,
+          "group_order": 3,
+          "within_group_order": 12,
+          "sector_key": "internet_ecommerce",
+          "sector_name": "互联网电商",
+          "source_version": "V2.3.0 / 2026-07-22",
+          "physical_delete_allowed": false,
+          "note": "初始基准板块"
+        },
+        {
+          "overall_order": 35,
+          "group_order": 3,
+          "within_group_order": 13,
+          "sector_key": "beer",
+          "sector_name": "啤酒",
+          "source_version": "V2.3.0 / 2026-07-22",
+          "physical_delete_allowed": false,
+          "note": "初始基准板块"
+        },
+        {
+          "overall_order": 36,
+          "group_order": 3,
+          "within_group_order": 14,
+          "sector_key": "small_appliances",
+          "sector_name": "小家电",
+          "source_version": "V2.3.0 / 2026-07-22",
+          "physical_delete_allowed": false,
+          "note": "初始基准板块"
+        },
+        {
+          "overall_order": 37,
+          "group_order": 3,
+          "within_group_order": 15,
+          "sector_key": "education",
+          "sector_name": "教育",
+          "source_version": "V2.3.0 / 2026-07-22",
+          "physical_delete_allowed": false,
+          "note": "初始基准板块"
+        }
+      ]
+    },
+    {
+      "group_order": 4,
+      "group_name": "大金融",
+      "sectors": [
+        {
+          "overall_order": 38,
+          "group_order": 4,
+          "within_group_order": 1,
+          "sector_key": "securities",
+          "sector_name": "证券",
+          "source_version": "V2.3.0 / 2026-07-22",
+          "physical_delete_allowed": false,
+          "note": "初始基准板块"
+        },
+        {
+          "overall_order": 39,
+          "group_order": 4,
+          "within_group_order": 2,
+          "sector_key": "bank",
+          "sector_name": "银行",
+          "source_version": "V2.3.0 / 2026-07-22",
+          "physical_delete_allowed": false,
+          "note": "初始基准板块"
+        },
+        {
+          "overall_order": 40,
+          "group_order": 4,
+          "within_group_order": 3,
+          "sector_key": "insurance",
+          "sector_name": "保险",
+          "source_version": "V2.3.0 / 2026-07-22",
+          "physical_delete_allowed": false,
+          "note": "初始基准板块"
+        },
+        {
+          "overall_order": 41,
+          "group_order": 4,
+          "within_group_order": 4,
+          "sector_key": "diversified_finance",
+          "sector_name": "多元金融",
+          "source_version": "V2.3.0 / 2026-07-22",
+          "physical_delete_allowed": false,
+          "note": "初始基准板块"
+        },
+        {
+          "overall_order": 42,
+          "group_order": 4,
+          "within_group_order": 5,
+          "sector_key": "internet_finance",
+          "sector_name": "互联网金融",
+          "source_version": "V2.3.0 / 2026-07-22",
+          "physical_delete_allowed": false,
+          "note": "初始基准板块"
+        }
+      ]
+    },
+    {
+      "group_order": 5,
+      "group_name": "新能源、汽车与高端制造",
+      "sectors": [
+        {
+          "overall_order": 43,
+          "group_order": 5,
+          "within_group_order": 1,
+          "sector_key": "robotics",
+          "sector_name": "机器人",
+          "source_version": "V2.3.0 / 2026-07-22",
+          "physical_delete_allowed": false,
+          "note": "初始基准板块"
+        },
+        {
+          "overall_order": 44,
+          "group_order": 5,
+          "within_group_order": 2,
+          "sector_key": "battery_lithium",
+          "sector_name": "电池/锂电池",
+          "source_version": "V2.3.0 / 2026-07-22",
+          "physical_delete_allowed": false,
+          "note": "初始基准板块"
+        },
+        {
+          "overall_order": 45,
+          "group_order": 5,
+          "within_group_order": 3,
+          "sector_key": "auto_parts",
+          "sector_name": "汽车零部件",
+          "source_version": "V2.3.0 / 2026-07-22",
+          "physical_delete_allowed": false,
+          "note": "初始基准板块"
+        },
+        {
+          "overall_order": 46,
+          "group_order": 5,
+          "within_group_order": 4,
+          "sector_key": "photovoltaic_energy_storage",
+          "sector_name": "光伏/储能",
+          "source_version": "V2.3.0 / 2026-07-22",
+          "physical_delete_allowed": false,
+          "note": "初始基准板块"
+        },
+        {
+          "overall_order": 47,
+          "group_order": 5,
+          "within_group_order": 5,
+          "sector_key": "power_grid_equipment",
+          "sector_name": "电网设备",
+          "source_version": "V2.3.0 / 2026-07-22",
+          "physical_delete_allowed": false,
+          "note": "初始基准板块"
+        },
+        {
+          "overall_order": 48,
+          "group_order": 5,
+          "within_group_order": 6,
+          "sector_key": "automobiles",
+          "sector_name": "汽车",
+          "source_version": "V2.3.0 / 2026-07-22",
+          "physical_delete_allowed": false,
+          "note": "初始基准板块"
+        },
+        {
+          "overall_order": 49,
+          "group_order": 5,
+          "within_group_order": 7,
+          "sector_key": "general_equipment",
+          "sector_name": "通用设备",
+          "source_version": "V2.3.0 / 2026-07-22",
+          "physical_delete_allowed": false,
+          "note": "初始基准板块"
+        }
+      ]
+    },
+    {
+      "group_order": 6,
+      "group_name": "资源、能源与周期",
+      "sectors": [
+        {
+          "overall_order": 50,
+          "group_order": 6,
+          "within_group_order": 1,
+          "sector_key": "nonferrous_metals",
+          "sector_name": "有色金属",
+          "source_version": "V2.3.0 / 2026-07-22",
+          "physical_delete_allowed": false,
+          "note": "初始基准板块"
+        },
+        {
+          "overall_order": 51,
+          "group_order": 6,
+          "within_group_order": 2,
+          "sector_key": "electricity",
+          "sector_name": "电力",
+          "source_version": "V2.3.0 / 2026-07-22",
+          "physical_delete_allowed": false,
+          "note": "初始基准板块"
+        },
+        {
+          "overall_order": 52,
+          "group_order": 6,
+          "within_group_order": 3,
+          "sector_key": "rare_earth",
+          "sector_name": "稀土",
+          "source_version": "V2.3.0 / 2026-07-22",
+          "physical_delete_allowed": false,
+          "note": "初始基准板块"
+        },
+        {
+          "overall_order": 53,
+          "group_order": 6,
+          "within_group_order": 4,
+          "sector_key": "coal",
+          "sector_name": "煤炭",
+          "source_version": "V2.3.0 / 2026-07-22",
+          "physical_delete_allowed": false,
+          "note": "初始基准板块"
+        },
+        {
+          "overall_order": 54,
+          "group_order": 6,
+          "within_group_order": 5,
+          "sector_key": "minor_metals",
+          "sector_name": "小金属",
+          "source_version": "V2.3.0 / 2026-07-22",
+          "physical_delete_allowed": false,
+          "note": "初始基准板块"
+        },
+        {
+          "overall_order": 55,
+          "group_order": 6,
+          "within_group_order": 6,
+          "sector_key": "chemicals",
+          "sector_name": "化工",
+          "source_version": "V2.3.0 / 2026-07-22",
+          "physical_delete_allowed": false,
+          "note": "初始基准板块"
+        },
+        {
+          "overall_order": 56,
+          "group_order": 6,
+          "within_group_order": 7,
+          "sector_key": "oil_petrochemical",
+          "sector_name": "石油石化",
+          "source_version": "V2.3.0 / 2026-07-22",
+          "physical_delete_allowed": false,
+          "note": "初始基准板块"
+        },
+        {
+          "overall_order": 57,
+          "group_order": 6,
+          "within_group_order": 8,
+          "sector_key": "glass_fiber",
+          "sector_name": "玻璃玻纤",
+          "source_version": "V2.3.0 / 2026-07-22",
+          "physical_delete_allowed": false,
+          "note": "初始基准板块"
+        },
+        {
+          "overall_order": 58,
+          "group_order": 6,
+          "within_group_order": 9,
+          "sector_key": "gold_concept",
+          "sector_name": "黄金概念",
+          "source_version": "V2.3.0 / 2026-07-22",
+          "physical_delete_allowed": false,
+          "note": "初始基准板块"
+        },
+        {
+          "overall_order": 59,
+          "group_order": 6,
+          "within_group_order": 10,
+          "sector_key": "precious_metals",
+          "sector_name": "贵金属",
+          "source_version": "V2.3.0 / 2026-07-22",
+          "physical_delete_allowed": false,
+          "note": "初始基准板块"
+        },
+        {
+          "overall_order": 60,
+          "group_order": 6,
+          "within_group_order": 11,
+          "sector_key": "steel",
+          "sector_name": "钢铁",
+          "source_version": "V2.3.0 / 2026-07-22",
+          "physical_delete_allowed": false,
+          "note": "初始基准板块"
+        },
+        {
+          "overall_order": 61,
+          "group_order": 6,
+          "within_group_order": 12,
+          "sector_key": "lithium_mining",
+          "sector_name": "锂矿",
+          "source_version": "V2.3.0 / 2026-07-22",
+          "physical_delete_allowed": false,
+          "note": "初始基准板块"
+        }
+      ]
+    },
+    {
+      "group_order": 7,
+      "group_name": "军工、航天与运输",
+      "sectors": [
+        {
+          "overall_order": 62,
+          "group_order": 7,
+          "within_group_order": 1,
+          "sector_key": "commercial_space",
+          "sector_name": "商业航天",
+          "source_version": "V2.3.0 / 2026-07-22",
+          "physical_delete_allowed": false,
+          "note": "初始基准板块"
+        },
+        {
+          "overall_order": 63,
+          "group_order": 7,
+          "within_group_order": 2,
+          "sector_key": "defense_military",
+          "sector_name": "国防军工",
+          "source_version": "V2.3.0 / 2026-07-22",
+          "physical_delete_allowed": false,
+          "note": "初始基准板块"
+        },
+        {
+          "overall_order": 64,
+          "group_order": 7,
+          "within_group_order": 3,
+          "sector_key": "aerospace_equipment",
+          "sector_name": "航天装备",
+          "source_version": "V2.3.0 / 2026-07-22",
+          "physical_delete_allowed": false,
+          "note": "初始基准板块"
+        },
+        {
+          "overall_order": 65,
+          "group_order": 7,
+          "within_group_order": 4,
+          "sector_key": "port_shipping",
+          "sector_name": "港口航运",
+          "source_version": "V2.3.0 / 2026-07-22",
+          "physical_delete_allowed": false,
+          "note": "初始基准板块"
+        }
+      ]
+    },
+    {
+      "group_order": 8,
+      "group_name": "地产",
+      "sectors": [
+        {
+          "overall_order": 66,
+          "group_order": 8,
+          "within_group_order": 1,
+          "sector_key": "real_estate",
+          "sector_name": "房地产",
+          "source_version": "V2.3.0 / 2026-07-22",
+          "physical_delete_allowed": false,
+          "note": "初始基准板块"
+        }
+      ]
+    }
+  ]
+}

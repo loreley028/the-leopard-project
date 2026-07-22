@@ -1,0 +1,69 @@
+{
+  "schema_version": 1,
+  "configuration_version": "v2.3-20260722",
+  "aliases": [
+    {
+      "order": 1,
+      "alias": "AI应用",
+      "canonical_sector_name": "AI 应用",
+      "sector_key": "ai_applications",
+      "basis": "V2.3 名称归一示例",
+      "confirmed": true,
+      "note": null
+    },
+    {
+      "order": 2,
+      "alias": "IT服务",
+      "canonical_sector_name": "IT 服务",
+      "sector_key": "it_services",
+      "basis": "V2.3 名称归一示例",
+      "confirmed": true,
+      "note": null
+    },
+    {
+      "order": 3,
+      "alias": "电池",
+      "canonical_sector_name": "电池/锂电池",
+      "sector_key": "battery_lithium",
+      "basis": "V2.3 名称归一示例",
+      "confirmed": true,
+      "note": null
+    },
+    {
+      "order": 4,
+      "alias": "锂电池",
+      "canonical_sector_name": "电池/锂电池",
+      "sector_key": "battery_lithium",
+      "basis": "V2.3 名称归一示例",
+      "confirmed": true,
+      "note": null
+    },
+    {
+      "order": 5,
+      "alias": "医药",
+      "canonical_sector_name": "创新药/医药",
+      "sector_key": "innovative_drug_medicine",
+      "basis": "V2.3 名称归一示例",
+      "confirmed": true,
+      "note": null
+    },
+    {
+      "order": 6,
+      "alias": "创新药",
+      "canonical_sector_name": "创新药/医药",
+      "sector_key": "innovative_drug_medicine",
+      "basis": "V2.3 名称归一示例",
+      "confirmed": true,
+      "note": null
+    },
+    {
+      "order": 7,
+      "alias": "光模块",
+      "canonical_sector_name": "CPO",
+      "sector_key": "cpo",
+      "basis": "V2.3 已确认语境示例",
+      "confirmed": true,
+      "note": "仅限已确认语境"
+    }
+  ]
+}
