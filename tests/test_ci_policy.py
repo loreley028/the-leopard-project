@@ -24,6 +24,7 @@ class CiPolicyTests(unittest.TestCase):
         self.assertIn("check_sensitive_files.py", text)
         self.assertIn("git status --porcelain", text)
         self.assertIn('PYTHONDONTWRITEBYTECODE: "1"', text)
+        self.assertIn("PYTHONPATH: backend", text)
         self.assertNotIn('-e ".[dev]"', text)
 
 

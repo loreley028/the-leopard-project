@@ -9,6 +9,7 @@ permissions:
 
 env:
   PYTHONDONTWRITEBYTECODE: "1"
+  PYTHONPATH: backend
 
 jobs:
   offline-validation:
