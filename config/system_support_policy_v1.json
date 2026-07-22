@@ -1,0 +1,58 @@
+{
+  "schema_version": 1,
+  "policy_version": "system-support-v1-20260722",
+  "effective_date": "2026-07-22",
+  "total_business_sectors": 66,
+  "supported_market_sectors": 65,
+  "unsupported_sector_count": 1,
+  "collection_denominator": 65,
+  "unsupported_reason_codes": [
+    "cross_market_not_integrated"
+  ],
+  "unsupported_sectors": [
+    {
+      "sector_key": "hang_seng_tech",
+      "sector_name": "恒生科技",
+      "canonical_symbol": "HSTECH",
+      "market": "HK",
+      "support_status": "unsupported",
+      "data_status": "unsupported",
+      "reason_code": "cross_market_not_integrated",
+      "display_text": "暂不支持",
+      "display_detail": "港股跨市场行情暂未接入",
+      "exclude_from": [
+        "automatic_collection",
+        "technical_indicators",
+        "sector_strength_ranking",
+        "pct_change_ranking",
+        "volume_liquidity_ranking",
+        "freshness_alerts",
+        "missing_data_alerts",
+        "provider_success_statistics",
+        "dual_source_reconciliation",
+        "automatic_retry",
+        "production_coverage_denominator"
+      ]
+    }
+  ],
+  "pdf_report_independence": {
+    "independent": true,
+    "source": "live_transcript_and_v2_3_pdf_specification",
+    "unsupported_market_data_must_not_remove_transcript_content": true,
+    "modify_pdf_logic_in_phase1b0": false
+  },
+  "provider_roles": {
+    "ths_public_validation": "diagnostic_provider",
+    "akshare_ths": "research_provider",
+    "tushare_ths_daily": "candidate_primary",
+    "HSTECH": "unsupported"
+  },
+  "allowed_provider_roles": [
+    "research_provider",
+    "diagnostic_provider",
+    "candidate_primary",
+    "unsupported"
+  ],
+  "production_primary_approved": false,
+  "production_fallback_approved": false
+}

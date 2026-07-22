@@ -15,7 +15,10 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = ["pytest>=8,<9"]
+dev = [
+  "pytest>=8,<9",
+  "PyYAML>=6,<7",
+]
 
 [project.scripts]
 leopard-project = "leopard_project.cli:main"
@@ -25,3 +28,9 @@ package-dir = {"" = "backend"}
 
 [tool.setuptools.packages.find]
 where = ["backend"]
+
+[tool.pytest.ini_options]
+pythonpath = ["backend", "tests"]
+markers = [
+  "live: explicit network tests excluded from the default CI suite",
+]

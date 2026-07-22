@@ -1,0 +1,57 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+
+permissions:
+  contents: read
+
+env:
+  PYTHONDONTWRITEBYTECODE: "1"
+
+jobs:
+  offline-validation:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install project and test dependencies
+        run: python -m pip install --disable-pip-version-check ".[dev]"
+
+      - name: Run default offline pytest suite
+        run: python -m pytest -p no:cacheprovider -m "not live"
+
+      - name: Validate workflow YAML and policy
+        run: python scripts/validate_workflow.py
+
+      - name: Validate Phase 0 configuration
+        run: python scripts/validate_phase0.py
+
+      - name: Validate Phase 1A policy and coverage
+        run: python scripts/validate_phase1a.py
+
+      - name: Validate Phase 1B-0 support scope
+        run: python scripts/validate_phase1b0.py
+
+      - name: Validate JSON
+        run: python scripts/validate_json.py
+
+      - name: Compile Python
+        run: python -m compileall -q backend tests scripts
+        env:
+          PYTHONPYCACHEPREFIX: /tmp/leopard-ci-pycache
+
+      - name: Check sensitive files and credentials
+        run: python scripts/check_sensitive_files.py
+
+      - name: Verify CI left the checkout unchanged
+        run: test -z "$(git status --porcelain)"

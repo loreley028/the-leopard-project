@@ -1,18 +1,25 @@
 # The Leopard Project
 
-The Leopard Project (`the-leopard-project`) is a configuration-driven foundation for deterministic after-market sector analytics and later live-commentary verification. Phase 0 contains no production market-data connection, deployment, complete web UI, or AI-generated market numbers.
+The Leopard Project (`the-leopard-project`) is a configuration-driven, deterministic after-market sector analytics system. The current Phase 1B-0 baseline defines CI, the first-release support boundary, a deterministic 65-sector collection plan, and evidence-backed provider selection. It does not enable production collection, scheduling, database writes, cloud access, or deployment.
 
-## Phase 0 contents
+## Current support boundary
 
-- Versioned configuration for the fixed V2.3 universe: 8 groups and 66 sectors.
-- All 66 researched Tonghuashun mappings, including provenance and methodology notes.
-- Seven confirmed alias-normalization examples.
-- Four explicit custom-composition definitions.
-- Pydantic domain models and a future PostgreSQL migration draft.
-- A provider-neutral interface plus an offline Fake Provider.
-- Pure functions for returns, moving averages, amount ratios, volume labels, 20-session position/crossings, ranking, and custom indices.
-- A deterministic batch-approval interface that creates a new version instead of overwriting research history.
-- Offline unit tests using fixed fixtures.
+- Business catalog: 66 sectors across 8 groups.
+- Automatic A-share market-data support: 65 sectors.
+- Unsupported in the first automatic release: Hang Seng Tech (`HSTECH`, HK), displayed as `暂不支持` with reason `cross_market_not_integrated`.
+- Daily collection denominator: 65; for example, 64 successes produce `64 / 65`.
+- Hang Seng Tech remains available to the transcript-driven daily PDF report. Market-data support never removes transcript content.
+
+The Phase 1A validation record remains immutable historical evidence. Phase 1B-0 adds a versioned product-support policy; it does not rewrite the earlier finding that HSTECH data was technically obtainable.
+
+## Provider status
+
+- `ths_public_validation`: `diagnostic_provider`
+- `akshare_ths`: `research_provider`
+- `tushare_ths_daily`: `candidate_primary` only; no Token, account test, or implementation is required in this phase.
+- No `production_primary` or `production_fallback` is approved.
+
+The current selection conclusion is that free/public sources are not yet sufficient for stable production. See [provider selection](docs/provider-selection.md) and the [comparison matrix](docs/provider-comparison-matrix.md).
 
 ## Naming contract
 
@@ -28,26 +35,22 @@ The Leopard Project (`the-leopard-project`) is a configuration-driven foundation
 
 ## Local validation
 
-Python 3.12 and Pydantic 2 are required. No internet or production credential is needed.
+Python 3.12 is required. The default suite is offline; live tests require an explicit marker and environment opt-in.
 
 ```bash
-PYTHONPATH=backend python3.12 -m unittest discover -s tests -v
+PYTHONPATH=backend python3.12 -m pytest -m "not live"
 PYTHONPATH=backend python3.12 scripts/validate_phase0.py
+PYTHONPATH=backend python3.12 scripts/validate_phase1a.py
+PYTHONPATH=backend python3.12 scripts/validate_phase1b0.py
+python3.12 scripts/validate_json.py
+python3.12 scripts/check_sensitive_files.py
 ```
 
-Optional packaging dependencies are declared in `pyproject.toml`; Phase 0 itself is verified with the local fixed-fixture test suite.
-
-## Mapping approval preview
-
-Research confirmation is not production approval. The checked-in seed retains `user_confirmed=false` and `effective_date=null`, so no mapping is eligible for a daily job.
+Explicit diagnostic live test and controlled selection scan:
 
 ```bash
-PYTHONPATH=backend python3.12 -m leopard_project.cli mappings approve-research-version \
-  --version v2.3-20260722
+LEOPARD_RUN_LIVE=1 PYTHONPATH=backend python3.12 -m pytest -m live
+PYTHONPATH=backend python3.12 -m leopard_project.cli providers select-phase1b0 --output-dir data/provider-selection
 ```
 
-This command only previews a new version. Add `--effective-date YYYY-MM-DD` to evaluate eligibility, and `--output <new-file.json>` to write a separate versioned artifact. It never updates the research seed in place or connects to a database.
-
-## Phase boundary
-
-Phase 0 stops at foundations, mapping audit, deterministic calculations, tests, and documentation. See [Phase 0 acceptance](docs/phase-0-acceptance.md) before authorizing Phase 1.
+CI runs only the offline suite and has read-only repository permissions. See [CI documentation](docs/ci.md).

@@ -1,0 +1,38 @@
+{
+  "sector_key": "glass_substrate",
+  "sector_name": "玻璃基板",
+  "mapping_type": "direct",
+  "data_status": "short_history",
+  "provider_symbols": [
+    "886111"
+  ],
+  "has_any_real_data": true,
+  "has_120_days": false,
+  "latest_trade_date": "2026-07-21",
+  "has_volume": true,
+  "has_turnover_rate": false,
+  "has_amount": true,
+  "repeated_request_consistent": true,
+  "components": [
+    {
+      "symbol": "886111",
+      "audit": {
+        "row_count": 14,
+        "latest_trade_date": "2026-07-21",
+        "at_least_120": false,
+        "dates_sorted": true,
+        "duplicate_dates": 0,
+        "null_fields": 0,
+        "ohlc_valid": true,
+        "price_change_consistent": true,
+        "deterministic_hash": "927c12d4c38620ecde2e63ed0ab3d2c708d5da6ede93dd522817e3dc663d1d42",
+        "has_amount": true,
+        "liquidity_statuses": [
+          "complete"
+        ]
+      },
+      "repeated_request_consistent": true,
+      "source_payload_hash": "bb1571e352cddc1489c1b4ea588ba34cd6908ee80f4ebd7f9547c2004b6a4f32"
+    }
+  ]
+}

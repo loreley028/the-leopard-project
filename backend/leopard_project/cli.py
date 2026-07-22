@@ -8,6 +8,7 @@ from pathlib import Path
 from .config import CONFIG_DIR
 from .mappings import approve_research_version
 from .provider_validation import run_validation
+from .provider_selection import run_provider_selection
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -24,6 +25,8 @@ def build_parser() -> argparse.ArgumentParser:
     validate = provider_commands.add_parser("validate-live")
     validate.add_argument("--scope", choices=("representative", "all"), default="representative")
     validate.add_argument("--output-dir", type=Path)
+    select = provider_commands.add_parser("select-phase1b0")
+    select.add_argument("--output-dir", type=Path, default=Path("data/provider-selection"))
     return parser
 
 
@@ -45,6 +48,10 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "providers" and args.provider_command == "validate-live":
         coverage = run_validation(scope=args.scope, output_dir=args.output_dir)
         print(json.dumps(coverage["summary"], ensure_ascii=False, default=str))
+        return 0
+    if args.command == "providers" and args.provider_command == "select-phase1b0":
+        coverage, comparison = run_provider_selection(output_dir=args.output_dir)
+        print(json.dumps({"coverage": coverage["summary"], "selection_conclusion": comparison["selection_conclusion"]}, ensure_ascii=False, default=str))
         return 0
     return 2
 

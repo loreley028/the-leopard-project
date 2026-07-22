@@ -1,0 +1,38 @@
+{
+  "sector_key": "hotel_catering",
+  "sector_name": "酒店餐饮",
+  "mapping_type": "proxy",
+  "data_status": "proxy",
+  "provider_symbols": [
+    "881160"
+  ],
+  "has_any_real_data": true,
+  "has_120_days": true,
+  "latest_trade_date": "2026-07-21",
+  "has_volume": true,
+  "has_turnover_rate": false,
+  "has_amount": true,
+  "repeated_request_consistent": true,
+  "components": [
+    {
+      "symbol": "881160",
+      "audit": {
+        "row_count": 131,
+        "latest_trade_date": "2026-07-21",
+        "at_least_120": true,
+        "dates_sorted": true,
+        "duplicate_dates": 0,
+        "null_fields": 0,
+        "ohlc_valid": true,
+        "price_change_consistent": true,
+        "deterministic_hash": "e0ee112aad055de1761b50228eaf669b8aa6b3f8274944859bce87e5aeced04d",
+        "has_amount": true,
+        "liquidity_statuses": [
+          "complete"
+        ]
+      },
+      "repeated_request_consistent": true,
+      "source_payload_hash": "c9e47faea0bf48710651b40e526fd9eed2094025bb310d2ddcad0343fd9b7b2b"
+    }
+  ]
+}

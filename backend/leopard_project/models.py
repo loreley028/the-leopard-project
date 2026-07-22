@@ -34,6 +34,15 @@ class DataStatus(StrEnum):
     HISTORY_INSUFFICIENT = "history_insufficient"
     STALE_SNAPSHOT = "stale_snapshot"
     PROVIDER_ANOMALY = "provider_anomaly"
+    PARTIAL = "partial"
+    SHORT_HISTORY = "short_history"
+    UNSUPPORTED = "unsupported"
+    PROVIDER_FAILED = "provider_failed"
+
+
+class SupportStatus(StrEnum):
+    SUPPORTED = "supported"
+    UNSUPPORTED = "unsupported"
 
 
 class LiquidityStatus(StrEnum):

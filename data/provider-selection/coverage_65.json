@@ -1,0 +1,3313 @@
+{
+  "schema_version": 1,
+  "phase": "1B-0",
+  "provider": "ths_public_validation",
+  "provider_role": "diagnostic_provider",
+  "generated_at": "2026-07-22T07:08:08.962337+00:00",
+  "requested_start": "2026-01-01",
+  "requested_end": "2026-07-22",
+  "rate_control": {
+    "concurrent_requests": 1,
+    "automatic_retries": 0,
+    "minimum_interval_seconds": 0.35
+  },
+  "summary": {
+    "business_catalog_count": 66,
+    "supported_sector_count": 65,
+    "unsupported_sector_count": 1,
+    "collection_denominator": 65,
+    "real_data_count": 65,
+    "coverage_rate": 1.0,
+    "full_history_count": 64,
+    "latest_trade_date": "2026-07-22",
+    "latest_trade_date_count": 3,
+    "field_counts": {
+      "has_open": 65,
+      "has_high": 65,
+      "has_low": 65,
+      "has_close": 65,
+      "has_pre_close": 65,
+      "has_pct_change": 65,
+      "has_volume": 65,
+      "has_turnover_rate": 0,
+      "has_amount": 65
+    },
+    "name_independently_verified_count": 0
+  },
+  "unsupported_sectors": [
+    {
+      "sector_key": "hang_seng_tech",
+      "sector_name": "恒生科技",
+      "canonical_symbol": "HSTECH",
+      "market": "HK",
+      "support_status": "unsupported",
+      "data_status": "unsupported",
+      "reason_code": "cross_market_not_integrated",
+      "display_text": "暂不支持",
+      "display_detail": "港股跨市场行情暂未接入",
+      "exclude_from": [
+        "automatic_collection",
+        "technical_indicators",
+        "sector_strength_ranking",
+        "pct_change_ranking",
+        "volume_liquidity_ranking",
+        "freshness_alerts",
+        "missing_data_alerts",
+        "provider_success_statistics",
+        "dual_source_reconciliation",
+        "automatic_retry",
+        "production_coverage_denominator"
+      ]
+    }
+  ],
+  "results": [
+    {
+      "sector_key": "pcb",
+      "sector_name": "PCB",
+      "market": "CN_A",
+      "mapping_type": "direct",
+      "data_status": "normal",
+      "provider_symbols": [
+        "885959"
+      ],
+      "has_any_real_data": true,
+      "has_120_days": true,
+      "latest_trade_date": "2026-07-21",
+      "has_open": true,
+      "has_high": true,
+      "has_low": true,
+      "has_close": true,
+      "has_pre_close": true,
+      "has_pct_change": true,
+      "has_volume": true,
+      "has_turnover_rate": false,
+      "has_amount": true,
+      "dates_sorted": true,
+      "duplicate_dates": 0,
+      "null_required_fields": 0,
+      "repeated_request_consistent": true,
+      "name_match_status": "not_independently_exposed_by_chart_endpoint",
+      "components": [
+        {
+          "symbol": "885959",
+          "audit": {
+            "row_count": 131,
+            "latest_trade_date": "2026-07-21",
+            "at_least_120": true,
+            "dates_sorted": true,
+            "duplicate_dates": 0,
+            "null_fields": 0,
+            "ohlc_valid": true,
+            "price_change_consistent": true,
+            "deterministic_hash": "f11551a6d5c7e819c55f98d8a896eed46c9c106a4ace11b94625077fcf856ab2",
+            "has_amount": true,
+            "liquidity_statuses": [
+              "complete"
+            ]
+          },
+          "repeated_request_consistent": true,
+          "source_payload_hash": "33958c1b59e8be4a60f38e38cd794eaef61212f56715047e5ad0f754deaac94b"
+        }
+      ]
+    },
+    {
+      "sector_key": "semiconductor",
+      "sector_name": "半导体",
+      "market": "CN_A",
+      "mapping_type": "direct",
+      "data_status": "normal",
+      "provider_symbols": [
+        "881121"
+      ],
+      "has_any_real_data": true,
+      "has_120_days": true,
+      "latest_trade_date": "2026-07-21",
+      "has_open": true,
+      "has_high": true,
+      "has_low": true,
+      "has_close": true,
+      "has_pre_close": true,
+      "has_pct_change": true,
+      "has_volume": true,
+      "has_turnover_rate": false,
+      "has_amount": true,
+      "dates_sorted": true,
+      "duplicate_dates": 0,
+      "null_required_fields": 0,
+      "repeated_request_consistent": true,
+      "name_match_status": "not_independently_exposed_by_chart_endpoint",
+      "components": [
+        {
+          "symbol": "881121",
+          "audit": {
+            "row_count": 131,
+            "latest_trade_date": "2026-07-21",
+            "at_least_120": true,
+            "dates_sorted": true,
+            "duplicate_dates": 0,
+            "null_fields": 0,
+            "ohlc_valid": true,
+            "price_change_consistent": true,
+            "deterministic_hash": "c3f6e633b4c92107fb2c255d118b8100584258163887c65a16bc9f586358fada",
+            "has_amount": true,
+            "liquidity_statuses": [
+              "complete"
+            ]
+          },
+          "repeated_request_consistent": true,
+          "source_payload_hash": "7dab3c4c97e8ad50609a2a96c6801efa19684fe698533067365d44eff49fbd8e"
+        }
+      ]
+    },
+    {
+      "sector_key": "electronic_components",
+      "sector_name": "元器件",
+      "market": "CN_A",
+      "mapping_type": "direct",
+      "data_status": "normal",
+      "provider_symbols": [
+        "881270"
+      ],
+      "has_any_real_data": true,
+      "has_120_days": true,
+      "latest_trade_date": "2026-07-21",
+      "has_open": true,
+      "has_high": true,
+      "has_low": true,
+      "has_close": true,
+      "has_pre_close": true,
+      "has_pct_change": true,
+      "has_volume": true,
+      "has_turnover_rate": false,
+      "has_amount": true,
+      "dates_sorted": true,
+      "duplicate_dates": 0,
+      "null_required_fields": 0,
+      "repeated_request_consistent": true,
+      "name_match_status": "not_independently_exposed_by_chart_endpoint",
+      "components": [
+        {
+          "symbol": "881270",
+          "audit": {
+            "row_count": 131,
+            "latest_trade_date": "2026-07-21",
+            "at_least_120": true,
+            "dates_sorted": true,
+            "duplicate_dates": 0,
+            "null_fields": 0,
+            "ohlc_valid": true,
+            "price_change_consistent": true,
+            "deterministic_hash": "dc897fe1c45f74b3c26577324984aff3344d5aef4a74ab84ec24db40ff1a3d1b",
+            "has_amount": true,
+            "liquidity_statuses": [
+              "complete"
+            ]
+          },
+          "repeated_request_consistent": true,
+          "source_payload_hash": "7868637cd0ca6eff707069c503ab9f4721f834478e637d17a2454551b331cec4"
+        }
+      ]
+    },
+    {
+      "sector_key": "cpo",
+      "sector_name": "CPO",
+      "market": "CN_A",
+      "mapping_type": "direct",
+      "data_status": "normal",
+      "provider_symbols": [
+        "886033"
+      ],
+      "has_any_real_data": true,
+      "has_120_days": true,
+      "latest_trade_date": "2026-07-21",
+      "has_open": true,
+      "has_high": true,
+      "has_low": true,
+      "has_close": true,
+      "has_pre_close": true,
+      "has_pct_change": true,
+      "has_volume": true,
+      "has_turnover_rate": false,
+      "has_amount": true,
+      "dates_sorted": true,
+      "duplicate_dates": 0,
+      "null_required_fields": 0,
+      "repeated_request_consistent": true,
+      "name_match_status": "not_independently_exposed_by_chart_endpoint",
+      "components": [
+        {
+          "symbol": "886033",
+          "audit": {
+            "row_count": 131,
+            "latest_trade_date": "2026-07-21",
+            "at_least_120": true,
+            "dates_sorted": true,
+            "duplicate_dates": 0,
+            "null_fields": 0,
+            "ohlc_valid": true,
+            "price_change_consistent": true,
+            "deterministic_hash": "ee08227727f0945fd92bc493d24869a5f62570dc75794c4db042789846a05464",
+            "has_amount": true,
+            "liquidity_statuses": [
+              "complete"
+            ]
+          },
+          "repeated_request_consistent": true,
+          "source_payload_hash": "5bd0b9ab3c6fd96876e365b6af7d7051c58f166db522605b9fbb45a8ffba8eb7"
+        }
+      ]
+    },
+    {
+      "sector_key": "consumer_electronics",
+      "sector_name": "消费电子",
+      "market": "CN_A",
+      "mapping_type": "direct",
+      "data_status": "normal",
+      "provider_symbols": [
+        "881124"
+      ],
+      "has_any_real_data": true,
+      "has_120_days": true,
+      "latest_trade_date": "2026-07-21",
+      "has_open": true,
+      "has_high": true,
+      "has_low": true,
+      "has_close": true,
+      "has_pre_close": true,
+      "has_pct_change": true,
+      "has_volume": true,
+      "has_turnover_rate": false,
+      "has_amount": true,
+      "dates_sorted": true,
+      "duplicate_dates": 0,
+      "null_required_fields": 0,
+      "repeated_request_consistent": true,
+      "name_match_status": "not_independently_exposed_by_chart_endpoint",
+      "components": [
+        {
+          "symbol": "881124",
+          "audit": {
+            "row_count": 131,
+            "latest_trade_date": "2026-07-21",
+            "at_least_120": true,
+            "dates_sorted": true,
+            "duplicate_dates": 0,
+            "null_fields": 0,
+            "ohlc_valid": true,
+            "price_change_consistent": true,
+            "deterministic_hash": "4938d52f403cc068df5c09e16aaefe286753a9a8f3ececead73d355d44ee16db",
+            "has_amount": true,
+            "liquidity_statuses": [
+              "complete"
+            ]
+          },
+          "repeated_request_consistent": true,
+          "source_payload_hash": "917a070016d3dfecf1dcf43e6544f933763f83776d1356c194643f48b060fa26"
+        }
+      ]
+    },
+    {
+      "sector_key": "communication_equipment",
+      "sector_name": "通信设备",
+      "market": "CN_A",
+      "mapping_type": "direct",
+      "data_status": "normal",
+      "provider_symbols": [
+        "881129"
+      ],
+      "has_any_real_data": true,
+      "has_120_days": true,
+      "latest_trade_date": "2026-07-21",
+      "has_open": true,
+      "has_high": true,
+      "has_low": true,
+      "has_close": true,
+      "has_pre_close": true,
+      "has_pct_change": true,
+      "has_volume": true,
+      "has_turnover_rate": false,
+      "has_amount": true,
+      "dates_sorted": true,
+      "duplicate_dates": 0,
+      "null_required_fields": 0,
+      "repeated_request_consistent": true,
+      "name_match_status": "not_independently_exposed_by_chart_endpoint",
+      "components": [
+        {
+          "symbol": "881129",
+          "audit": {
+            "row_count": 131,
+            "latest_trade_date": "2026-07-21",
+            "at_least_120": true,
+            "dates_sorted": true,
+            "duplicate_dates": 0,
+            "null_fields": 0,
+            "ohlc_valid": true,
+            "price_change_consistent": true,
+            "deterministic_hash": "11a2a2d3fea52fd8a3b093ef4c5af0fde61e2462e5772a728b7bb45f6048e32a",
+            "has_amount": true,
+            "liquidity_statuses": [
+              "complete"
+            ]
+          },
+          "repeated_request_consistent": true,
+          "source_payload_hash": "dcee2644e74652965d44a5a4e71c36811f18ce398d97d672790cc4970c0b4c46"
+        }
+      ]
+    },
+    {
+      "sector_key": "computing_power_rental",
+      "sector_name": "算力租赁",
+      "market": "CN_A",
+      "mapping_type": "direct",
+      "data_status": "normal",
+      "provider_symbols": [
+        "886050"
+      ],
+      "has_any_real_data": true,
+      "has_120_days": true,
+      "latest_trade_date": "2026-07-21",
+      "has_open": true,
+      "has_high": true,
+      "has_low": true,
+      "has_close": true,
+      "has_pre_close": true,
+      "has_pct_change": true,
+      "has_volume": true,
+      "has_turnover_rate": false,
+      "has_amount": true,
+      "dates_sorted": true,
+      "duplicate_dates": 0,
+      "null_required_fields": 0,
+      "repeated_request_consistent": true,
+      "name_match_status": "not_independently_exposed_by_chart_endpoint",
+      "components": [
+        {
+          "symbol": "886050",
+          "audit": {
+            "row_count": 131,
+            "latest_trade_date": "2026-07-21",
+            "at_least_120": true,
+            "dates_sorted": true,
+            "duplicate_dates": 0,
+            "null_fields": 0,
+            "ohlc_valid": true,
+            "price_change_consistent": true,
+            "deterministic_hash": "33694359d36e4c991357b57f22898c2d59e2d163351befad6ceabcb2d95ecb83",
+            "has_amount": true,
+            "liquidity_statuses": [
+              "complete"
+            ]
+          },
+          "repeated_request_consistent": true,
+          "source_payload_hash": "91ed786775451fd0732f7cf032e1fc415d82e3be50dc04c574b225c26b86475d"
+        }
+      ]
+    },
+    {
+      "sector_key": "liquid_cooling",
+      "sector_name": "液冷",
+      "market": "CN_A",
+      "mapping_type": "direct",
+      "data_status": "normal",
+      "provider_symbols": [
+        "886044"
+      ],
+      "has_any_real_data": true,
+      "has_120_days": true,
+      "latest_trade_date": "2026-07-21",
+      "has_open": true,
+      "has_high": true,
+      "has_low": true,
+      "has_close": true,
+      "has_pre_close": true,
+      "has_pct_change": true,
+      "has_volume": true,
+      "has_turnover_rate": false,
+      "has_amount": true,
+      "dates_sorted": true,
+      "duplicate_dates": 0,
+      "null_required_fields": 0,
+      "repeated_request_consistent": true,
+      "name_match_status": "not_independently_exposed_by_chart_endpoint",
+      "components": [
+        {
+          "symbol": "886044",
+          "audit": {
+            "row_count": 131,
+            "latest_trade_date": "2026-07-21",
+            "at_least_120": true,
+            "dates_sorted": true,
+            "duplicate_dates": 0,
+            "null_fields": 0,
+            "ohlc_valid": true,
+            "price_change_consistent": true,
+            "deterministic_hash": "fb76b497549ac6ef42be8512f3ede0088485083f2a29e9b97f66daa416da633f",
+            "has_amount": true,
+            "liquidity_statuses": [
+              "complete"
+            ]
+          },
+          "repeated_request_consistent": true,
+          "source_payload_hash": "99ecd71aa7ba519d66c1d1b13dd11b3dcc1eb8d422681c4660d57176228074f3"
+        }
+      ]
+    },
+    {
+      "sector_key": "telecom_services",
+      "sector_name": "通信服务",
+      "market": "CN_A",
+      "mapping_type": "direct",
+      "data_status": "normal",
+      "provider_symbols": [
+        "881162"
+      ],
+      "has_any_real_data": true,
+      "has_120_days": true,
+      "latest_trade_date": "2026-07-21",
+      "has_open": true,
+      "has_high": true,
+      "has_low": true,
+      "has_close": true,
+      "has_pre_close": true,
+      "has_pct_change": true,
+      "has_volume": true,
+      "has_turnover_rate": false,
+      "has_amount": true,
+      "dates_sorted": true,
+      "duplicate_dates": 0,
+      "null_required_fields": 0,
+      "repeated_request_consistent": true,
+      "name_match_status": "not_independently_exposed_by_chart_endpoint",
+      "components": [
+        {
+          "symbol": "881162",
+          "audit": {
+            "row_count": 131,
+            "latest_trade_date": "2026-07-21",
+            "at_least_120": true,
+            "dates_sorted": true,
+            "duplicate_dates": 0,
+            "null_fields": 0,
+            "ohlc_valid": true,
+            "price_change_consistent": true,
+            "deterministic_hash": "36b0576b493836b2b01160cb1a8d8871a8ab147aac8f43aab6f24fe330b5ffa0",
+            "has_amount": true,
+            "liquidity_statuses": [
+              "complete"
+            ]
+          },
+          "repeated_request_consistent": true,
+          "source_payload_hash": "feafcc78a6c2bfae7c86d342c62fbf73e611038aedcfde4274f28ac1d8eeb6be"
+        }
+      ]
+    },
+    {
+      "sector_key": "mlcc",
+      "sector_name": "MLCC",
+      "market": "CN_A",
+      "mapping_type": "direct",
+      "data_status": "normal",
+      "provider_symbols": [
+        "884093"
+      ],
+      "has_any_real_data": true,
+      "has_120_days": true,
+      "latest_trade_date": "2026-07-21",
+      "has_open": true,
+      "has_high": true,
+      "has_low": true,
+      "has_close": true,
+      "has_pre_close": true,
+      "has_pct_change": true,
+      "has_volume": true,
+      "has_turnover_rate": false,
+      "has_amount": true,
+      "dates_sorted": true,
+      "duplicate_dates": 0,
+      "null_required_fields": 0,
+      "repeated_request_consistent": true,
+      "name_match_status": "not_independently_exposed_by_chart_endpoint",
+      "components": [
+        {
+          "symbol": "884093",
+          "audit": {
+            "row_count": 131,
+            "latest_trade_date": "2026-07-21",
+            "at_least_120": true,
+            "dates_sorted": true,
+            "duplicate_dates": 0,
+            "null_fields": 0,
+            "ohlc_valid": true,
+            "price_change_consistent": true,
+            "deterministic_hash": "37af6793c536d53443f23cf1cc59926a6aa3a93df8dc8d6e35467b6a7ebde60f",
+            "has_amount": true,
+            "liquidity_statuses": [
+              "complete"
+            ]
+          },
+          "repeated_request_consistent": true,
+          "source_payload_hash": "d3ac54de8fcfd36619ecb948dae65beec19970173da508dc414f64e3ba974de9"
+        }
+      ]
+    },
+    {
+      "sector_key": "advanced_packaging",
+      "sector_name": "先进封装",
+      "market": "CN_A",
+      "mapping_type": "direct",
+      "data_status": "normal",
+      "provider_symbols": [
+        "886009"
+      ],
+      "has_any_real_data": true,
+      "has_120_days": true,
+      "latest_trade_date": "2026-07-21",
+      "has_open": true,
+      "has_high": true,
+      "has_low": true,
+      "has_close": true,
+      "has_pre_close": true,
+      "has_pct_change": true,
+      "has_volume": true,
+      "has_turnover_rate": false,
+      "has_amount": true,
+      "dates_sorted": true,
+      "duplicate_dates": 0,
+      "null_required_fields": 0,
+      "repeated_request_consistent": true,
+      "name_match_status": "not_independently_exposed_by_chart_endpoint",
+      "components": [
+        {
+          "symbol": "886009",
+          "audit": {
+            "row_count": 131,
+            "latest_trade_date": "2026-07-21",
+            "at_least_120": true,
+            "dates_sorted": true,
+            "duplicate_dates": 0,
+            "null_fields": 0,
+            "ohlc_valid": true,
+            "price_change_consistent": true,
+            "deterministic_hash": "a87595c0393a935ad4f481741f6d09f1f9a0643c94dccea936e7a85a6acaa294",
+            "has_amount": true,
+            "liquidity_statuses": [
+              "complete"
+            ]
+          },
+          "repeated_request_consistent": true,
+          "source_payload_hash": "f000e8dd9c94120ade83bebbd31f07a7dc9a2676c7ba86be4438bc82d7adec7b"
+        }
+      ]
+    },
+    {
+      "sector_key": "optical_fiber_theme",
+      "sector_name": "光纤题材",
+      "market": "CN_A",
+      "mapping_type": "direct",
+      "data_status": "normal",
+      "provider_symbols": [
+        "886084"
+      ],
+      "has_any_real_data": true,
+      "has_120_days": true,
+      "latest_trade_date": "2026-07-21",
+      "has_open": true,
+      "has_high": true,
+      "has_low": true,
+      "has_close": true,
+      "has_pre_close": true,
+      "has_pct_change": true,
+      "has_volume": true,
+      "has_turnover_rate": false,
+      "has_amount": true,
+      "dates_sorted": true,
+      "duplicate_dates": 0,
+      "null_required_fields": 0,
+      "repeated_request_consistent": true,
+      "name_match_status": "not_independently_exposed_by_chart_endpoint",
+      "components": [
+        {
+          "symbol": "886084",
+          "audit": {
+            "row_count": 131,
+            "latest_trade_date": "2026-07-21",
+            "at_least_120": true,
+            "dates_sorted": true,
+            "duplicate_dates": 0,
+            "null_fields": 0,
+            "ohlc_valid": true,
+            "price_change_consistent": true,
+            "deterministic_hash": "8f17586f7ae48d52f5e3a1f622ffabd7e4df725efa02c45a9c31034f217342b0",
+            "has_amount": true,
+            "liquidity_statuses": [
+              "complete"
+            ]
+          },
+          "repeated_request_consistent": true,
+          "source_payload_hash": "d815eb64316f25794750875f864a93b8cccbb783adcc8cd7747fb6f27dc1d438"
+        }
+      ]
+    },
+    {
+      "sector_key": "glass_substrate",
+      "sector_name": "玻璃基板",
+      "market": "CN_A",
+      "mapping_type": "direct",
+      "data_status": "short_history",
+      "provider_symbols": [
+        "886111"
+      ],
+      "has_any_real_data": true,
+      "has_120_days": false,
+      "latest_trade_date": "2026-07-21",
+      "has_open": true,
+      "has_high": true,
+      "has_low": true,
+      "has_close": true,
+      "has_pre_close": true,
+      "has_pct_change": true,
+      "has_volume": true,
+      "has_turnover_rate": false,
+      "has_amount": true,
+      "dates_sorted": true,
+      "duplicate_dates": 0,
+      "null_required_fields": 0,
+      "repeated_request_consistent": true,
+      "name_match_status": "not_independently_exposed_by_chart_endpoint",
+      "components": [
+        {
+          "symbol": "886111",
+          "audit": {
+            "row_count": 14,
+            "latest_trade_date": "2026-07-21",
+            "at_least_120": false,
+            "dates_sorted": true,
+            "duplicate_dates": 0,
+            "null_fields": 0,
+            "ohlc_valid": true,
+            "price_change_consistent": true,
+            "deterministic_hash": "927c12d4c38620ecde2e63ed0ab3d2c708d5da6ede93dd522817e3dc663d1d42",
+            "has_amount": true,
+            "liquidity_statuses": [
+              "complete"
+            ]
+          },
+          "repeated_request_consistent": true,
+          "source_payload_hash": "bb1571e352cddc1489c1b4ea588ba34cd6908ee80f4ebd7f9547c2004b6a4f32"
+        }
+      ]
+    },
+    {
+      "sector_key": "ai_applications",
+      "sector_name": "AI 应用",
+      "market": "CN_A",
+      "mapping_type": "direct",
+      "data_status": "normal",
+      "provider_symbols": [
+        "886108"
+      ],
+      "has_any_real_data": true,
+      "has_120_days": true,
+      "latest_trade_date": "2026-07-21",
+      "has_open": true,
+      "has_high": true,
+      "has_low": true,
+      "has_close": true,
+      "has_pre_close": true,
+      "has_pct_change": true,
+      "has_volume": true,
+      "has_turnover_rate": false,
+      "has_amount": true,
+      "dates_sorted": true,
+      "duplicate_dates": 0,
+      "null_required_fields": 0,
+      "repeated_request_consistent": true,
+      "name_match_status": "not_independently_exposed_by_chart_endpoint",
+      "components": [
+        {
+          "symbol": "886108",
+          "audit": {
+            "row_count": 125,
+            "latest_trade_date": "2026-07-21",
+            "at_least_120": true,
+            "dates_sorted": true,
+            "duplicate_dates": 0,
+            "null_fields": 0,
+            "ohlc_valid": true,
+            "price_change_consistent": true,
+            "deterministic_hash": "2782b316da7edf13a9b3a06de795e96ce559f8f16525b6b1d1bf0fb42f4366b3",
+            "has_amount": true,
+            "liquidity_statuses": [
+              "complete"
+            ]
+          },
+          "repeated_request_consistent": true,
+          "source_payload_hash": "5378dcf8eccb02b9ee437d1b8534996e2f75b8a9afaeb9e4e8494851431b5786"
+        }
+      ]
+    },
+    {
+      "sector_key": "software_development",
+      "sector_name": "软件开发",
+      "market": "CN_A",
+      "mapping_type": "direct",
+      "data_status": "normal",
+      "provider_symbols": [
+        "881272"
+      ],
+      "has_any_real_data": true,
+      "has_120_days": true,
+      "latest_trade_date": "2026-07-21",
+      "has_open": true,
+      "has_high": true,
+      "has_low": true,
+      "has_close": true,
+      "has_pre_close": true,
+      "has_pct_change": true,
+      "has_volume": true,
+      "has_turnover_rate": false,
+      "has_amount": true,
+      "dates_sorted": true,
+      "duplicate_dates": 0,
+      "null_required_fields": 0,
+      "repeated_request_consistent": true,
+      "name_match_status": "not_independently_exposed_by_chart_endpoint",
+      "components": [
+        {
+          "symbol": "881272",
+          "audit": {
+            "row_count": 131,
+            "latest_trade_date": "2026-07-21",
+            "at_least_120": true,
+            "dates_sorted": true,
+            "duplicate_dates": 0,
+            "null_fields": 0,
+            "ohlc_valid": true,
+            "price_change_consistent": true,
+            "deterministic_hash": "f1368d57c32d31e8e11a0fb138a4d6a0bf54b1b737ed1600b623b2d99802f0b9",
+            "has_amount": true,
+            "liquidity_statuses": [
+              "complete"
+            ]
+          },
+          "repeated_request_consistent": true,
+          "source_payload_hash": "4d9e16892f83e8b2e8a0c64d14ee218aed9660371052f6e9c83250944a847389"
+        }
+      ]
+    },
+    {
+      "sector_key": "gaming",
+      "sector_name": "游戏",
+      "market": "CN_A",
+      "mapping_type": "direct",
+      "data_status": "normal",
+      "provider_symbols": [
+        "881275"
+      ],
+      "has_any_real_data": true,
+      "has_120_days": true,
+      "latest_trade_date": "2026-07-21",
+      "has_open": true,
+      "has_high": true,
+      "has_low": true,
+      "has_close": true,
+      "has_pre_close": true,
+      "has_pct_change": true,
+      "has_volume": true,
+      "has_turnover_rate": false,
+      "has_amount": true,
+      "dates_sorted": true,
+      "duplicate_dates": 0,
+      "null_required_fields": 0,
+      "repeated_request_consistent": true,
+      "name_match_status": "not_independently_exposed_by_chart_endpoint",
+      "components": [
+        {
+          "symbol": "881275",
+          "audit": {
+            "row_count": 131,
+            "latest_trade_date": "2026-07-21",
+            "at_least_120": true,
+            "dates_sorted": true,
+            "duplicate_dates": 0,
+            "null_fields": 0,
+            "ohlc_valid": true,
+            "price_change_consistent": true,
+            "deterministic_hash": "48af3ba1aa78317adbefd373c11100a341002bb2367f3ca3a4f18ef02e0a367c",
+            "has_amount": true,
+            "liquidity_statuses": [
+              "complete"
+            ]
+          },
+          "repeated_request_consistent": true,
+          "source_payload_hash": "d8a34ffa24a74d7766e00599848f626728b7402d1a0a848ca6d83413f30af989"
+        }
+      ]
+    },
+    {
+      "sector_key": "media",
+      "sector_name": "传媒",
+      "market": "CN_A",
+      "mapping_type": "direct",
+      "data_status": "normal",
+      "provider_symbols": [
+        "881164"
+      ],
+      "has_any_real_data": true,
+      "has_120_days": true,
+      "latest_trade_date": "2026-07-21",
+      "has_open": true,
+      "has_high": true,
+      "has_low": true,
+      "has_close": true,
+      "has_pre_close": true,
+      "has_pct_change": true,
+      "has_volume": true,
+      "has_turnover_rate": false,
+      "has_amount": true,
+      "dates_sorted": true,
+      "duplicate_dates": 0,
+      "null_required_fields": 0,
+      "repeated_request_consistent": true,
+      "name_match_status": "not_independently_exposed_by_chart_endpoint",
+      "components": [
+        {
+          "symbol": "881164",
+          "audit": {
+            "row_count": 131,
+            "latest_trade_date": "2026-07-21",
+            "at_least_120": true,
+            "dates_sorted": true,
+            "duplicate_dates": 0,
+            "null_fields": 0,
+            "ohlc_valid": true,
+            "price_change_consistent": true,
+            "deterministic_hash": "fee36265a76fac9e055745b48c9c8850c87a552ea99176c673fa1b44eed4d3d3",
+            "has_amount": true,
+            "liquidity_statuses": [
+              "complete"
+            ]
+          },
+          "repeated_request_consistent": true,
+          "source_payload_hash": "c411e29e4441c3f62b165dd2145649ccb963b290ef29c709db8b03614f5a2bec"
+        }
+      ]
+    },
+    {
+      "sector_key": "computer_sector",
+      "sector_name": "计算机",
+      "market": "CN_A",
+      "mapping_type": "direct",
+      "data_status": "normal",
+      "provider_symbols": [
+        "881130"
+      ],
+      "has_any_real_data": true,
+      "has_120_days": true,
+      "latest_trade_date": "2026-07-21",
+      "has_open": true,
+      "has_high": true,
+      "has_low": true,
+      "has_close": true,
+      "has_pre_close": true,
+      "has_pct_change": true,
+      "has_volume": true,
+      "has_turnover_rate": false,
+      "has_amount": true,
+      "dates_sorted": true,
+      "duplicate_dates": 0,
+      "null_required_fields": 0,
+      "repeated_request_consistent": true,
+      "name_match_status": "not_independently_exposed_by_chart_endpoint",
+      "components": [
+        {
+          "symbol": "881130",
+          "audit": {
+            "row_count": 131,
+            "latest_trade_date": "2026-07-21",
+            "at_least_120": true,
+            "dates_sorted": true,
+            "duplicate_dates": 0,
+            "null_fields": 0,
+            "ohlc_valid": true,
+            "price_change_consistent": true,
+            "deterministic_hash": "e69e84e27c5bde53aaefb4187ee192465444564cd373b9eb1e3872534a1a2c13",
+            "has_amount": true,
+            "liquidity_statuses": [
+              "complete"
+            ]
+          },
+          "repeated_request_consistent": true,
+          "source_payload_hash": "342a2397f1fb16af55e5a27a1abe0db0e0ccdb31a15541b7b4251adbfc2d5e5e"
+        }
+      ]
+    },
+    {
+      "sector_key": "it_services",
+      "sector_name": "IT 服务",
+      "market": "CN_A",
+      "mapping_type": "direct",
+      "data_status": "normal",
+      "provider_symbols": [
+        "881271"
+      ],
+      "has_any_real_data": true,
+      "has_120_days": true,
+      "latest_trade_date": "2026-07-21",
+      "has_open": true,
+      "has_high": true,
+      "has_low": true,
+      "has_close": true,
+      "has_pre_close": true,
+      "has_pct_change": true,
+      "has_volume": true,
+      "has_turnover_rate": false,
+      "has_amount": true,
+      "dates_sorted": true,
+      "duplicate_dates": 0,
+      "null_required_fields": 0,
+      "repeated_request_consistent": true,
+      "name_match_status": "not_independently_exposed_by_chart_endpoint",
+      "components": [
+        {
+          "symbol": "881271",
+          "audit": {
+            "row_count": 131,
+            "latest_trade_date": "2026-07-21",
+            "at_least_120": true,
+            "dates_sorted": true,
+            "duplicate_dates": 0,
+            "null_fields": 0,
+            "ohlc_valid": true,
+            "price_change_consistent": true,
+            "deterministic_hash": "3415bd254fef9c51af168c961b4eea7a86ce4d8728048e2216c7341f3487d6f5",
+            "has_amount": true,
+            "liquidity_statuses": [
+              "complete"
+            ]
+          },
+          "repeated_request_consistent": true,
+          "source_payload_hash": "a546ab7a6afdf4bb70ec488841bc35805d67854e00a42e4d55fc1f758ac15249"
+        }
+      ]
+    },
+    {
+      "sector_key": "cinema",
+      "sector_name": "影视院线",
+      "market": "CN_A",
+      "mapping_type": "direct",
+      "data_status": "normal",
+      "provider_symbols": [
+        "881274"
+      ],
+      "has_any_real_data": true,
+      "has_120_days": true,
+      "latest_trade_date": "2026-07-21",
+      "has_open": true,
+      "has_high": true,
+      "has_low": true,
+      "has_close": true,
+      "has_pre_close": true,
+      "has_pct_change": true,
+      "has_volume": true,
+      "has_turnover_rate": false,
+      "has_amount": true,
+      "dates_sorted": true,
+      "duplicate_dates": 0,
+      "null_required_fields": 0,
+      "repeated_request_consistent": true,
+      "name_match_status": "not_independently_exposed_by_chart_endpoint",
+      "components": [
+        {
+          "symbol": "881274",
+          "audit": {
+            "row_count": 131,
+            "latest_trade_date": "2026-07-21",
+            "at_least_120": true,
+            "dates_sorted": true,
+            "duplicate_dates": 0,
+            "null_fields": 0,
+            "ohlc_valid": true,
+            "price_change_consistent": true,
+            "deterministic_hash": "77c35f39712c258f771250fb1cecfce4bb25110e00de0c0839355afd5b37198a",
+            "has_amount": true,
+            "liquidity_statuses": [
+              "complete"
+            ]
+          },
+          "repeated_request_consistent": true,
+          "source_payload_hash": "075296e08bb7857514852dc8733cd951695a02c8a9216a17e1e00c67262a10c5"
+        }
+      ]
+    },
+    {
+      "sector_key": "advertising",
+      "sector_name": "广告",
+      "market": "CN_A",
+      "mapping_type": "direct",
+      "data_status": "normal",
+      "provider_symbols": [
+        "884178"
+      ],
+      "has_any_real_data": true,
+      "has_120_days": true,
+      "latest_trade_date": "2026-07-22",
+      "has_open": true,
+      "has_high": true,
+      "has_low": true,
+      "has_close": true,
+      "has_pre_close": true,
+      "has_pct_change": true,
+      "has_volume": true,
+      "has_turnover_rate": false,
+      "has_amount": true,
+      "dates_sorted": true,
+      "duplicate_dates": 0,
+      "null_required_fields": 0,
+      "repeated_request_consistent": true,
+      "name_match_status": "not_independently_exposed_by_chart_endpoint",
+      "components": [
+        {
+          "symbol": "884178",
+          "audit": {
+            "row_count": 132,
+            "latest_trade_date": "2026-07-22",
+            "at_least_120": true,
+            "dates_sorted": true,
+            "duplicate_dates": 0,
+            "null_fields": 0,
+            "ohlc_valid": true,
+            "price_change_consistent": true,
+            "deterministic_hash": "9e0283237114fad176acb5418124551ae5e83568fb7cc76974abf34cc9b1aa1e",
+            "has_amount": true,
+            "liquidity_statuses": [
+              "complete"
+            ]
+          },
+          "repeated_request_consistent": true,
+          "source_payload_hash": "b72eaa3d12135ee848139d5e21e211f556dbffbe37987ed68e38728ef158790a"
+        }
+      ]
+    },
+    {
+      "sector_key": "innovative_drug_medicine",
+      "sector_name": "创新药/医药",
+      "market": "CN_A",
+      "mapping_type": "direct",
+      "data_status": "normal",
+      "provider_symbols": [
+        "886015"
+      ],
+      "has_any_real_data": true,
+      "has_120_days": true,
+      "latest_trade_date": "2026-07-21",
+      "has_open": true,
+      "has_high": true,
+      "has_low": true,
+      "has_close": true,
+      "has_pre_close": true,
+      "has_pct_change": true,
+      "has_volume": true,
+      "has_turnover_rate": false,
+      "has_amount": true,
+      "dates_sorted": true,
+      "duplicate_dates": 0,
+      "null_required_fields": 0,
+      "repeated_request_consistent": true,
+      "name_match_status": "not_independently_exposed_by_chart_endpoint",
+      "components": [
+        {
+          "symbol": "886015",
+          "audit": {
+            "row_count": 131,
+            "latest_trade_date": "2026-07-21",
+            "at_least_120": true,
+            "dates_sorted": true,
+            "duplicate_dates": 0,
+            "null_fields": 0,
+            "ohlc_valid": true,
+            "price_change_consistent": true,
+            "deterministic_hash": "616992111edbefa24ec74ba745a4d4b7d676584c92dfbb0292147168690cb9f3",
+            "has_amount": true,
+            "liquidity_statuses": [
+              "complete"
+            ]
+          },
+          "repeated_request_consistent": true,
+          "source_payload_hash": "1371e8d95a1d5821fcca4afe0068d20ebae5a55a9d01d72f485bcaa40237dbdb"
+        }
+      ]
+    },
+    {
+      "sector_key": "baijiu",
+      "sector_name": "白酒",
+      "market": "CN_A",
+      "mapping_type": "direct",
+      "data_status": "normal",
+      "provider_symbols": [
+        "881273"
+      ],
+      "has_any_real_data": true,
+      "has_120_days": true,
+      "latest_trade_date": "2026-07-21",
+      "has_open": true,
+      "has_high": true,
+      "has_low": true,
+      "has_close": true,
+      "has_pre_close": true,
+      "has_pct_change": true,
+      "has_volume": true,
+      "has_turnover_rate": false,
+      "has_amount": true,
+      "dates_sorted": true,
+      "duplicate_dates": 0,
+      "null_required_fields": 0,
+      "repeated_request_consistent": true,
+      "name_match_status": "not_independently_exposed_by_chart_endpoint",
+      "components": [
+        {
+          "symbol": "881273",
+          "audit": {
+            "row_count": 131,
+            "latest_trade_date": "2026-07-21",
+            "at_least_120": true,
+            "dates_sorted": true,
+            "duplicate_dates": 0,
+            "null_fields": 0,
+            "ohlc_valid": true,
+            "price_change_consistent": true,
+            "deterministic_hash": "79d5cf4feea68c2a8c3ab3153347756cd5f50e4daf88dd745de74446154c65ec",
+            "has_amount": true,
+            "liquidity_statuses": [
+              "complete"
+            ]
+          },
+          "repeated_request_consistent": true,
+          "source_payload_hash": "2881fb601ee23bc6c23541bf8dfe348381568352848f3396a9e93230f2042903"
+        }
+      ]
+    },
+    {
+      "sector_key": "hotel_catering",
+      "sector_name": "酒店餐饮",
+      "market": "CN_A",
+      "mapping_type": "proxy",
+      "data_status": "proxy",
+      "provider_symbols": [
+        "881160"
+      ],
+      "has_any_real_data": true,
+      "has_120_days": true,
+      "latest_trade_date": "2026-07-21",
+      "has_open": true,
+      "has_high": true,
+      "has_low": true,
+      "has_close": true,
+      "has_pre_close": true,
+      "has_pct_change": true,
+      "has_volume": true,
+      "has_turnover_rate": false,
+      "has_amount": true,
+      "dates_sorted": true,
+      "duplicate_dates": 0,
+      "null_required_fields": 0,
+      "repeated_request_consistent": true,
+      "name_match_status": "not_independently_exposed_by_chart_endpoint",
+      "components": [
+        {
+          "symbol": "881160",
+          "audit": {
+            "row_count": 131,
+            "latest_trade_date": "2026-07-21",
+            "at_least_120": true,
+            "dates_sorted": true,
+            "duplicate_dates": 0,
+            "null_fields": 0,
+            "ohlc_valid": true,
+            "price_change_consistent": true,
+            "deterministic_hash": "e0ee112aad055de1761b50228eaf669b8aa6b3f8274944859bce87e5aeced04d",
+            "has_amount": true,
+            "liquidity_statuses": [
+              "complete"
+            ]
+          },
+          "repeated_request_consistent": true,
+          "source_payload_hash": "c9e47faea0bf48710651b40e526fd9eed2094025bb310d2ddcad0343fd9b7b2b"
+        }
+      ]
+    },
+    {
+      "sector_key": "agriculture_breeding",
+      "sector_name": "农业/养殖",
+      "market": "CN_A",
+      "mapping_type": "direct",
+      "data_status": "normal",
+      "provider_symbols": [
+        "881102"
+      ],
+      "has_any_real_data": true,
+      "has_120_days": true,
+      "latest_trade_date": "2026-07-21",
+      "has_open": true,
+      "has_high": true,
+      "has_low": true,
+      "has_close": true,
+      "has_pre_close": true,
+      "has_pct_change": true,
+      "has_volume": true,
+      "has_turnover_rate": false,
+      "has_amount": true,
+      "dates_sorted": true,
+      "duplicate_dates": 0,
+      "null_required_fields": 0,
+      "repeated_request_consistent": true,
+      "name_match_status": "not_independently_exposed_by_chart_endpoint",
+      "components": [
+        {
+          "symbol": "881102",
+          "audit": {
+            "row_count": 131,
+            "latest_trade_date": "2026-07-21",
+            "at_least_120": true,
+            "dates_sorted": true,
+            "duplicate_dates": 0,
+            "null_fields": 0,
+            "ohlc_valid": true,
+            "price_change_consistent": true,
+            "deterministic_hash": "9104dbbfec9e0c6a0a7a8d62e52e411328da96b5c29b9078e9302b6996868df6",
+            "has_amount": true,
+            "liquidity_statuses": [
+              "complete"
+            ]
+          },
+          "repeated_request_consistent": true,
+          "source_payload_hash": "fa664b9c25205ef56ae797c590f90f47dc5ee014fe19bb5f8906556272044259"
+        }
+      ]
+    },
+    {
+      "sector_key": "medical_services",
+      "sector_name": "医疗服务",
+      "market": "CN_A",
+      "mapping_type": "direct",
+      "data_status": "normal",
+      "provider_symbols": [
+        "881175"
+      ],
+      "has_any_real_data": true,
+      "has_120_days": true,
+      "latest_trade_date": "2026-07-21",
+      "has_open": true,
+      "has_high": true,
+      "has_low": true,
+      "has_close": true,
+      "has_pre_close": true,
+      "has_pct_change": true,
+      "has_volume": true,
+      "has_turnover_rate": false,
+      "has_amount": true,
+      "dates_sorted": true,
+      "duplicate_dates": 0,
+      "null_required_fields": 0,
+      "repeated_request_consistent": true,
+      "name_match_status": "not_independently_exposed_by_chart_endpoint",
+      "components": [
+        {
+          "symbol": "881175",
+          "audit": {
+            "row_count": 131,
+            "latest_trade_date": "2026-07-21",
+            "at_least_120": true,
+            "dates_sorted": true,
+            "duplicate_dates": 0,
+            "null_fields": 0,
+            "ohlc_valid": true,
+            "price_change_consistent": true,
+            "deterministic_hash": "946bf7ff6ee94f812d4da780988b57bfeee95c42a62606a4dedf98898e81bafb",
+            "has_amount": true,
+            "liquidity_statuses": [
+              "complete"
+            ]
+          },
+          "repeated_request_consistent": true,
+          "source_payload_hash": "aa03afb96653707335adf9987543c6c0c8558ee7703e892c52fe646dfaee0d7e"
+        }
+      ]
+    },
+    {
+      "sector_key": "medical_devices",
+      "sector_name": "医疗器械",
+      "market": "CN_A",
+      "mapping_type": "direct",
+      "data_status": "normal",
+      "provider_symbols": [
+        "881144"
+      ],
+      "has_any_real_data": true,
+      "has_120_days": true,
+      "latest_trade_date": "2026-07-21",
+      "has_open": true,
+      "has_high": true,
+      "has_low": true,
+      "has_close": true,
+      "has_pre_close": true,
+      "has_pct_change": true,
+      "has_volume": true,
+      "has_turnover_rate": false,
+      "has_amount": true,
+      "dates_sorted": true,
+      "duplicate_dates": 0,
+      "null_required_fields": 0,
+      "repeated_request_consistent": true,
+      "name_match_status": "not_independently_exposed_by_chart_endpoint",
+      "components": [
+        {
+          "symbol": "881144",
+          "audit": {
+            "row_count": 131,
+            "latest_trade_date": "2026-07-21",
+            "at_least_120": true,
+            "dates_sorted": true,
+            "duplicate_dates": 0,
+            "null_fields": 0,
+            "ohlc_valid": true,
+            "price_change_consistent": true,
+            "deterministic_hash": "d4412924cc7b7bb37c7b00daa0e73c0900cfd151fad8741b2c0431372d5b0c3f",
+            "has_amount": true,
+            "liquidity_statuses": [
+              "complete"
+            ]
+          },
+          "repeated_request_consistent": true,
+          "source_payload_hash": "97e4ff8541ce70c0fc8a1ab1af96ea2abb6c2331476947d44d85153b11f5585e"
+        }
+      ]
+    },
+    {
+      "sector_key": "traditional_chinese_medicine",
+      "sector_name": "中药",
+      "market": "CN_A",
+      "mapping_type": "direct",
+      "data_status": "normal",
+      "provider_symbols": [
+        "881141"
+      ],
+      "has_any_real_data": true,
+      "has_120_days": true,
+      "latest_trade_date": "2026-07-21",
+      "has_open": true,
+      "has_high": true,
+      "has_low": true,
+      "has_close": true,
+      "has_pre_close": true,
+      "has_pct_change": true,
+      "has_volume": true,
+      "has_turnover_rate": false,
+      "has_amount": true,
+      "dates_sorted": true,
+      "duplicate_dates": 0,
+      "null_required_fields": 0,
+      "repeated_request_consistent": true,
+      "name_match_status": "not_independently_exposed_by_chart_endpoint",
+      "components": [
+        {
+          "symbol": "881141",
+          "audit": {
+            "row_count": 131,
+            "latest_trade_date": "2026-07-21",
+            "at_least_120": true,
+            "dates_sorted": true,
+            "duplicate_dates": 0,
+            "null_fields": 0,
+            "ohlc_valid": true,
+            "price_change_consistent": true,
+            "deterministic_hash": "a735b6c755d13f05039761d3d9a89dac6a70f66f64d6c2fdc07b246fa7352403",
+            "has_amount": true,
+            "liquidity_statuses": [
+              "complete"
+            ]
+          },
+          "repeated_request_consistent": true,
+          "source_payload_hash": "556fb9ef91e2087d61c903d6b7355839793f4766e2de6eb90646f076791e1c1a"
+        }
+      ]
+    },
+    {
+      "sector_key": "tourism",
+      "sector_name": "旅游",
+      "market": "CN_A",
+      "mapping_type": "direct",
+      "data_status": "normal",
+      "provider_symbols": [
+        "885497"
+      ],
+      "has_any_real_data": true,
+      "has_120_days": true,
+      "latest_trade_date": "2026-07-21",
+      "has_open": true,
+      "has_high": true,
+      "has_low": true,
+      "has_close": true,
+      "has_pre_close": true,
+      "has_pct_change": true,
+      "has_volume": true,
+      "has_turnover_rate": false,
+      "has_amount": true,
+      "dates_sorted": true,
+      "duplicate_dates": 0,
+      "null_required_fields": 0,
+      "repeated_request_consistent": true,
+      "name_match_status": "not_independently_exposed_by_chart_endpoint",
+      "components": [
+        {
+          "symbol": "885497",
+          "audit": {
+            "row_count": 131,
+            "latest_trade_date": "2026-07-21",
+            "at_least_120": true,
+            "dates_sorted": true,
+            "duplicate_dates": 0,
+            "null_fields": 0,
+            "ohlc_valid": true,
+            "price_change_consistent": true,
+            "deterministic_hash": "b211a995096a30e0129f44b7d70e0ad28d8c13856c76c7b5380fa21775e9d18a",
+            "has_amount": true,
+            "liquidity_statuses": [
+              "complete"
+            ]
+          },
+          "repeated_request_consistent": true,
+          "source_payload_hash": "f0c3a6a9c59512ae0a350efe51f190706092101f60626fb54b10e5a1e53b4af1"
+        }
+      ]
+    },
+    {
+      "sector_key": "retail",
+      "sector_name": "零售",
+      "market": "CN_A",
+      "mapping_type": "direct",
+      "data_status": "normal",
+      "provider_symbols": [
+        "881158"
+      ],
+      "has_any_real_data": true,
+      "has_120_days": true,
+      "latest_trade_date": "2026-07-21",
+      "has_open": true,
+      "has_high": true,
+      "has_low": true,
+      "has_close": true,
+      "has_pre_close": true,
+      "has_pct_change": true,
+      "has_volume": true,
+      "has_turnover_rate": false,
+      "has_amount": true,
+      "dates_sorted": true,
+      "duplicate_dates": 0,
+      "null_required_fields": 0,
+      "repeated_request_consistent": true,
+      "name_match_status": "not_independently_exposed_by_chart_endpoint",
+      "components": [
+        {
+          "symbol": "881158",
+          "audit": {
+            "row_count": 131,
+            "latest_trade_date": "2026-07-21",
+            "at_least_120": true,
+            "dates_sorted": true,
+            "duplicate_dates": 0,
+            "null_fields": 0,
+            "ohlc_valid": true,
+            "price_change_consistent": true,
+            "deterministic_hash": "61dd5e40afbfecc2c279b21fcc1d45e5e9db2d9ac461776a0f78ec1a42ea9820",
+            "has_amount": true,
+            "liquidity_statuses": [
+              "complete"
+            ]
+          },
+          "repeated_request_consistent": true,
+          "source_payload_hash": "b7647ccdb6204de2f5f98d7c9446bd8e377ea1706a24f863ead309e841e57f62"
+        }
+      ]
+    },
+    {
+      "sector_key": "white_goods",
+      "sector_name": "白色家电",
+      "market": "CN_A",
+      "mapping_type": "direct",
+      "data_status": "normal",
+      "provider_symbols": [
+        "881131"
+      ],
+      "has_any_real_data": true,
+      "has_120_days": true,
+      "latest_trade_date": "2026-07-21",
+      "has_open": true,
+      "has_high": true,
+      "has_low": true,
+      "has_close": true,
+      "has_pre_close": true,
+      "has_pct_change": true,
+      "has_volume": true,
+      "has_turnover_rate": false,
+      "has_amount": true,
+      "dates_sorted": true,
+      "duplicate_dates": 0,
+      "null_required_fields": 0,
+      "repeated_request_consistent": true,
+      "name_match_status": "not_independently_exposed_by_chart_endpoint",
+      "components": [
+        {
+          "symbol": "881131",
+          "audit": {
+            "row_count": 131,
+            "latest_trade_date": "2026-07-21",
+            "at_least_120": true,
+            "dates_sorted": true,
+            "duplicate_dates": 0,
+            "null_fields": 0,
+            "ohlc_valid": true,
+            "price_change_consistent": true,
+            "deterministic_hash": "2bd418cbb6f1914b8e11fa8cd64f8db58fbee712c73aff386500c08b70c27d29",
+            "has_amount": true,
+            "liquidity_statuses": [
+              "complete"
+            ]
+          },
+          "repeated_request_consistent": true,
+          "source_payload_hash": "2ac0f74221651c4feb1c6c274a7137781f708efabd20dc01dba2509dabaef9f5"
+        }
+      ]
+    },
+    {
+      "sector_key": "food_beverage",
+      "sector_name": "食品饮料",
+      "market": "CN_A",
+      "mapping_type": "custom_composite",
+      "data_status": "normal",
+      "provider_symbols": [
+        "881134",
+        "881133"
+      ],
+      "has_any_real_data": true,
+      "has_120_days": true,
+      "latest_trade_date": "2026-07-21",
+      "has_open": true,
+      "has_high": true,
+      "has_low": true,
+      "has_close": true,
+      "has_pre_close": true,
+      "has_pct_change": true,
+      "has_volume": true,
+      "has_turnover_rate": false,
+      "has_amount": true,
+      "dates_sorted": true,
+      "duplicate_dates": 0,
+      "null_required_fields": 0,
+      "repeated_request_consistent": true,
+      "name_match_status": "not_independently_exposed_by_chart_endpoint",
+      "components": [
+        {
+          "symbol": "881134",
+          "audit": {
+            "row_count": 131,
+            "latest_trade_date": "2026-07-21",
+            "at_least_120": true,
+            "dates_sorted": true,
+            "duplicate_dates": 0,
+            "null_fields": 0,
+            "ohlc_valid": true,
+            "price_change_consistent": true,
+            "deterministic_hash": "8b82589f80f1f1b1e755bd585fcbfdde6a8e45ccdda10c77314822de324518e4",
+            "has_amount": true,
+            "liquidity_statuses": [
+              "complete"
+            ]
+          },
+          "repeated_request_consistent": true,
+          "source_payload_hash": "afd774fded9e804f1c73299b1b6e740c74744bb16af00bc8110a7d714e116ccd"
+        },
+        {
+          "symbol": "881133",
+          "audit": {
+            "row_count": 131,
+            "latest_trade_date": "2026-07-21",
+            "at_least_120": true,
+            "dates_sorted": true,
+            "duplicate_dates": 0,
+            "null_fields": 0,
+            "ohlc_valid": true,
+            "price_change_consistent": true,
+            "deterministic_hash": "b95a3555272602275c0b9d9fdf11938a6e683ea22cd128183cb0542c838dd1fc",
+            "has_amount": true,
+            "liquidity_statuses": [
+              "complete"
+            ]
+          },
+          "repeated_request_consistent": true,
+          "source_payload_hash": "1004950408cf1ac977fa47602a5422f8c5c814c415e9932d11bace22db133d50"
+        }
+      ]
+    },
+    {
+      "sector_key": "internet_ecommerce",
+      "sector_name": "互联网电商",
+      "market": "CN_A",
+      "mapping_type": "direct",
+      "data_status": "normal",
+      "provider_symbols": [
+        "881177"
+      ],
+      "has_any_real_data": true,
+      "has_120_days": true,
+      "latest_trade_date": "2026-07-21",
+      "has_open": true,
+      "has_high": true,
+      "has_low": true,
+      "has_close": true,
+      "has_pre_close": true,
+      "has_pct_change": true,
+      "has_volume": true,
+      "has_turnover_rate": false,
+      "has_amount": true,
+      "dates_sorted": true,
+      "duplicate_dates": 0,
+      "null_required_fields": 0,
+      "repeated_request_consistent": true,
+      "name_match_status": "not_independently_exposed_by_chart_endpoint",
+      "components": [
+        {
+          "symbol": "881177",
+          "audit": {
+            "row_count": 131,
+            "latest_trade_date": "2026-07-21",
+            "at_least_120": true,
+            "dates_sorted": true,
+            "duplicate_dates": 0,
+            "null_fields": 0,
+            "ohlc_valid": true,
+            "price_change_consistent": true,
+            "deterministic_hash": "ed996d74ecd04af49c4cdd0f7834f60a2c8281feb78c79c9f9a5d04253e71bd9",
+            "has_amount": true,
+            "liquidity_statuses": [
+              "complete"
+            ]
+          },
+          "repeated_request_consistent": true,
+          "source_payload_hash": "038d8f782b295f31c1cc0e31a2e9e94553874286bd590088de663c927601ce5a"
+        }
+      ]
+    },
+    {
+      "sector_key": "beer",
+      "sector_name": "啤酒",
+      "market": "CN_A",
+      "mapping_type": "direct",
+      "data_status": "normal",
+      "provider_symbols": [
+        "885780"
+      ],
+      "has_any_real_data": true,
+      "has_120_days": true,
+      "latest_trade_date": "2026-07-21",
+      "has_open": true,
+      "has_high": true,
+      "has_low": true,
+      "has_close": true,
+      "has_pre_close": true,
+      "has_pct_change": true,
+      "has_volume": true,
+      "has_turnover_rate": false,
+      "has_amount": true,
+      "dates_sorted": true,
+      "duplicate_dates": 0,
+      "null_required_fields": 0,
+      "repeated_request_consistent": true,
+      "name_match_status": "not_independently_exposed_by_chart_endpoint",
+      "components": [
+        {
+          "symbol": "885780",
+          "audit": {
+            "row_count": 131,
+            "latest_trade_date": "2026-07-21",
+            "at_least_120": true,
+            "dates_sorted": true,
+            "duplicate_dates": 0,
+            "null_fields": 0,
+            "ohlc_valid": true,
+            "price_change_consistent": true,
+            "deterministic_hash": "d1c806bd22faca23f957bf49011e78af61289c55849eadb1a907a160cc1cd8ce",
+            "has_amount": true,
+            "liquidity_statuses": [
+              "complete"
+            ]
+          },
+          "repeated_request_consistent": true,
+          "source_payload_hash": "94cb44b8780655849d74d81432528fe4a0ca23915b0b060db4f4f41b0080ba95"
+        }
+      ]
+    },
+    {
+      "sector_key": "small_appliances",
+      "sector_name": "小家电",
+      "market": "CN_A",
+      "mapping_type": "direct",
+      "data_status": "normal",
+      "provider_symbols": [
+        "881173"
+      ],
+      "has_any_real_data": true,
+      "has_120_days": true,
+      "latest_trade_date": "2026-07-21",
+      "has_open": true,
+      "has_high": true,
+      "has_low": true,
+      "has_close": true,
+      "has_pre_close": true,
+      "has_pct_change": true,
+      "has_volume": true,
+      "has_turnover_rate": false,
+      "has_amount": true,
+      "dates_sorted": true,
+      "duplicate_dates": 0,
+      "null_required_fields": 0,
+      "repeated_request_consistent": true,
+      "name_match_status": "not_independently_exposed_by_chart_endpoint",
+      "components": [
+        {
+          "symbol": "881173",
+          "audit": {
+            "row_count": 131,
+            "latest_trade_date": "2026-07-21",
+            "at_least_120": true,
+            "dates_sorted": true,
+            "duplicate_dates": 0,
+            "null_fields": 0,
+            "ohlc_valid": true,
+            "price_change_consistent": true,
+            "deterministic_hash": "55c6dafe54ae968424700e62b7fda04df7213b931764c946bb55de57764b71b2",
+            "has_amount": true,
+            "liquidity_statuses": [
+              "complete"
+            ]
+          },
+          "repeated_request_consistent": true,
+          "source_payload_hash": "fa9810e94174b4bfe238b95e490c96441a949f7b21fd30d7cf5248605b0da373"
+        }
+      ]
+    },
+    {
+      "sector_key": "education",
+      "sector_name": "教育",
+      "market": "CN_A",
+      "mapping_type": "direct",
+      "data_status": "normal",
+      "provider_symbols": [
+        "881178"
+      ],
+      "has_any_real_data": true,
+      "has_120_days": true,
+      "latest_trade_date": "2026-07-21",
+      "has_open": true,
+      "has_high": true,
+      "has_low": true,
+      "has_close": true,
+      "has_pre_close": true,
+      "has_pct_change": true,
+      "has_volume": true,
+      "has_turnover_rate": false,
+      "has_amount": true,
+      "dates_sorted": true,
+      "duplicate_dates": 0,
+      "null_required_fields": 0,
+      "repeated_request_consistent": true,
+      "name_match_status": "not_independently_exposed_by_chart_endpoint",
+      "components": [
+        {
+          "symbol": "881178",
+          "audit": {
+            "row_count": 131,
+            "latest_trade_date": "2026-07-21",
+            "at_least_120": true,
+            "dates_sorted": true,
+            "duplicate_dates": 0,
+            "null_fields": 0,
+            "ohlc_valid": true,
+            "price_change_consistent": true,
+            "deterministic_hash": "8d2f7393db2f3cfaface52838703c2f5011f238e5763afb24bf75462c43ec908",
+            "has_amount": true,
+            "liquidity_statuses": [
+              "complete"
+            ]
+          },
+          "repeated_request_consistent": true,
+          "source_payload_hash": "9a44e413b9cbe6744becbe70e2e9999f70c5dc8966db17789285e8a62b1f2fea"
+        }
+      ]
+    },
+    {
+      "sector_key": "securities",
+      "sector_name": "证券",
+      "market": "CN_A",
+      "mapping_type": "direct",
+      "data_status": "normal",
+      "provider_symbols": [
+        "881157"
+      ],
+      "has_any_real_data": true,
+      "has_120_days": true,
+      "latest_trade_date": "2026-07-21",
+      "has_open": true,
+      "has_high": true,
+      "has_low": true,
+      "has_close": true,
+      "has_pre_close": true,
+      "has_pct_change": true,
+      "has_volume": true,
+      "has_turnover_rate": false,
+      "has_amount": true,
+      "dates_sorted": true,
+      "duplicate_dates": 0,
+      "null_required_fields": 0,
+      "repeated_request_consistent": true,
+      "name_match_status": "not_independently_exposed_by_chart_endpoint",
+      "components": [
+        {
+          "symbol": "881157",
+          "audit": {
+            "row_count": 131,
+            "latest_trade_date": "2026-07-21",
+            "at_least_120": true,
+            "dates_sorted": true,
+            "duplicate_dates": 0,
+            "null_fields": 0,
+            "ohlc_valid": true,
+            "price_change_consistent": true,
+            "deterministic_hash": "6d2ada49cd9df12e69fa1b31960360d241409fd89e1087978395ac7e5a4b6b28",
+            "has_amount": true,
+            "liquidity_statuses": [
+              "complete"
+            ]
+          },
+          "repeated_request_consistent": true,
+          "source_payload_hash": "a39e5b4c4fc28504884b2ed16a924b8a3db1bfeb010943ed725b5d462e4e9fcb"
+        }
+      ]
+    },
+    {
+      "sector_key": "bank",
+      "sector_name": "银行",
+      "market": "CN_A",
+      "mapping_type": "direct",
+      "data_status": "normal",
+      "provider_symbols": [
+        "881155"
+      ],
+      "has_any_real_data": true,
+      "has_120_days": true,
+      "latest_trade_date": "2026-07-21",
+      "has_open": true,
+      "has_high": true,
+      "has_low": true,
+      "has_close": true,
+      "has_pre_close": true,
+      "has_pct_change": true,
+      "has_volume": true,
+      "has_turnover_rate": false,
+      "has_amount": true,
+      "dates_sorted": true,
+      "duplicate_dates": 0,
+      "null_required_fields": 0,
+      "repeated_request_consistent": true,
+      "name_match_status": "not_independently_exposed_by_chart_endpoint",
+      "components": [
+        {
+          "symbol": "881155",
+          "audit": {
+            "row_count": 131,
+            "latest_trade_date": "2026-07-21",
+            "at_least_120": true,
+            "dates_sorted": true,
+            "duplicate_dates": 0,
+            "null_fields": 0,
+            "ohlc_valid": true,
+            "price_change_consistent": true,
+            "deterministic_hash": "7ae62f0b6f7fd374f96e2484994580712994ed5e5e243b3b30f96ad81d11dd67",
+            "has_amount": true,
+            "liquidity_statuses": [
+              "complete"
+            ]
+          },
+          "repeated_request_consistent": true,
+          "source_payload_hash": "945d9ff191fa330c092488681369a7be34de48ca32c8678caf8d08b557322e2a"
+        }
+      ]
+    },
+    {
+      "sector_key": "insurance",
+      "sector_name": "保险",
+      "market": "CN_A",
+      "mapping_type": "direct",
+      "data_status": "normal",
+      "provider_symbols": [
+        "881156"
+      ],
+      "has_any_real_data": true,
+      "has_120_days": true,
+      "latest_trade_date": "2026-07-21",
+      "has_open": true,
+      "has_high": true,
+      "has_low": true,
+      "has_close": true,
+      "has_pre_close": true,
+      "has_pct_change": true,
+      "has_volume": true,
+      "has_turnover_rate": false,
+      "has_amount": true,
+      "dates_sorted": true,
+      "duplicate_dates": 0,
+      "null_required_fields": 0,
+      "repeated_request_consistent": true,
+      "name_match_status": "not_independently_exposed_by_chart_endpoint",
+      "components": [
+        {
+          "symbol": "881156",
+          "audit": {
+            "row_count": 131,
+            "latest_trade_date": "2026-07-21",
+            "at_least_120": true,
+            "dates_sorted": true,
+            "duplicate_dates": 0,
+            "null_fields": 0,
+            "ohlc_valid": true,
+            "price_change_consistent": true,
+            "deterministic_hash": "6645372419a8d13563fc9a71e4c666b8d7082b6c3584008af93b3e1758c70224",
+            "has_amount": true,
+            "liquidity_statuses": [
+              "complete"
+            ]
+          },
+          "repeated_request_consistent": true,
+          "source_payload_hash": "06640bb3273f3cfd944aa7061fdf142f38ff20e85a8eea7afdaf8f821b24ddd8"
+        }
+      ]
+    },
+    {
+      "sector_key": "diversified_finance",
+      "sector_name": "多元金融",
+      "market": "CN_A",
+      "mapping_type": "direct",
+      "data_status": "normal",
+      "provider_symbols": [
+        "881283"
+      ],
+      "has_any_real_data": true,
+      "has_120_days": true,
+      "latest_trade_date": "2026-07-21",
+      "has_open": true,
+      "has_high": true,
+      "has_low": true,
+      "has_close": true,
+      "has_pre_close": true,
+      "has_pct_change": true,
+      "has_volume": true,
+      "has_turnover_rate": false,
+      "has_amount": true,
+      "dates_sorted": true,
+      "duplicate_dates": 0,
+      "null_required_fields": 0,
+      "repeated_request_consistent": true,
+      "name_match_status": "not_independently_exposed_by_chart_endpoint",
+      "components": [
+        {
+          "symbol": "881283",
+          "audit": {
+            "row_count": 131,
+            "latest_trade_date": "2026-07-21",
+            "at_least_120": true,
+            "dates_sorted": true,
+            "duplicate_dates": 0,
+            "null_fields": 0,
+            "ohlc_valid": true,
+            "price_change_consistent": true,
+            "deterministic_hash": "bfc3c489e0e598d1c34e4508e191e9a71d6dd494ca3d747eb32c092e80ac4158",
+            "has_amount": true,
+            "liquidity_statuses": [
+              "complete"
+            ]
+          },
+          "repeated_request_consistent": true,
+          "source_payload_hash": "7018a7265dd73daf532dce1ec4595d69b910805a6a88b0fb169accb85939f601"
+        }
+      ]
+    },
+    {
+      "sector_key": "internet_finance",
+      "sector_name": "互联网金融",
+      "market": "CN_A",
+      "mapping_type": "direct",
+      "data_status": "normal",
+      "provider_symbols": [
+        "885456"
+      ],
+      "has_any_real_data": true,
+      "has_120_days": true,
+      "latest_trade_date": "2026-07-21",
+      "has_open": true,
+      "has_high": true,
+      "has_low": true,
+      "has_close": true,
+      "has_pre_close": true,
+      "has_pct_change": true,
+      "has_volume": true,
+      "has_turnover_rate": false,
+      "has_amount": true,
+      "dates_sorted": true,
+      "duplicate_dates": 0,
+      "null_required_fields": 0,
+      "repeated_request_consistent": true,
+      "name_match_status": "not_independently_exposed_by_chart_endpoint",
+      "components": [
+        {
+          "symbol": "885456",
+          "audit": {
+            "row_count": 131,
+            "latest_trade_date": "2026-07-21",
+            "at_least_120": true,
+            "dates_sorted": true,
+            "duplicate_dates": 0,
+            "null_fields": 0,
+            "ohlc_valid": true,
+            "price_change_consistent": true,
+            "deterministic_hash": "4f166d3df531018a8fe4d898efc4eec43ecb437f1af9416733f226112f0ca6eb",
+            "has_amount": true,
+            "liquidity_statuses": [
+              "complete"
+            ]
+          },
+          "repeated_request_consistent": true,
+          "source_payload_hash": "9faadb053422e6e88c3194dfd1b0744ecfb298454b6640ea4e769143bfaea2af"
+        }
+      ]
+    },
+    {
+      "sector_key": "robotics",
+      "sector_name": "机器人",
+      "market": "CN_A",
+      "mapping_type": "direct",
+      "data_status": "normal",
+      "provider_symbols": [
+        "885517"
+      ],
+      "has_any_real_data": true,
+      "has_120_days": true,
+      "latest_trade_date": "2026-07-21",
+      "has_open": true,
+      "has_high": true,
+      "has_low": true,
+      "has_close": true,
+      "has_pre_close": true,
+      "has_pct_change": true,
+      "has_volume": true,
+      "has_turnover_rate": false,
+      "has_amount": true,
+      "dates_sorted": true,
+      "duplicate_dates": 0,
+      "null_required_fields": 0,
+      "repeated_request_consistent": true,
+      "name_match_status": "not_independently_exposed_by_chart_endpoint",
+      "components": [
+        {
+          "symbol": "885517",
+          "audit": {
+            "row_count": 131,
+            "latest_trade_date": "2026-07-21",
+            "at_least_120": true,
+            "dates_sorted": true,
+            "duplicate_dates": 0,
+            "null_fields": 0,
+            "ohlc_valid": true,
+            "price_change_consistent": true,
+            "deterministic_hash": "ed00fed9fec583491443ed335cf23e009f2817d5b1358dbf6922c4e22b9c10c7",
+            "has_amount": true,
+            "liquidity_statuses": [
+              "complete"
+            ]
+          },
+          "repeated_request_consistent": true,
+          "source_payload_hash": "7f398e8c7871f4e2a5050ed588b5b4bc910926d11e1cc94841ff0052c893e9e9"
+        }
+      ]
+    },
+    {
+      "sector_key": "battery_lithium",
+      "sector_name": "电池/锂电池",
+      "market": "CN_A",
+      "mapping_type": "direct",
+      "data_status": "normal",
+      "provider_symbols": [
+        "881281"
+      ],
+      "has_any_real_data": true,
+      "has_120_days": true,
+      "latest_trade_date": "2026-07-21",
+      "has_open": true,
+      "has_high": true,
+      "has_low": true,
+      "has_close": true,
+      "has_pre_close": true,
+      "has_pct_change": true,
+      "has_volume": true,
+      "has_turnover_rate": false,
+      "has_amount": true,
+      "dates_sorted": true,
+      "duplicate_dates": 0,
+      "null_required_fields": 0,
+      "repeated_request_consistent": true,
+      "name_match_status": "not_independently_exposed_by_chart_endpoint",
+      "components": [
+        {
+          "symbol": "881281",
+          "audit": {
+            "row_count": 131,
+            "latest_trade_date": "2026-07-21",
+            "at_least_120": true,
+            "dates_sorted": true,
+            "duplicate_dates": 0,
+            "null_fields": 0,
+            "ohlc_valid": true,
+            "price_change_consistent": true,
+            "deterministic_hash": "91051ab39c2beaabe507201bb83da54a399ecde64927380f3cfe846f326fcfc4",
+            "has_amount": true,
+            "liquidity_statuses": [
+              "complete"
+            ]
+          },
+          "repeated_request_consistent": true,
+          "source_payload_hash": "cd62a39cbcef51beb06f551544bbbec3542f7573d8f13319dae9acc356133696"
+        }
+      ]
+    },
+    {
+      "sector_key": "auto_parts",
+      "sector_name": "汽车零部件",
+      "market": "CN_A",
+      "mapping_type": "direct",
+      "data_status": "normal",
+      "provider_symbols": [
+        "881126"
+      ],
+      "has_any_real_data": true,
+      "has_120_days": true,
+      "latest_trade_date": "2026-07-21",
+      "has_open": true,
+      "has_high": true,
+      "has_low": true,
+      "has_close": true,
+      "has_pre_close": true,
+      "has_pct_change": true,
+      "has_volume": true,
+      "has_turnover_rate": false,
+      "has_amount": true,
+      "dates_sorted": true,
+      "duplicate_dates": 0,
+      "null_required_fields": 0,
+      "repeated_request_consistent": true,
+      "name_match_status": "not_independently_exposed_by_chart_endpoint",
+      "components": [
+        {
+          "symbol": "881126",
+          "audit": {
+            "row_count": 131,
+            "latest_trade_date": "2026-07-21",
+            "at_least_120": true,
+            "dates_sorted": true,
+            "duplicate_dates": 0,
+            "null_fields": 0,
+            "ohlc_valid": true,
+            "price_change_consistent": true,
+            "deterministic_hash": "d30b53533c3e6ba28bd6ea69f2fe569116b8744439f99afe0ce9e7055dd4c899",
+            "has_amount": true,
+            "liquidity_statuses": [
+              "complete"
+            ]
+          },
+          "repeated_request_consistent": true,
+          "source_payload_hash": "d00cfdda2661751229580f597e19e097dd0c68d3f48fa87e7f467e31ab4b9bce"
+        }
+      ]
+    },
+    {
+      "sector_key": "photovoltaic_energy_storage",
+      "sector_name": "光伏/储能",
+      "market": "CN_A",
+      "mapping_type": "custom_composite",
+      "data_status": "normal",
+      "provider_symbols": [
+        "881279",
+        "885921"
+      ],
+      "has_any_real_data": true,
+      "has_120_days": true,
+      "latest_trade_date": "2026-07-21",
+      "has_open": true,
+      "has_high": true,
+      "has_low": true,
+      "has_close": true,
+      "has_pre_close": true,
+      "has_pct_change": true,
+      "has_volume": true,
+      "has_turnover_rate": false,
+      "has_amount": true,
+      "dates_sorted": true,
+      "duplicate_dates": 0,
+      "null_required_fields": 0,
+      "repeated_request_consistent": true,
+      "name_match_status": "not_independently_exposed_by_chart_endpoint",
+      "components": [
+        {
+          "symbol": "881279",
+          "audit": {
+            "row_count": 131,
+            "latest_trade_date": "2026-07-21",
+            "at_least_120": true,
+            "dates_sorted": true,
+            "duplicate_dates": 0,
+            "null_fields": 0,
+            "ohlc_valid": true,
+            "price_change_consistent": true,
+            "deterministic_hash": "8080c6aa970b7c7ad4d0b510d21e5e2c142cc875c76190d2590208f83be37c62",
+            "has_amount": true,
+            "liquidity_statuses": [
+              "complete"
+            ]
+          },
+          "repeated_request_consistent": true,
+          "source_payload_hash": "ed0fd99e2b531860167eb6f47828a6dae234937a588edc1ec2ef8c521ec1870e"
+        },
+        {
+          "symbol": "885921",
+          "audit": {
+            "row_count": 131,
+            "latest_trade_date": "2026-07-21",
+            "at_least_120": true,
+            "dates_sorted": true,
+            "duplicate_dates": 0,
+            "null_fields": 0,
+            "ohlc_valid": true,
+            "price_change_consistent": true,
+            "deterministic_hash": "78156bc88ab758232fe0c77ed8f8f944b668c3c0187bb561b228075dc8aed40d",
+            "has_amount": true,
+            "liquidity_statuses": [
+              "complete"
+            ]
+          },
+          "repeated_request_consistent": true,
+          "source_payload_hash": "b7bea56f96861b0791584352a1cec9d52093449b6590c912b50bf547c5013fe7"
+        }
+      ]
+    },
+    {
+      "sector_key": "power_grid_equipment",
+      "sector_name": "电网设备",
+      "market": "CN_A",
+      "mapping_type": "direct",
+      "data_status": "normal",
+      "provider_symbols": [
+        "881278"
+      ],
+      "has_any_real_data": true,
+      "has_120_days": true,
+      "latest_trade_date": "2026-07-21",
+      "has_open": true,
+      "has_high": true,
+      "has_low": true,
+      "has_close": true,
+      "has_pre_close": true,
+      "has_pct_change": true,
+      "has_volume": true,
+      "has_turnover_rate": false,
+      "has_amount": true,
+      "dates_sorted": true,
+      "duplicate_dates": 0,
+      "null_required_fields": 0,
+      "repeated_request_consistent": true,
+      "name_match_status": "not_independently_exposed_by_chart_endpoint",
+      "components": [
+        {
+          "symbol": "881278",
+          "audit": {
+            "row_count": 131,
+            "latest_trade_date": "2026-07-21",
+            "at_least_120": true,
+            "dates_sorted": true,
+            "duplicate_dates": 0,
+            "null_fields": 0,
+            "ohlc_valid": true,
+            "price_change_consistent": true,
+            "deterministic_hash": "cfbf332628d6dfac815f0f9daf7c8b1c21ce7385ab164c141214b9bc93a595ab",
+            "has_amount": true,
+            "liquidity_statuses": [
+              "complete"
+            ]
+          },
+          "repeated_request_consistent": true,
+          "source_payload_hash": "3e8f010b2e236be8a51bca2cd2cd342f91b50a4fbf08af7af47301e1cb4e8931"
+        }
+      ]
+    },
+    {
+      "sector_key": "automobiles",
+      "sector_name": "汽车",
+      "market": "CN_A",
+      "mapping_type": "direct",
+      "data_status": "normal",
+      "provider_symbols": [
+        "881125"
+      ],
+      "has_any_real_data": true,
+      "has_120_days": true,
+      "latest_trade_date": "2026-07-21",
+      "has_open": true,
+      "has_high": true,
+      "has_low": true,
+      "has_close": true,
+      "has_pre_close": true,
+      "has_pct_change": true,
+      "has_volume": true,
+      "has_turnover_rate": false,
+      "has_amount": true,
+      "dates_sorted": true,
+      "duplicate_dates": 0,
+      "null_required_fields": 0,
+      "repeated_request_consistent": true,
+      "name_match_status": "not_independently_exposed_by_chart_endpoint",
+      "components": [
+        {
+          "symbol": "881125",
+          "audit": {
+            "row_count": 131,
+            "latest_trade_date": "2026-07-21",
+            "at_least_120": true,
+            "dates_sorted": true,
+            "duplicate_dates": 0,
+            "null_fields": 0,
+            "ohlc_valid": true,
+            "price_change_consistent": true,
+            "deterministic_hash": "ad71dca725646ffb17a53accb047c450d3f48c54f8715aea6fa97af2cb4cf826",
+            "has_amount": true,
+            "liquidity_statuses": [
+              "complete"
+            ]
+          },
+          "repeated_request_consistent": true,
+          "source_payload_hash": "dea22af0042e7b55ede5a5dca79cbc6f544462c359b190dcf989bbc4db9275f7"
+        }
+      ]
+    },
+    {
+      "sector_key": "general_equipment",
+      "sector_name": "通用设备",
+      "market": "CN_A",
+      "mapping_type": "direct",
+      "data_status": "normal",
+      "provider_symbols": [
+        "881117"
+      ],
+      "has_any_real_data": true,
+      "has_120_days": true,
+      "latest_trade_date": "2026-07-21",
+      "has_open": true,
+      "has_high": true,
+      "has_low": true,
+      "has_close": true,
+      "has_pre_close": true,
+      "has_pct_change": true,
+      "has_volume": true,
+      "has_turnover_rate": false,
+      "has_amount": true,
+      "dates_sorted": true,
+      "duplicate_dates": 0,
+      "null_required_fields": 0,
+      "repeated_request_consistent": true,
+      "name_match_status": "not_independently_exposed_by_chart_endpoint",
+      "components": [
+        {
+          "symbol": "881117",
+          "audit": {
+            "row_count": 131,
+            "latest_trade_date": "2026-07-21",
+            "at_least_120": true,
+            "dates_sorted": true,
+            "duplicate_dates": 0,
+            "null_fields": 0,
+            "ohlc_valid": true,
+            "price_change_consistent": true,
+            "deterministic_hash": "95734af1d212e649904c926197aeedc1f96047f2cd11cbbcd9f5c73df9993a9b",
+            "has_amount": true,
+            "liquidity_statuses": [
+              "complete"
+            ]
+          },
+          "repeated_request_consistent": true,
+          "source_payload_hash": "3b36f5770bb7233e5f0839cd8f4cbbe243c9e248a2db0af5fa3e2407fe660d01"
+        }
+      ]
+    },
+    {
+      "sector_key": "nonferrous_metals",
+      "sector_name": "有色金属",
+      "market": "CN_A",
+      "mapping_type": "direct",
+      "data_status": "normal",
+      "provider_symbols": [
+        "881168"
+      ],
+      "has_any_real_data": true,
+      "has_120_days": true,
+      "latest_trade_date": "2026-07-21",
+      "has_open": true,
+      "has_high": true,
+      "has_low": true,
+      "has_close": true,
+      "has_pre_close": true,
+      "has_pct_change": true,
+      "has_volume": true,
+      "has_turnover_rate": false,
+      "has_amount": true,
+      "dates_sorted": true,
+      "duplicate_dates": 0,
+      "null_required_fields": 0,
+      "repeated_request_consistent": true,
+      "name_match_status": "not_independently_exposed_by_chart_endpoint",
+      "components": [
+        {
+          "symbol": "881168",
+          "audit": {
+            "row_count": 131,
+            "latest_trade_date": "2026-07-21",
+            "at_least_120": true,
+            "dates_sorted": true,
+            "duplicate_dates": 0,
+            "null_fields": 0,
+            "ohlc_valid": true,
+            "price_change_consistent": true,
+            "deterministic_hash": "1b4bfce8bb40601dee61654f335b3f053d871bf0944a4317dbf4dc3e41226fc7",
+            "has_amount": true,
+            "liquidity_statuses": [
+              "complete"
+            ]
+          },
+          "repeated_request_consistent": true,
+          "source_payload_hash": "7a4c76b25233fd2bc6bff4c904c498f8d2ae905b6b81204fd522c4f37bee8284"
+        }
+      ]
+    },
+    {
+      "sector_key": "electricity",
+      "sector_name": "电力",
+      "market": "CN_A",
+      "mapping_type": "direct",
+      "data_status": "normal",
+      "provider_symbols": [
+        "881145"
+      ],
+      "has_any_real_data": true,
+      "has_120_days": true,
+      "latest_trade_date": "2026-07-21",
+      "has_open": true,
+      "has_high": true,
+      "has_low": true,
+      "has_close": true,
+      "has_pre_close": true,
+      "has_pct_change": true,
+      "has_volume": true,
+      "has_turnover_rate": false,
+      "has_amount": true,
+      "dates_sorted": true,
+      "duplicate_dates": 0,
+      "null_required_fields": 0,
+      "repeated_request_consistent": true,
+      "name_match_status": "not_independently_exposed_by_chart_endpoint",
+      "components": [
+        {
+          "symbol": "881145",
+          "audit": {
+            "row_count": 131,
+            "latest_trade_date": "2026-07-21",
+            "at_least_120": true,
+            "dates_sorted": true,
+            "duplicate_dates": 0,
+            "null_fields": 0,
+            "ohlc_valid": true,
+            "price_change_consistent": true,
+            "deterministic_hash": "3fd8c46eb6d949d0ab2faf74129502e30dbfe4165031d72cac09e0c3bfec2e4e",
+            "has_amount": true,
+            "liquidity_statuses": [
+              "complete"
+            ]
+          },
+          "repeated_request_consistent": true,
+          "source_payload_hash": "e19534720124aab0d3d8e428d7524ab7f563fcdf4c1e293295ad4b9216b15099"
+        }
+      ]
+    },
+    {
+      "sector_key": "rare_earth",
+      "sector_name": "稀土",
+      "market": "CN_A",
+      "mapping_type": "direct",
+      "data_status": "normal",
+      "provider_symbols": [
+        "885343"
+      ],
+      "has_any_real_data": true,
+      "has_120_days": true,
+      "latest_trade_date": "2026-07-21",
+      "has_open": true,
+      "has_high": true,
+      "has_low": true,
+      "has_close": true,
+      "has_pre_close": true,
+      "has_pct_change": true,
+      "has_volume": true,
+      "has_turnover_rate": false,
+      "has_amount": true,
+      "dates_sorted": true,
+      "duplicate_dates": 0,
+      "null_required_fields": 0,
+      "repeated_request_consistent": true,
+      "name_match_status": "not_independently_exposed_by_chart_endpoint",
+      "components": [
+        {
+          "symbol": "885343",
+          "audit": {
+            "row_count": 131,
+            "latest_trade_date": "2026-07-21",
+            "at_least_120": true,
+            "dates_sorted": true,
+            "duplicate_dates": 0,
+            "null_fields": 0,
+            "ohlc_valid": true,
+            "price_change_consistent": true,
+            "deterministic_hash": "c1b70915465c58065d850de56e1ad0013abf926eee0b036a37b580e2e373684f",
+            "has_amount": true,
+            "liquidity_statuses": [
+              "complete"
+            ]
+          },
+          "repeated_request_consistent": true,
+          "source_payload_hash": "605270739fec8b621e777a98c0559bdaabbbf506d75df0d05066d72336c62b94"
+        }
+      ]
+    },
+    {
+      "sector_key": "coal",
+      "sector_name": "煤炭",
+      "market": "CN_A",
+      "mapping_type": "direct",
+      "data_status": "normal",
+      "provider_symbols": [
+        "881105"
+      ],
+      "has_any_real_data": true,
+      "has_120_days": true,
+      "latest_trade_date": "2026-07-21",
+      "has_open": true,
+      "has_high": true,
+      "has_low": true,
+      "has_close": true,
+      "has_pre_close": true,
+      "has_pct_change": true,
+      "has_volume": true,
+      "has_turnover_rate": false,
+      "has_amount": true,
+      "dates_sorted": true,
+      "duplicate_dates": 0,
+      "null_required_fields": 0,
+      "repeated_request_consistent": true,
+      "name_match_status": "not_independently_exposed_by_chart_endpoint",
+      "components": [
+        {
+          "symbol": "881105",
+          "audit": {
+            "row_count": 131,
+            "latest_trade_date": "2026-07-21",
+            "at_least_120": true,
+            "dates_sorted": true,
+            "duplicate_dates": 0,
+            "null_fields": 0,
+            "ohlc_valid": true,
+            "price_change_consistent": true,
+            "deterministic_hash": "c1b08918ab442e11e070cb4276f2fb397c46411c990d8479d5096585330394c9",
+            "has_amount": true,
+            "liquidity_statuses": [
+              "complete"
+            ]
+          },
+          "repeated_request_consistent": true,
+          "source_payload_hash": "6323dbe8f137ca3b57dc751218a2e825181904b2d2a3e824279c81eb19103f40"
+        }
+      ]
+    },
+    {
+      "sector_key": "minor_metals",
+      "sector_name": "小金属",
+      "market": "CN_A",
+      "mapping_type": "direct",
+      "data_status": "normal",
+      "provider_symbols": [
+        "881170"
+      ],
+      "has_any_real_data": true,
+      "has_120_days": true,
+      "latest_trade_date": "2026-07-21",
+      "has_open": true,
+      "has_high": true,
+      "has_low": true,
+      "has_close": true,
+      "has_pre_close": true,
+      "has_pct_change": true,
+      "has_volume": true,
+      "has_turnover_rate": false,
+      "has_amount": true,
+      "dates_sorted": true,
+      "duplicate_dates": 0,
+      "null_required_fields": 0,
+      "repeated_request_consistent": true,
+      "name_match_status": "not_independently_exposed_by_chart_endpoint",
+      "components": [
+        {
+          "symbol": "881170",
+          "audit": {
+            "row_count": 131,
+            "latest_trade_date": "2026-07-21",
+            "at_least_120": true,
+            "dates_sorted": true,
+            "duplicate_dates": 0,
+            "null_fields": 0,
+            "ohlc_valid": true,
+            "price_change_consistent": true,
+            "deterministic_hash": "8a94d75a37d846c3894a7252f9766737fe79e4cf4fc6d5593e0057dda57106fe",
+            "has_amount": true,
+            "liquidity_statuses": [
+              "complete"
+            ]
+          },
+          "repeated_request_consistent": true,
+          "source_payload_hash": "8a6d91c4d1eddb3d813ec1aaa58b53f95872bea0368e52e08d1ee5693c1be572"
+        }
+      ]
+    },
+    {
+      "sector_key": "chemicals",
+      "sector_name": "化工",
+      "market": "CN_A",
+      "mapping_type": "direct",
+      "data_status": "normal",
+      "provider_symbols": [
+        "881109"
+      ],
+      "has_any_real_data": true,
+      "has_120_days": true,
+      "latest_trade_date": "2026-07-21",
+      "has_open": true,
+      "has_high": true,
+      "has_low": true,
+      "has_close": true,
+      "has_pre_close": true,
+      "has_pct_change": true,
+      "has_volume": true,
+      "has_turnover_rate": false,
+      "has_amount": true,
+      "dates_sorted": true,
+      "duplicate_dates": 0,
+      "null_required_fields": 0,
+      "repeated_request_consistent": true,
+      "name_match_status": "not_independently_exposed_by_chart_endpoint",
+      "components": [
+        {
+          "symbol": "881109",
+          "audit": {
+            "row_count": 131,
+            "latest_trade_date": "2026-07-21",
+            "at_least_120": true,
+            "dates_sorted": true,
+            "duplicate_dates": 0,
+            "null_fields": 0,
+            "ohlc_valid": true,
+            "price_change_consistent": true,
+            "deterministic_hash": "5c30c387387fb43bd2fb2408301d60540eccb2ff086d670b67f154701cdc70f8",
+            "has_amount": true,
+            "liquidity_statuses": [
+              "complete"
+            ]
+          },
+          "repeated_request_consistent": true,
+          "source_payload_hash": "230813a6a7a67d8dc81958c86ca74cd6366564e898b29bfda5ff7080dcc1722f"
+        }
+      ]
+    },
+    {
+      "sector_key": "oil_petrochemical",
+      "sector_name": "石油石化",
+      "market": "CN_A",
+      "mapping_type": "custom_composite",
+      "data_status": "normal",
+      "provider_symbols": [
+        "881180",
+        "881107"
+      ],
+      "has_any_real_data": true,
+      "has_120_days": true,
+      "latest_trade_date": "2026-07-21",
+      "has_open": true,
+      "has_high": true,
+      "has_low": true,
+      "has_close": true,
+      "has_pre_close": true,
+      "has_pct_change": true,
+      "has_volume": true,
+      "has_turnover_rate": false,
+      "has_amount": true,
+      "dates_sorted": true,
+      "duplicate_dates": 0,
+      "null_required_fields": 0,
+      "repeated_request_consistent": true,
+      "name_match_status": "not_independently_exposed_by_chart_endpoint",
+      "components": [
+        {
+          "symbol": "881180",
+          "audit": {
+            "row_count": 131,
+            "latest_trade_date": "2026-07-21",
+            "at_least_120": true,
+            "dates_sorted": true,
+            "duplicate_dates": 0,
+            "null_fields": 0,
+            "ohlc_valid": true,
+            "price_change_consistent": true,
+            "deterministic_hash": "e9476764e267918710efd1b8c774039805b0efa316323fed56c59a78e0f31bfd",
+            "has_amount": true,
+            "liquidity_statuses": [
+              "complete"
+            ]
+          },
+          "repeated_request_consistent": true,
+          "source_payload_hash": "fd053e2826eb3b26c23956bf439b39592d6da565312a0f633cd631892a38460c"
+        },
+        {
+          "symbol": "881107",
+          "audit": {
+            "row_count": 131,
+            "latest_trade_date": "2026-07-21",
+            "at_least_120": true,
+            "dates_sorted": true,
+            "duplicate_dates": 0,
+            "null_fields": 0,
+            "ohlc_valid": true,
+            "price_change_consistent": true,
+            "deterministic_hash": "bab7df1beda8393101020b3bd1376b9065e02b5dc36b0a94e3ea037619afb317",
+            "has_amount": true,
+            "liquidity_statuses": [
+              "complete"
+            ]
+          },
+          "repeated_request_consistent": true,
+          "source_payload_hash": "03257c1bf99e8ecc1d5d590832622bd62d39aa3068d35e52cf63834b322b6485"
+        }
+      ]
+    },
+    {
+      "sector_key": "glass_fiber",
+      "sector_name": "玻璃玻纤",
+      "market": "CN_A",
+      "mapping_type": "direct",
+      "data_status": "normal",
+      "provider_symbols": [
+        "884059"
+      ],
+      "has_any_real_data": true,
+      "has_120_days": true,
+      "latest_trade_date": "2026-07-22",
+      "has_open": true,
+      "has_high": true,
+      "has_low": true,
+      "has_close": true,
+      "has_pre_close": true,
+      "has_pct_change": true,
+      "has_volume": true,
+      "has_turnover_rate": false,
+      "has_amount": true,
+      "dates_sorted": true,
+      "duplicate_dates": 0,
+      "null_required_fields": 0,
+      "repeated_request_consistent": true,
+      "name_match_status": "not_independently_exposed_by_chart_endpoint",
+      "components": [
+        {
+          "symbol": "884059",
+          "audit": {
+            "row_count": 132,
+            "latest_trade_date": "2026-07-22",
+            "at_least_120": true,
+            "dates_sorted": true,
+            "duplicate_dates": 0,
+            "null_fields": 0,
+            "ohlc_valid": true,
+            "price_change_consistent": true,
+            "deterministic_hash": "b20c02a004147c2299d169c67c7847f9494a2d2e6591774d74677e9af31081b8",
+            "has_amount": true,
+            "liquidity_statuses": [
+              "complete"
+            ]
+          },
+          "repeated_request_consistent": true,
+          "source_payload_hash": "be4a689a1d7a61c6298412206af8eac93ab8d42e5c8de713aa57cf54389866c4"
+        }
+      ]
+    },
+    {
+      "sector_key": "gold_concept",
+      "sector_name": "黄金概念",
+      "market": "CN_A",
+      "mapping_type": "direct",
+      "data_status": "normal",
+      "provider_symbols": [
+        "885530"
+      ],
+      "has_any_real_data": true,
+      "has_120_days": true,
+      "latest_trade_date": "2026-07-21",
+      "has_open": true,
+      "has_high": true,
+      "has_low": true,
+      "has_close": true,
+      "has_pre_close": true,
+      "has_pct_change": true,
+      "has_volume": true,
+      "has_turnover_rate": false,
+      "has_amount": true,
+      "dates_sorted": true,
+      "duplicate_dates": 0,
+      "null_required_fields": 0,
+      "repeated_request_consistent": true,
+      "name_match_status": "not_independently_exposed_by_chart_endpoint",
+      "components": [
+        {
+          "symbol": "885530",
+          "audit": {
+            "row_count": 131,
+            "latest_trade_date": "2026-07-21",
+            "at_least_120": true,
+            "dates_sorted": true,
+            "duplicate_dates": 0,
+            "null_fields": 0,
+            "ohlc_valid": true,
+            "price_change_consistent": true,
+            "deterministic_hash": "4b7f9a0fec57f70de0b389b0cb1d26a3eef02d7cf697caf315b4aee9d0ead00a",
+            "has_amount": true,
+            "liquidity_statuses": [
+              "complete"
+            ]
+          },
+          "repeated_request_consistent": true,
+          "source_payload_hash": "3ce2f3cd3849ede6f9a8c70a8426482e33e1908d9430243c018fe52324d9ab64"
+        }
+      ]
+    },
+    {
+      "sector_key": "precious_metals",
+      "sector_name": "贵金属",
+      "market": "CN_A",
+      "mapping_type": "direct",
+      "data_status": "normal",
+      "provider_symbols": [
+        "881169"
+      ],
+      "has_any_real_data": true,
+      "has_120_days": true,
+      "latest_trade_date": "2026-07-21",
+      "has_open": true,
+      "has_high": true,
+      "has_low": true,
+      "has_close": true,
+      "has_pre_close": true,
+      "has_pct_change": true,
+      "has_volume": true,
+      "has_turnover_rate": false,
+      "has_amount": true,
+      "dates_sorted": true,
+      "duplicate_dates": 0,
+      "null_required_fields": 0,
+      "repeated_request_consistent": true,
+      "name_match_status": "not_independently_exposed_by_chart_endpoint",
+      "components": [
+        {
+          "symbol": "881169",
+          "audit": {
+            "row_count": 131,
+            "latest_trade_date": "2026-07-21",
+            "at_least_120": true,
+            "dates_sorted": true,
+            "duplicate_dates": 0,
+            "null_fields": 0,
+            "ohlc_valid": true,
+            "price_change_consistent": true,
+            "deterministic_hash": "0c677815dd99392f0f149d688692f1706edd5549465e48a2aaab5a0a9db710e3",
+            "has_amount": true,
+            "liquidity_statuses": [
+              "complete"
+            ]
+          },
+          "repeated_request_consistent": true,
+          "source_payload_hash": "4a4f52069bc7eeb07fbb89627915ea68ae06aa19bb49d3de0d718f2f42b7e1e0"
+        }
+      ]
+    },
+    {
+      "sector_key": "steel",
+      "sector_name": "钢铁",
+      "market": "CN_A",
+      "mapping_type": "direct",
+      "data_status": "normal",
+      "provider_symbols": [
+        "881112"
+      ],
+      "has_any_real_data": true,
+      "has_120_days": true,
+      "latest_trade_date": "2026-07-21",
+      "has_open": true,
+      "has_high": true,
+      "has_low": true,
+      "has_close": true,
+      "has_pre_close": true,
+      "has_pct_change": true,
+      "has_volume": true,
+      "has_turnover_rate": false,
+      "has_amount": true,
+      "dates_sorted": true,
+      "duplicate_dates": 0,
+      "null_required_fields": 0,
+      "repeated_request_consistent": true,
+      "name_match_status": "not_independently_exposed_by_chart_endpoint",
+      "components": [
+        {
+          "symbol": "881112",
+          "audit": {
+            "row_count": 131,
+            "latest_trade_date": "2026-07-21",
+            "at_least_120": true,
+            "dates_sorted": true,
+            "duplicate_dates": 0,
+            "null_fields": 0,
+            "ohlc_valid": true,
+            "price_change_consistent": true,
+            "deterministic_hash": "a1081046b2c3d290eced16d38957970b65188513462956ecf351857c4d68162d",
+            "has_amount": true,
+            "liquidity_statuses": [
+              "complete"
+            ]
+          },
+          "repeated_request_consistent": true,
+          "source_payload_hash": "2b89f6cf6369907d883c2597dcd746e12a79740d2fc71e25773cd01a07fb2226"
+        }
+      ]
+    },
+    {
+      "sector_key": "lithium_mining",
+      "sector_name": "锂矿",
+      "market": "CN_A",
+      "mapping_type": "direct",
+      "data_status": "normal",
+      "provider_symbols": [
+        "881267"
+      ],
+      "has_any_real_data": true,
+      "has_120_days": true,
+      "latest_trade_date": "2026-07-21",
+      "has_open": true,
+      "has_high": true,
+      "has_low": true,
+      "has_close": true,
+      "has_pre_close": true,
+      "has_pct_change": true,
+      "has_volume": true,
+      "has_turnover_rate": false,
+      "has_amount": true,
+      "dates_sorted": true,
+      "duplicate_dates": 0,
+      "null_required_fields": 0,
+      "repeated_request_consistent": true,
+      "name_match_status": "not_independently_exposed_by_chart_endpoint",
+      "components": [
+        {
+          "symbol": "881267",
+          "audit": {
+            "row_count": 131,
+            "latest_trade_date": "2026-07-21",
+            "at_least_120": true,
+            "dates_sorted": true,
+            "duplicate_dates": 0,
+            "null_fields": 0,
+            "ohlc_valid": true,
+            "price_change_consistent": true,
+            "deterministic_hash": "b15ae08db7db309c36d588477d0eecbf924aa25e67d5e8196ef8d1d70026a423",
+            "has_amount": true,
+            "liquidity_statuses": [
+              "complete"
+            ]
+          },
+          "repeated_request_consistent": true,
+          "source_payload_hash": "781522359723f1c3e17c1168597479c0d6beb5d5ba3c3787a324e24dfccac284"
+        }
+      ]
+    },
+    {
+      "sector_key": "commercial_space",
+      "sector_name": "商业航天",
+      "market": "CN_A",
+      "mapping_type": "direct",
+      "data_status": "normal",
+      "provider_symbols": [
+        "886078"
+      ],
+      "has_any_real_data": true,
+      "has_120_days": true,
+      "latest_trade_date": "2026-07-21",
+      "has_open": true,
+      "has_high": true,
+      "has_low": true,
+      "has_close": true,
+      "has_pre_close": true,
+      "has_pct_change": true,
+      "has_volume": true,
+      "has_turnover_rate": false,
+      "has_amount": true,
+      "dates_sorted": true,
+      "duplicate_dates": 0,
+      "null_required_fields": 0,
+      "repeated_request_consistent": true,
+      "name_match_status": "not_independently_exposed_by_chart_endpoint",
+      "components": [
+        {
+          "symbol": "886078",
+          "audit": {
+            "row_count": 131,
+            "latest_trade_date": "2026-07-21",
+            "at_least_120": true,
+            "dates_sorted": true,
+            "duplicate_dates": 0,
+            "null_fields": 0,
+            "ohlc_valid": true,
+            "price_change_consistent": true,
+            "deterministic_hash": "39ae720bc47e1a02d56d34609991ce412a771da10302b6aa51de828da27a1294",
+            "has_amount": true,
+            "liquidity_statuses": [
+              "complete"
+            ]
+          },
+          "repeated_request_consistent": true,
+          "source_payload_hash": "35e34e1f178e5837494118181bbfdaafb1aaeaaa8a97c7577b9687afedffa582"
+        }
+      ]
+    },
+    {
+      "sector_key": "defense_military",
+      "sector_name": "国防军工",
+      "market": "CN_A",
+      "mapping_type": "direct",
+      "data_status": "normal",
+      "provider_symbols": [
+        "885700"
+      ],
+      "has_any_real_data": true,
+      "has_120_days": true,
+      "latest_trade_date": "2026-07-21",
+      "has_open": true,
+      "has_high": true,
+      "has_low": true,
+      "has_close": true,
+      "has_pre_close": true,
+      "has_pct_change": true,
+      "has_volume": true,
+      "has_turnover_rate": false,
+      "has_amount": true,
+      "dates_sorted": true,
+      "duplicate_dates": 0,
+      "null_required_fields": 0,
+      "repeated_request_consistent": true,
+      "name_match_status": "not_independently_exposed_by_chart_endpoint",
+      "components": [
+        {
+          "symbol": "885700",
+          "audit": {
+            "row_count": 131,
+            "latest_trade_date": "2026-07-21",
+            "at_least_120": true,
+            "dates_sorted": true,
+            "duplicate_dates": 0,
+            "null_fields": 0,
+            "ohlc_valid": true,
+            "price_change_consistent": true,
+            "deterministic_hash": "ef838b9a47874efa8536763966a4394011861f0b2a14161747a1e999f202671a",
+            "has_amount": true,
+            "liquidity_statuses": [
+              "complete"
+            ]
+          },
+          "repeated_request_consistent": true,
+          "source_payload_hash": "08fba1a1830d9830818ea34a82252df0c6167702eceb08ef9108d702bce5b1fb"
+        }
+      ]
+    },
+    {
+      "sector_key": "aerospace_equipment",
+      "sector_name": "航天装备",
+      "market": "CN_A",
+      "mapping_type": "direct",
+      "data_status": "normal",
+      "provider_symbols": [
+        "884180"
+      ],
+      "has_any_real_data": true,
+      "has_120_days": true,
+      "latest_trade_date": "2026-07-22",
+      "has_open": true,
+      "has_high": true,
+      "has_low": true,
+      "has_close": true,
+      "has_pre_close": true,
+      "has_pct_change": true,
+      "has_volume": true,
+      "has_turnover_rate": false,
+      "has_amount": true,
+      "dates_sorted": true,
+      "duplicate_dates": 0,
+      "null_required_fields": 0,
+      "repeated_request_consistent": true,
+      "name_match_status": "not_independently_exposed_by_chart_endpoint",
+      "components": [
+        {
+          "symbol": "884180",
+          "audit": {
+            "row_count": 132,
+            "latest_trade_date": "2026-07-22",
+            "at_least_120": true,
+            "dates_sorted": true,
+            "duplicate_dates": 0,
+            "null_fields": 0,
+            "ohlc_valid": true,
+            "price_change_consistent": true,
+            "deterministic_hash": "8f9c0629577ef2d775c43d7693eabf1562739b984dd30a479399717298dfc439",
+            "has_amount": true,
+            "liquidity_statuses": [
+              "complete"
+            ]
+          },
+          "repeated_request_consistent": true,
+          "source_payload_hash": "7d10adef93ef876786a065f057aec3a6ea6c5b4963de06613324253318af7a79"
+        }
+      ]
+    },
+    {
+      "sector_key": "port_shipping",
+      "sector_name": "港口航运",
+      "market": "CN_A",
+      "mapping_type": "direct",
+      "data_status": "normal",
+      "provider_symbols": [
+        "881148"
+      ],
+      "has_any_real_data": true,
+      "has_120_days": true,
+      "latest_trade_date": "2026-07-21",
+      "has_open": true,
+      "has_high": true,
+      "has_low": true,
+      "has_close": true,
+      "has_pre_close": true,
+      "has_pct_change": true,
+      "has_volume": true,
+      "has_turnover_rate": false,
+      "has_amount": true,
+      "dates_sorted": true,
+      "duplicate_dates": 0,
+      "null_required_fields": 0,
+      "repeated_request_consistent": true,
+      "name_match_status": "not_independently_exposed_by_chart_endpoint",
+      "components": [
+        {
+          "symbol": "881148",
+          "audit": {
+            "row_count": 131,
+            "latest_trade_date": "2026-07-21",
+            "at_least_120": true,
+            "dates_sorted": true,
+            "duplicate_dates": 0,
+            "null_fields": 0,
+            "ohlc_valid": true,
+            "price_change_consistent": true,
+            "deterministic_hash": "6601ba3023f63ea5225dd0b29953bc551b824403d40f4914ecf4c9a060ad4e5a",
+            "has_amount": true,
+            "liquidity_statuses": [
+              "complete"
+            ]
+          },
+          "repeated_request_consistent": true,
+          "source_payload_hash": "c60fd3213c646043c77654c08ac68c9d09b3ddafb4a6604f186f90ef51d34689"
+        }
+      ]
+    },
+    {
+      "sector_key": "real_estate",
+      "sector_name": "房地产",
+      "market": "CN_A",
+      "mapping_type": "direct",
+      "data_status": "normal",
+      "provider_symbols": [
+        "881153"
+      ],
+      "has_any_real_data": true,
+      "has_120_days": true,
+      "latest_trade_date": "2026-07-21",
+      "has_open": true,
+      "has_high": true,
+      "has_low": true,
+      "has_close": true,
+      "has_pre_close": true,
+      "has_pct_change": true,
+      "has_volume": true,
+      "has_turnover_rate": false,
+      "has_amount": true,
+      "dates_sorted": true,
+      "duplicate_dates": 0,
+      "null_required_fields": 0,
+      "repeated_request_consistent": true,
+      "name_match_status": "not_independently_exposed_by_chart_endpoint",
+      "components": [
+        {
+          "symbol": "881153",
+          "audit": {
+            "row_count": 131,
+            "latest_trade_date": "2026-07-21",
+            "at_least_120": true,
+            "dates_sorted": true,
+            "duplicate_dates": 0,
+            "null_fields": 0,
+            "ohlc_valid": true,
+            "price_change_consistent": true,
+            "deterministic_hash": "cf464c32a725dd5bb57d3b8c8467cc4f31a02a7a792783fb7adec93b14f72a9d",
+            "has_amount": true,
+            "liquidity_statuses": [
+              "complete"
+            ]
+          },
+          "repeated_request_consistent": true,
+          "source_payload_hash": "f306e67772904a9fa50cb22658f3e0d8e53ade72a12e109e256543dd3391489b"
+        }
+      ]
+    }
+  ]
+}

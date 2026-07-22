@@ -1,43 +1,40 @@
-# Architecture — Phase 0
+# Architecture — Phase 1B-0
 
-## Boundary
-
-The Leopard Project separates source acquisition, deterministic calculation, persistence, API delivery, and later commentary verification. Phase 0 implements only the domain foundation and offline fixtures.
+## Two independent product paths
 
 ```text
-Versioned config -> Config loader -> Eligibility policy
-                                      |
-Fake Provider -> normalized DailyBar -> indicator pure functions -> snapshot models
-                                      |
-                              future repository/API/export layers
+66-sector business catalog
+        |
+        +--> system support policy --> 65-sector A-share collection plan
+        |                                  |
+        |                         MarketDataProvider diagnostics
+        |                                  |
+        |                         normalized bars / indicators / rankings
+        |
+        +--> live transcript + V2.3 PDF specification --> daily PDF summary
 ```
 
-Business code does not import a Tonghuashun, Tushare, AKShare, RQData, or other production client. A future provider adapter must implement `MarketDataProvider` and return normalized `DailyBar` records with provider, acquisition time, payload hash, market, and data status.
+The automatic market-data path and the daily live-report PDF path are deliberately independent. HSTECH is `unsupported` by the first automatic release, but a live transcript may still mention Hang Seng Tech and its content remains eligible for the PDF. Phase 1B-0 does not modify the PDF specification or generation logic.
 
-## Modules
+## Support scope
 
-- `config/`: versioned sectors, aliases, researched mappings, and custom-composition rules.
-- `backend/leopard_project/models.py`: Pydantic domain contracts.
-- `backend/leopard_project/config.py`: loading, structural validation, alias lookup, and mapping admission.
-- `backend/leopard_project/providers/`: provider abstraction, error taxonomy, and offline Fake Provider.
-- `backend/leopard_project/indicators.py`: deterministic numeric calculations and ranking.
-- `backend/leopard_project/mappings.py`: immutable, version-producing batch approval.
-- `backend/migrations/versions/`: SQL migration design draft for Phase 1.
-- `tests/` and `data/fixtures/`: offline deterministic verification.
+`config/system_support_policy_v1.json` is the current product decision:
 
-## Deployment naming reservation
+- catalog: 66;
+- supported A-share sectors: 65;
+- unsupported: HSTECH/HK only;
+- collection and success-rate denominator: 65.
 
-The future Compose project is `leopard_project`, database is `leopard_project`, and reserved container names are `leopard-api`, `leopard-web`, `leopard-scheduler`, and `leopard-db`. The API prefix is `/api/v1/`.
+`backend/leopard_project/support.py` generates an immutable, ordered plan. Unsupported entries cannot create Provider symbols. Hotel catering produces an `881160` proxy task, glass substrate produces an `886111` short-history task, and the other three custom sectors retain component-based calculation tasks.
 
-The deployment path must be an isolated new path selected during Phase 3. The old project-book path is not authoritative after the project rename. No server connection or deployment occurred in Phase 0.
+## Provider boundary
 
-## Future data flow
+Business code depends on `MarketDataProvider`. Public THS access remains diagnostic. AKShare is research-only and Tushare remains an unbound candidate; no production role is approved. Phase 1A coverage under `data/provider-validation/` remains historical evidence. Phase 1B-0 selection artifacts live separately under `data/provider-selection/`.
 
-1. Scheduler selects the correct market calendar (A-share or Hong Kong).
-2. Repository loads only mappings passing the admission policy for the trade date.
-3. Provider validates symbols and returns normalized bars.
-4. Validator rejects missing, duplicated, misdated, or malformed records.
-5. Pure functions calculate indicators from ordered trading-session data.
-6. A transaction stores raw bars, indicator snapshots, anomalies, and a job run.
-7. Exporters produce traceable Excel/JSON artifacts and an `ExportManifest`.
-8. `/api/v1/` exposes stored results; the frontend never recalculates core indicators.
+## State semantics
+
+`unsupported` is a support decision and is strictly different from `provider_failed`. Unsupported entries remain serializable for catalog display but are excluded from requests, alerts, retries, rankings, indicators, reconciliation, freshness checks, and provider success statistics.
+
+## CI boundary
+
+GitHub Actions runs with `contents: read`, installs project test dependencies, and executes only `pytest -m "not live"` plus versioned configuration, JSON, compilation, and credential checks. It has no cloud access, secrets, write permission, or live requests.

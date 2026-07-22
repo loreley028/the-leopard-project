@@ -10,8 +10,10 @@ from ..config import CONFIG_DIR
 
 
 class ProviderRole(StrEnum):
+    RESEARCH_PROVIDER = "research_provider"
     CANDIDATE_PRIMARY = "candidate_primary"
     DIAGNOSTIC_PROVIDER = "diagnostic_provider"
+    UNSUPPORTED = "unsupported"
     PRODUCTION_PRIMARY = "production_primary"
 
 

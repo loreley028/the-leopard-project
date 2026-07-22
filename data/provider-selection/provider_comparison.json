@@ -1,0 +1,116 @@
+{
+  "schema_version": 1,
+  "generated_at": "2026-07-22T07:08:08.965312+00:00",
+  "selection_conclusion": "D_free_or_public_sources_are_not_yet_sufficient_for_stable_production",
+  "production_primary_approved": false,
+  "providers": [
+    {
+      "provider_name": "ths_public_validation",
+      "provider_role": "diagnostic_provider",
+      "supported_sector_count": 65,
+      "coverage_rate": 1.0,
+      "full_history_count": 64,
+      "latest_trade_date_count": 3,
+      "has_open": 65,
+      "has_high": 65,
+      "has_low": 65,
+      "has_close": 65,
+      "has_pre_close": 65,
+      "has_pct_change": 65,
+      "has_volume": 65,
+      "has_turnover_rate": 0,
+      "has_amount": 65,
+      "freshness_risk": "medium; latest-date gate required",
+      "stale_snapshot_risk": "high; public cache/version drift observed in Phase 1A HSTECH test",
+      "rate_limit": "undocumented; Phase 1B-0 uses sequential requests with >=0.35s interval",
+      "authentication_required": false,
+      "paid_permission_required": false,
+      "licensing_risk": "high; no project-specific production authorization established",
+      "endpoint_stability": "low; undocumented web chart callback",
+      "integration_complexity": "low",
+      "maintenance_cost": "high",
+      "production_recommendation": "B_current_source_remains_diagnostic_provider",
+      "blocking_reasons": [
+        "undocumented_endpoint",
+        "no_sla",
+        "licensing_not_confirmed",
+        "name_not_exposed",
+        "turnover_rate_absent"
+      ],
+      "evidence": [
+        "phase1b0_live_scan",
+        "phase1a_snapshot_observation"
+      ]
+    },
+    {
+      "provider_name": "akshare_ths",
+      "provider_role": "research_provider",
+      "supported_sector_count": null,
+      "coverage_rate": null,
+      "full_history_count": null,
+      "latest_trade_date_count": null,
+      "has_open": null,
+      "has_high": null,
+      "has_low": null,
+      "has_close": null,
+      "has_pre_close": null,
+      "has_pct_change": null,
+      "has_volume": null,
+      "has_turnover_rate": null,
+      "has_amount": null,
+      "freshness_risk": "not_live_validated",
+      "stale_snapshot_risk": "shares THS upstream risk",
+      "rate_limit": "upstream-dependent and undocumented",
+      "authentication_required": false,
+      "paid_permission_required": false,
+      "licensing_risk": "upstream data terms require confirmation",
+      "endpoint_stability": "not independently established",
+      "integration_complexity": "medium",
+      "maintenance_cost": "medium_to_high",
+      "production_recommendation": "research_only_not_an_independent_fallback",
+      "blocking_reasons": [
+        "not_live_validated_in_repository",
+        "same_or_similar_public_upstream",
+        "no_project_sla"
+      ],
+      "evidence": [
+        "akshare_official_repository_and_documented_interfaces"
+      ]
+    },
+    {
+      "provider_name": "tushare_ths_daily",
+      "provider_role": "candidate_primary",
+      "supported_sector_count": null,
+      "coverage_rate": null,
+      "full_history_count": null,
+      "latest_trade_date_count": null,
+      "has_open": null,
+      "has_high": null,
+      "has_low": null,
+      "has_close": null,
+      "has_pre_close": null,
+      "has_pct_change": null,
+      "has_volume": null,
+      "has_turnover_rate": null,
+      "has_amount": null,
+      "freshness_risk": "not_live_validated",
+      "stale_snapshot_risk": "not_evaluated",
+      "rate_limit": "official endpoint documents permission/points requirements",
+      "authentication_required": true,
+      "paid_permission_required": "permission_or_points_required",
+      "licensing_risk": "account use terms and project authorization require confirmation",
+      "endpoint_stability": "documented API but not tested with this account",
+      "integration_complexity": "medium",
+      "maintenance_cost": "medium",
+      "production_recommendation": "candidate_only_no_provider_implementation_in_phase1b0",
+      "blocking_reasons": [
+        "no_account_permission_test",
+        "65_symbol_conversion_not_verified",
+        "amount_not_documented"
+      ],
+      "evidence": [
+        "tushare_official_ths_daily_documentation"
+      ]
+    }
+  ]
+}
