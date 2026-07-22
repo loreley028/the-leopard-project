@@ -1,0 +1,44 @@
+{
+  "reconciliation_version": "reconciliation-v1-20260722",
+  "reconciliation_run_id": "32253ead328bdb437833f3c8",
+  "requested_as_of": "2026-07-22T15:30:00+08:00",
+  "expected_trade_date": "2026-07-21",
+  "actual_trade_date": "2026-07-21",
+  "sector_key": "semiconductor",
+  "sector_name": "半导体",
+  "canonical_symbol": "881121",
+  "source_a_provider": "ths_public_validation",
+  "source_b_provider": "akshare_ths_research",
+  "source_a_lineage": "ths_public_validation",
+  "source_b_lineage": "akshare_ths_research",
+  "source_independence_status": "shared_upstream",
+  "source_a_eod_status": "complete_eod",
+  "source_b_eod_status": null,
+  "source_a_values": null,
+  "source_b_values": null,
+  "close_difference_abs": null,
+  "close_difference_pct": null,
+  "pct_change_difference_abs": null,
+  "volume_difference_abs": null,
+  "volume_difference_pct": null,
+  "amount_difference_abs": null,
+  "amount_difference_pct": null,
+  "missing_fields_a": [
+    "close",
+    "pct_change",
+    "volume",
+    "amount"
+  ],
+  "missing_fields_b": [
+    "close",
+    "pct_change",
+    "volume",
+    "amount"
+  ],
+  "anomaly_codes": [
+    "one_source_missing",
+    "manual_review_required"
+  ],
+  "reconciliation_status": "one_source_missing",
+  "created_at": "2026-07-22T16:00:00+08:00"
+}

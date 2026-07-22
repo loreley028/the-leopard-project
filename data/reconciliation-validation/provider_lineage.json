@@ -1,0 +1,85 @@
+{
+  "schema_version": 1,
+  "lineage_version": "provider-lineage-v1-20260722",
+  "providers": [
+    {
+      "provider_name": "ths_public_validation",
+      "adapter_name": "ThsPublicValidationProvider",
+      "provider_role": "diagnostic_provider",
+      "upstream_vendor": "Tonghuashun",
+      "upstream_endpoint_family": "v4_board_chart_jsonp",
+      "endpoint_host": "d.10jqka.com.cn",
+      "transport_type": "HTTPS JSONP callback",
+      "authentication_required": false,
+      "documented_api": false,
+      "service_sla": "none",
+      "licensing_status": "project_production_authorization_unconfirmed",
+      "observed_response_signature": "jsonp:data:semicolon_delimited_rows",
+      "observed_field_signature": [
+        "trade_date",
+        "open",
+        "high",
+        "low",
+        "close",
+        "volume",
+        "amount"
+      ],
+      "independence_status": "unknown",
+      "independence_confidence": "not_applicable",
+      "compared_with": [
+        "akshare_ths_research"
+      ],
+      "evidence": [
+        "backend/leopard_project/providers/ths_public.py",
+        "data/provider-selection/coverage_65.json"
+      ],
+      "verified_at": "2026-07-22T16:00:00+08:00",
+      "notes": "Validation-only public chart callback; no production SLA or authorization established."
+    },
+    {
+      "provider_name": "akshare_ths_research",
+      "adapter_name": "AkshareResearchProvider",
+      "provider_role": "research_provider",
+      "upstream_vendor": "Tonghuashun",
+      "upstream_endpoint_family": "v4_board_chart_jsonp",
+      "endpoint_host": "d.10jqka.com.cn",
+      "transport_type": "AKShare Python adapter over q.10jqka lookup and d.10jqka HTTPS JSONP",
+      "authentication_required": false,
+      "documented_api": true,
+      "service_sla": "none",
+      "licensing_status": "research_only_upstream_terms_unconfirmed",
+      "observed_response_signature": "jsonp:data:semicolon_delimited_rows",
+      "observed_field_signature": [
+        "date",
+        "open",
+        "high",
+        "low",
+        "close",
+        "volume",
+        "amount"
+      ],
+      "independence_status": "shared_upstream",
+      "independence_confidence": "high_source_code_verified",
+      "compared_with": [
+        "ths_public_validation"
+      ],
+      "evidence": [
+        "https://github.com/akfamily/akshare",
+        "https://akshare.akfamily.xyz/tutorial.html",
+        "https://github.com/akfamily/akshare/blob/main/akshare/stock_feature/stock_board_industry_ths.py",
+        "https://github.com/akfamily/akshare/blob/main/akshare/stock_feature/stock_board_concept_ths.py",
+        "AKShare 1.18.64 source requests the same d.10jqka.com.cn v4 board chart endpoint"
+      ],
+      "verified_at": "2026-07-22T16:00:00+08:00",
+      "notes": "Different Python adapter does not provide fault isolation because the final chart endpoint and response format are the same; runtime anti-bot material is never persisted."
+    }
+  ],
+  "pair_assessment": {
+    "source_a": "ths_public_validation",
+    "source_b": "akshare_ths_research",
+    "independence_status": "shared_upstream",
+    "independent_dual_source_available": false,
+    "akshare_live_execution_status": "blocked_by_dependency_network",
+    "production_fallback_value": "not_established"
+  }
+}

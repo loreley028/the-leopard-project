@@ -1,0 +1,17 @@
+{
+  "schema_version": 1,
+  "reconciliation_version": "reconciliation-v1-20260722",
+  "validation_only": true,
+  "close_difference_pct_matched": "0.01",
+  "close_difference_pct_acceptable": "0.10",
+  "pct_change_difference_matched": "0.01",
+  "pct_change_difference_acceptable": "0.05",
+  "volume_difference_pct_acceptable": "1.00",
+  "amount_difference_pct_acceptable": "1.00",
+  "missing_optional_field_policy": "record_and_continue",
+  "shared_upstream_policy": "source_not_independent",
+  "intraday_policy": "exclude",
+  "stale_policy": "exclude",
+  "manual_review_threshold": "0.50",
+  "production_thresholds_approved": false
+}

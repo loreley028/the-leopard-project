@@ -5,7 +5,10 @@ from pathlib import Path
 
 
 def main() -> int:
-    roots = (Path("config"), Path("data/provider-validation"), Path("data/provider-selection"))
+    roots = (
+        Path("config"), Path("data/provider-validation"), Path("data/provider-selection"),
+        Path("data/reconciliation-validation"),
+    )
     paths = sorted(path for root in roots if root.exists() for path in root.rglob("*.json"))
     for path in paths:
         json.loads(path.read_text(encoding="utf-8"))

@@ -1,0 +1,36 @@
+{
+  "schema_version": 1,
+  "policy_version": "eod-v1-20260722",
+  "market": "CN_A",
+  "timezone": "Asia/Shanghai",
+  "market_close_time": "15:00",
+  "safe_accept_after": "16:30",
+  "expected_trade_date_rule": "latest_calendar_session_complete_at_safe_accept_after",
+  "future_date_policy": "reject_as_future_snapshot",
+  "intraday_snapshot_policy": "exclude_from_eod_and_reconciliation",
+  "stale_snapshot_policy": "exclude_and_require_review",
+  "missing_expected_date_policy": "exclude_and_require_review",
+  "minimum_required_fields": [
+    "open",
+    "high",
+    "low",
+    "close",
+    "pre_close",
+    "pct_change",
+    "volume"
+  ],
+  "optional_fields": [
+    "amount",
+    "turnover_rate"
+  ],
+  "provider_specific_overrides": {
+    "ths_public_validation": {
+      "safe_accept_after": "16:30"
+    },
+    "akshare_ths_research": {
+      "safe_accept_after": "16:30"
+    }
+  },
+  "calendar_fixture": "config/cn_a_trading_calendar_fixture_v1.json",
+  "production_calendar_approved": false
+}

@@ -1,0 +1,28 @@
+{
+  "schema_version": 1,
+  "calendar_version": "cn-a-controlled-fixture-v1-20260722",
+  "market": "CN_A",
+  "timezone": "Asia/Shanghai",
+  "purpose": "controlled_tests_and_replay_only",
+  "production_approved": false,
+  "trading_dates": [
+    "2026-04-30",
+    "2026-05-04",
+    "2026-07-17",
+    "2026-07-20",
+    "2026-07-21",
+    "2026-07-22"
+  ],
+  "non_trading_dates": [
+    "2026-05-01",
+    "2026-05-02",
+    "2026-05-03",
+    "2026-07-18",
+    "2026-07-19"
+  ],
+  "limitations": [
+    "This is not a complete exchange calendar.",
+    "Dates outside the controlled fixture must be rejected.",
+    "A production calendar Provider is required before scheduling."
+  ]
+}

@@ -1,40 +1,34 @@
-# Architecture — Phase 1B-0
-
-## Two independent product paths
+# Architecture — Phase 1B-1
 
 ```text
-66-sector business catalog
-        |
-        +--> system support policy --> 65-sector A-share collection plan
-        |                                  |
-        |                         MarketDataProvider diagnostics
-        |                                  |
-        |                         normalized bars / indicators / rankings
-        |
-        +--> live transcript + V2.3 PDF specification --> daily PDF summary
+66-sector catalog
+  ├─ HSTECH/HK → unsupported display only
+  ├─ 65 CN_A collection plan
+  │    ├─ MarketDataProvider adapter
+  │    ├─ CN_A TradingCalendar + EOD policy
+  │    ├─ complete_eod-only snapshot boundary
+  │    └─ Provider lineage → reconciliation engine
+  └─ transcript + V2.3 PDF rules → daily PDF summary (independent path)
 ```
 
-The automatic market-data path and the daily live-report PDF path are deliberately independent. HSTECH is `unsupported` by the first automatic release, but a live transcript may still mention Hang Seng Tech and its content remains eligible for the PDF. Phase 1B-0 does not modify the PDF specification or generation logic.
+## Complete-session boundary
 
-## Support scope
+`config/end_of_day_policy_v1.json` supplies timezone, market close, 16:30 safe acceptance time, minimum fields and anomaly policies. `backend/leopard_project/eod.py` accepts an injected, timezone-aware `as_of`; no system-clock dependency is required by business logic.
 
-`config/system_support_policy_v1.json` is the current product decision:
+`TradingCalendar` is an abstraction. The checked-in CN_A calendar is deliberately incomplete and only supports controlled tests and the 2026-07-21 replay. Dates outside its declared fixture fail closed. A complete authoritative calendar Provider is required before scheduling.
 
-- catalog: 66;
-- supported A-share sectors: 65;
-- unsupported: HSTECH/HK only;
-- collection and success-rate denominator: 65.
+Only `complete_eod` is eligible for normal EOD data. Intraday, stale, future, missing, incomplete, failed and unsupported states are blocked.
 
-`backend/leopard_project/support.py` generates an immutable, ordered plan. Unsupported entries cannot create Provider symbols. Hotel catering produces an `881160` proxy task, glass substrate produces an `886111` short-history task, and the other three custom sectors retain component-based calculation tasks.
+## Provider and lineage boundary
 
-## Provider boundary
+Business code continues to depend on `MarketDataProvider`. `AkshareResearchProvider` is network-disabled unless an explicit fetcher is injected. Source inspection shows that AKShare ultimately calls the same Tonghuashun `d.10jqka.com.cn` v4 board chart endpoint as `ThsPublicValidationProvider`, so the pair is `shared_upstream` and cannot prove independent availability.
 
-Business code depends on `MarketDataProvider`. Public THS access remains diagnostic. AKShare is research-only and Tushare remains an unbound candidate; no production role is approved. Phase 1A coverage under `data/provider-validation/` remains historical evidence. Phase 1B-0 selection artifacts live separately under `data/provider-selection/`.
+## Reconciliation boundary
 
-## State semantics
+`config/reconciliation_policy_v1.json` contains validation thresholds. `backend/leopard_project/reconciliation.py` records source states, values, missing optional fields, numeric differences, lineage and anomaly codes. Shared upstream takes precedence over a numerical match: identical values cannot become independent dual-source success.
 
-`unsupported` is a support decision and is strictly different from `provider_failed`. Unsupported entries remain serializable for catalog display but are excluded from requests, alerts, retries, rankings, indicators, reconciliation, freshness checks, and provider success statistics.
+The checked-in 65-sector result is a metadata replay of immutable Phase 1B-0 evidence. It does not reconstruct prices from hashes and does not claim an AKShare live success.
 
 ## CI boundary
 
-GitHub Actions runs with `contents: read`, installs project test dependencies, and executes only `pytest -m "not live"` plus versioned configuration, JSON, compilation, and credential checks. It has no cloud access, secrets, write permission, or live requests.
+CI remains read-only and offline. It adds Phase 1B-1 policy, lineage and reconciliation validation without removing Phase 0, Phase 1A or Phase 1B-0 checks. `ci_action_runtime_upgrade_pending` is recorded for later maintenance.

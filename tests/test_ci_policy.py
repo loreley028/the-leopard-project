@@ -20,6 +20,7 @@ class CiPolicyTests(unittest.TestCase):
         self.assertIn("validate_phase0.py", text)
         self.assertIn("validate_phase1a.py", text)
         self.assertIn("validate_phase1b0.py", text)
+        self.assertIn("validate_phase1b1.py", text)
         self.assertIn("validate_workflow.py", text)
         self.assertIn("check_sensitive_files.py", text)
         self.assertIn("git status --porcelain", text)

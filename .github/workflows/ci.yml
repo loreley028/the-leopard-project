@@ -43,6 +43,9 @@ jobs:
       - name: Validate Phase 1B-0 support scope
         run: python scripts/validate_phase1b0.py
 
+      - name: Validate Phase 1B-1 EOD, lineage and reconciliation policy
+        run: python scripts/validate_phase1b1.py
+
       - name: Validate JSON
         run: python scripts/validate_json.py
 
