@@ -11,8 +11,16 @@ build/
 *.egg-info/
 node_modules/
 frontend/dist/
+frontend/coverage/
+frontend/*.tsbuildinfo
+frontend/vite.config.js
+frontend/vite.config.d.ts
 output/*
 !output/.gitkeep
 data/runtime/
+var/uploads/
+var/*.db
+var/*.sqlite
+var/*.sqlite3
 logs/
 backups/

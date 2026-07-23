@@ -46,6 +46,12 @@ jobs:
       - name: Validate Phase 1B-1 EOD, lineage and reconciliation policy
         run: python scripts/validate_phase1b1.py
 
+      - name: Validate Phase 2A-0 PDF Web MVP policy
+        run: python scripts/validate_phase2a0.py
+
+      - name: Validate UI license boundary
+        run: python scripts/check_ui_license_boundary.py
+
       - name: Validate JSON
         run: python scripts/validate_json.py
 
@@ -58,4 +64,43 @@ jobs:
         run: python scripts/check_sensitive_files.py
 
       - name: Verify CI left the checkout unchanged
+        run: test -z "$(git status --porcelain)"
+
+  frontend-validation:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Lint frontend
+        run: npm run lint
+
+      - name: Typecheck frontend
+        run: npm run typecheck
+
+      - name: Run frontend unit and accessibility tests
+        run: npm run test
+
+      - name: Run focused accessibility tests
+        run: npm run test:a11y
+
+      - name: Build frontend
+        run: npm run build
+
+      - name: Verify CI left the checkout unchanged
+        working-directory: .
         run: test -z "$(git status --porcelain)"

@@ -1,0 +1,16 @@
+{
+  "policy_version": "1.0",
+  "library_name": "animal-island-ui",
+  "package_name": "animal-island-ui",
+  "pinned_version": "1.3.0",
+  "license": "CC-BY-NC-4.0",
+  "usage_scope": "private_noncommercial_research",
+  "usage_is_commercial": false,
+  "company_use": false,
+  "public_registration": false,
+  "paid_access": false,
+  "attribution_required": true,
+  "modification_notice_required": true,
+  "commercialization_review_required": true,
+  "approved_for_current_scope": true
+}

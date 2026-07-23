@@ -1,0 +1,2 @@
+import type { ReactNode } from "react";
+export function IslandTable({ caption, headers, rows }: { caption: string; headers: string[]; rows: ReactNode[][] }) { return <div className="table-wrap"><table><caption>{caption}</caption><thead><tr>{headers.map(item => <th key={item} scope="col">{item}</th>)}</tr></thead><tbody>{rows.map((row, index) => <tr key={index}>{row.map((cell, cellIndex) => <td key={cellIndex}>{cell}</td>)}</tr>)}</tbody></table></div>; }

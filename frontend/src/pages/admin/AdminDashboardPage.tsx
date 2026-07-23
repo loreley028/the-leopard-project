@@ -1,0 +1,6 @@
+import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
+import { api } from "../../api/client";
+import { IslandCard } from "../../components/island/IslandCard";
+import type { Report } from "../../types";
+export function AdminDashboardPage() { const [summary, setSummary] = useState<Record<string, number>>({}); const [recent, setRecent] = useState<Report[]>([]); useEffect(() => { api.adminSummary().then(setSummary); api.adminReports().then(items => setRecent(items.slice(0, 3))).catch(() => setRecent([])); }, []); const cards = [["草稿", "drafts"], ["待复核", "needs_review"], ["已发布", "published"], ["解析失败", "parse_failed"], ["未映射词", "unmapped_terms"]] as const; return <div className="page"><header><h1>管理工作台</h1><p>上传、解析、人工复核与发布都在同一个应用中完成。</p></header><div className="grid">{cards.map(([label, key]) => <IslandCard key={key}><span className="eyebrow">{label}</span><p style={{ fontSize: "2rem", margin: ".4rem 0" }}>{summary[key] ?? 0}</p></IslandCard>)}</div><IslandCard title="最近上传">{recent.length ? <ul>{recent.map(item => <li key={item.id}><Link to={`/admin/reports/${item.id}/review`}>{item.title}</Link> · {item.created_at}</li>)}</ul> : <p>暂无上传记录</p>}</IslandCard><div className="form-actions"><Link to="/admin/reports/new">上传新报告</Link><Link to="/admin/reports">查看全部报告</Link></div></div>; }

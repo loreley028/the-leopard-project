@@ -1,0 +1,20 @@
+{
+  "schema_version": 1,
+  "policy_version": "report-schedule-v1-20260723",
+  "timezone": "Asia/Shanghai",
+  "expected_upload_weekdays": [
+    "SUNDAY",
+    "MONDAY",
+    "TUESDAY",
+    "WEDNESDAY",
+    "THURSDAY"
+  ],
+  "no_report_expected_weekdays": [
+    "FRIDAY",
+    "SATURDAY"
+  ],
+  "missing_report_alert_enabled": false,
+  "upload_time_is_report_date": false,
+  "report_date_requires_confirmation": true,
+  "admin_report_date_override_allowed": true
+}

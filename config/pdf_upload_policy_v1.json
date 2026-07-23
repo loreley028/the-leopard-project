@@ -1,0 +1,12 @@
+{
+  "schema_version": 1,
+  "policy_version": "pdf-upload-v1-20260723",
+  "allowed_mime_types": ["application/pdf"],
+  "required_file_header": "%PDF-",
+  "max_file_size_bytes": 10485760,
+  "storage_directory": "var/uploads",
+  "hash_algorithm": "sha256",
+  "external_links_followed": false,
+  "embedded_scripts_executed": false,
+  "external_ai_enabled": false
+}

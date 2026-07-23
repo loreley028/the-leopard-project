@@ -24,8 +24,19 @@ def main() -> int:
         raise ValueError("CI workflow permissions must be exactly contents: read")
 
     jobs = document.get("jobs")
-    if not isinstance(jobs, dict) or "offline-validation" not in jobs:
-        raise ValueError("offline-validation job is required")
+    if not isinstance(jobs, dict) or not {"offline-validation", "frontend-validation"}.issubset(jobs):
+        raise ValueError("offline-validation and frontend-validation jobs are required")
+
+    text = WORKFLOW_PATH.read_text(encoding="utf-8")
+    required_steps = (
+        "validate_phase0.py", "validate_phase1a.py", "validate_phase1b0.py", "validate_phase1b1.py",
+        "validate_phase2a0.py", "check_ui_license_boundary.py", "npm ci", "npm run lint",
+        "npm run typecheck", "npm run test", "npm run build",
+    )
+    if not all(step in text for step in required_steps):
+        raise ValueError("CI workflow is missing a required historical or Phase 2A-0 validation")
+    if "LEOPARD_RUN_LIVE" in text or "secrets." in text:
+        raise ValueError("CI must remain offline and token-independent")
 
     print(f"Workflow YAML valid: {WORKFLOW_PATH.relative_to(PROJECT_ROOT)}")
     return 0

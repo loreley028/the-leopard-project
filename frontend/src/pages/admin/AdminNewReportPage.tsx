@@ -1,0 +1,6 @@
+import { useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { api, ApiError } from "../../api/client";
+import { IslandCard } from "../../components/island/IslandCard";
+import { IslandUploadZone } from "../../components/island/IslandUploadZone";
+export function AdminNewReportPage() { const navigate = useNavigate(); const [progress, setProgress] = useState(0); const [message, setMessage] = useState(""); const upload = async (file: File) => { if (file.type !== "application/pdf" || !file.name.toLowerCase().endsWith(".pdf")) { setMessage("请选择有效 PDF 文件"); return; } setProgress(25); try { const result = await api.upload(file); setProgress(100); if (result.duplicate) setMessage("该 PDF 已上传，正在打开已有报告"); navigate(`/admin/reports/${result.report.id}/review`); } catch (error) { setProgress(0); setMessage(error instanceof ApiError ? error.message : "上传失败"); } }; return <div className="page"><h1>上传 PDF</h1><IslandCard><IslandUploadZone onFile={upload} /><progress aria-label="上传进度" max="100" value={progress} /><p role={message.includes("失败") || message.includes("有效") ? "alert" : "status"}>{message}</p><p className="muted">上传时间不是报告日期。解析后必须由管理员确认归属日期。</p></IslandCard></div>; }

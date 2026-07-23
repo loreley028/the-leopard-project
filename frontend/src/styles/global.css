@@ -1,0 +1,23 @@
+@import "./tokens.css";
+
+* { box-sizing: border-box; }
+html { color-scheme: light; background: var(--background-sand); }
+body { margin: 0; color: var(--text-bark); font-family: ui-rounded, "Avenir Next", system-ui, sans-serif; background: radial-gradient(circle at 90% 5%, #d9edf0 0 11rem, transparent 11.2rem), var(--background-sand); }
+a { color: inherit; }
+button, input, textarea { font: inherit; }
+button, a, input, textarea, [tabindex] { outline-offset: 4px; }
+:focus-visible { outline: 3px solid var(--focus-ring); }
+.skip-link { position: fixed; top: -5rem; left: 1rem; z-index: 100; padding: .75rem 1rem; background: var(--text-bark); color: white; border-radius: 10px; }
+.skip-link:focus { top: 1rem; }
+.page { display: grid; gap: var(--space-6); }
+.hero { display: grid; grid-template-columns: 1.5fr 1fr; gap: var(--space-5); align-items: center; padding: clamp(1.5rem, 5vw, 4rem); border-radius: 30px; background: linear-gradient(135deg, var(--surface-cream), var(--surface-ocean)); box-shadow: var(--shadow-soft); }
+.hero h1 { margin: 0 0 1rem; max-width: 15ch; font-size: var(--font-xl); line-height: 1.05; }
+.hero-island { min-height: 190px; border-radius: 52% 48% 46% 54%; background: radial-gradient(ellipse at 50% 80%, #dfbf7e 0 29%, transparent 30%), radial-gradient(ellipse at 48% 56%, #87ad77 0 39%, transparent 40%), linear-gradient(#8bcad2 0 63%, #77b9c5 64%); box-shadow: inset 0 -12px 30px rgb(255 255 255 / 25%); }
+.grid { display: grid; gap: var(--space-4); grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); }
+.stack { display: grid; gap: var(--space-4); }
+.eyebrow { font-size: var(--font-xs); font-weight: 800; letter-spacing: .12em; text-transform: uppercase; color: var(--text-muted); }
+.muted { color: var(--text-muted); }
+.notice { padding: .85rem 1rem; border-left: 4px solid var(--status-warning); background: #fff5d8; border-radius: 8px; }
+.form-actions { display: flex; flex-wrap: wrap; gap: .75rem; }
+@media (max-width: 760px) { .hero { grid-template-columns: 1fr; } .hero-island { min-height: 125px; } }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; transition-duration: .01ms !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; } }
