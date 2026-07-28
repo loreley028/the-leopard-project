@@ -1,8 +1,52 @@
-import { useEffect, useState } from "react";
-import { useParams } from "react-router-dom";
+import { useEffect, useMemo, useState } from "react";
+import { Link, useParams } from "react-router-dom";
 import { api } from "../api/client";
 import { IslandCard } from "../components/island/IslandCard";
+import { IslandMetricGrid } from "../components/island/IslandMetricGrid";
+import { IslandMarketSparkline } from "../components/island/IslandMarketSparkline";
 import { IslandStatusBadge } from "../components/island/IslandStatusBadge";
-import { IslandTimeline } from "../components/island/IslandTimeline";
-import type { Sector } from "../types";
-export function SectorDetailPage() { const { sectorKey = "" } = useParams(); const [sector, setSector] = useState<Sector | null>(); useEffect(() => { api.sector(sectorKey).then(setSector).catch(() => setSector(null)); }, [sectorKey]); if (!sector) return <p role="status">加载板块资料…</p>; return <div className="page"><header><p className="eyebrow">{sector.group_name}</p><h1>{sector.sector_name}</h1><IslandStatusBadge status={sector.data_status} /><p>{sector.market_status_detail}</p></header><IslandCard title="直播观点时间线">{sector.timeline?.length ? <IslandTimeline items={sector.timeline.map(item => ({ date: item.report_date, title: item.report_title, content: item.summary }))} /> : <p>暂无已发布观点。</p>}</IslandCard><p className="notice">研究辅助数据，非生产级行情服务。</p></div>; }
+import type { SectorResearch } from "../types";
+import { formatPct } from "../utils/format";
+import { intradayDataLabel } from "../utils/intraday";
+
+const PATH_LABELS: Record<string, string> = { avoid: "不碰", strong_watch: "强观", watch: "观察", weak_watch: "弱观", turn_hold: "转持", hold: "持有", turn_weak: "转弱", exit: "离场", not_mentioned: "未提" };
+
+export function SectorDetailPage() {
+  const { sectorKey = "" } = useParams();
+  const [research, setResearch] = useState<SectorResearch | null>();
+  const [pathPeriods, setPathPeriods] = useState(20);
+  const [marketDays, setMarketDays] = useState(20);
+  useEffect(() => { api.sectorResearch(sectorKey, pathPeriods, marketDays).then(setResearch).catch(() => setResearch(null)); }, [sectorKey, pathPeriods, marketDays]);
+  const monthGroups = useMemo(() => {
+    const groups: Array<{ month: string; items: NonNullable<SectorResearch["recent_path"]> }> = [];
+    for (const item of [...(research?.recent_path ?? [])].reverse()) {
+      const month = item.report_date.slice(0, 7);
+      const current = groups.at(-1);
+      if (!current || current.month !== month) groups.push({ month, items: [item] }); else current.items.push(item);
+    }
+    return groups;
+  }, [research]);
+  if (research === undefined) return <p role="status">加载板块研究档案…</p>;
+  if (!research) return <p role="alert">板块研究档案不存在。</p>;
+  const intradayLabel = research.intraday_snapshot && research.intraday_status === "intraday_fresh" ? "盘中缓存" : intradayDataLabel(research.intraday_status, research.intraday_session).replace("获取失败", "盘中行情获取失败").replace("数据延迟", "盘中数据延迟");
+  return <div className="page sector-research-detail"><header><p className="eyebrow">{research.group_name}</p><h1>{research.sector_name}</h1><IslandStatusBadge status={research.data_status} /><p>{research.market_status_detail}</p><div className="path-period-switch" aria-label="直播报告路径期数">{[10,20,40,60].map(value => <button type="button" key={value} className={pathPeriods === value ? "active" : ""} onClick={() => setPathPeriods(value)}>最近{value}期</button>)}</div><p className="muted">路径范围按直播报告期计算；实际显示 {research.recent_path?.length ?? 0} / 可用 {research.available_path_periods ?? 0} 期。无原始PDF的日期只显示冻结路径记录。</p><div className="path-month-groups">{monthGroups.map(group => <section key={group.month}><strong>{group.month}</strong><div className="recent-path-banner">{group.items.map((item, index) => <span key={item.id} className={`path-chip path-${item.path.path_status} ${index === group.items.length - 1 && group === monthGroups.at(-1) ? "latest" : ""}`} title={`${item.report_date} · 报告状态${item.path.path_status_label} · 有效状态${item.effective_status ? PATH_LABELS[item.effective_status] : "暂无"}`}><small>{item.report_date.slice(5)}</small>{item.path.path_status_label.slice(0, 1)}</span>)}</div></section>)}</div></header>
+    <div className="dashboard-grid"><IslandCard title="最新明确直播观点">{research.latest_explicit_view ? <><strong>{research.latest_explicit_view.path.path_status_label} · {research.latest_explicit_view.report_date}</strong><p>{research.latest_explicit_view.assessment.current_judgement}</p><p><Link to={`/reports/${research.latest_explicit_view.report_id}`}>查看来源报告</Link></p></> : <p>暂无明确直播观点；“未提”不代表观点失效。</p>}</IslandCard><IslandCard title="盘中行情"><p>状态：<strong>{intradayLabel}</strong></p>{research.intraday_snapshot ? <><p>盘中涨跌：{formatPct(research.intraday_snapshot.pct_change)}</p><p>数据时间：{research.intraday_snapshot.observed_at}</p><p>来源：{research.intraday_snapshot.provider_role}</p></> : <p>保留服务器最近有效缓存；Viewer不会请求Provider。</p>}</IslandCard><IslandCard title="最新完整收盘行情">{research.market_support_status === "unsupported" ? <p>暂不支持：港股跨市场行情尚未接入，不展示伪造指标。</p> : <><p>完整交易日：{research.current_latest_market?.trade_date ?? "未刷新"}</p><IslandMetricGrid market={research.current_latest_market} /></>}</IslandCard></div>
+    <IslandCard title="最近5个交易日"><p>近5日累计：<strong>{formatPct(research.current_latest_market?.return_5d)}</strong>（按完整日收益复合/首尾价格计算，不作百分比简单相加）</p><div className="recent-five-detail">{research.recent_5_trading_days?.map(item => <span key={item.trade_date} className={item.daily_pct_change > 0 ? "up" : item.daily_pct_change < 0 ? "down" : "flat"}><time>{item.trade_date}</time><b>{formatPct(item.daily_pct_change)}</b><small>收盘 {item.close}</small></span>) ?? <p>暂无完整行情。</p>}</div></IslandCard>
+    <IslandCard title="当前有效状态与两种持有区间"><p>本期报告状态：<strong>{PATH_LABELS[research.reported_status ?? "not_mentioned"]}</strong>；当前有效状态：<strong>{research.effective_status ? PATH_LABELS[research.effective_status] : "尚无明确观点"}</strong>。</p><HoldingSummary label="绝对持有" interval={research.strict_holding_interval} /><HoldingSummary label="广义持有" interval={research.broad_holding_interval} /></IslandCard>
+    <IslandCard title="历史已结束持有区间"><HoldingHistory label="绝对持有" items={research.historical_strict_intervals} /><HoldingHistory label="广义持有" items={research.historical_broad_intervals} /></IslandCard>
+    <IslandCard title="完整收盘行情图"><div className="path-period-switch" aria-label="行情交易日范围">{[20,40,60].map(value => <button type="button" key={value} className={marketDays === value ? "active" : ""} onClick={() => setMarketDays(value)}>最近{value}交易日</button>)}</div>{research.market_support_status === "unsupported" ? <p>暂不支持：不生成伪造行情图。</p> : <><IslandMarketSparkline history={research.market_history ?? []} /><p className="muted">实线只使用完整收盘；盘中点不进入均线。</p></>}</IslandCard>
+    <section><h2>路径记录</h2><div className="path-record-list">{research.recent_path?.map(item => <IslandCard key={item.id}><h3>{item.report_date} · {item.path.path_status_label}</h3><p>有效状态：{item.effective_status ? PATH_LABELS[item.effective_status] : "暂无"}；行情日期：{item.market_as_of_date ?? "未附加"}</p>{item.has_detailed_assessment && item.detail_report_id ? <Link to={`/reports/${item.detail_report_id}`}>查看该期详细报告</Link> : <p>仅有路径记录，尚未补充该期原始报告。</p>}</IslandCard>)}</div></section>
+    <section><h2>历次详细解读与发布快照</h2><div className="assessment-list">{research.detailed_history?.map(item => <IslandCard key={item.report_id}><h3>{item.report_date} · {item.path.path_status_label}</h3><dl className="assessment-fields"><div><dt>历史路径</dt><dd>{item.assessment.recent_path_summary}</dd></div><div><dt>当期判断</dt><dd>{item.assessment.current_judgement || "本期未提"}</dd></div><div><dt>主要依据</dt><dd>{item.assessment.main_basis || "—"}</dd></div><div><dt>观察条件</dt><dd>{item.assessment.observation_condition || "—"}</dd></div></dl><h4>本报告发布时</h4><IslandMetricGrid market={item.report_snapshot} /><Link to={`/reports/${item.report_id}`}>来源报告</Link></IslandCard>)}</div></section>
+    <p className="notice">报告快照保持不变；盘中缓存与最新完整收盘严格分离。研究辅助数据，非生产级行情服务。</p>
+  </div>;
+}
+
+function HoldingSummary({ label, interval }: { label: string; interval?: NonNullable<SectorResearch["strict_holding_interval"]> | null }) {
+  if (!interval) return <p><strong>{label}：</strong>当前未进行。</p>;
+  if (interval.status !== "active") return <p><strong>{label}：</strong>{interval.calculation_status === "market_insufficient" ? "起点行情不足" : "当前未进行"}。</p>;
+  return <div className="holding-summary"><p><strong>{label}：</strong>进行中，正式收益 {formatPct(interval.eod_return)}；起点报告 {interval.start_report_date} / 行情 {interval.start_market_as_of_date}。</p>{interval.intraday_reference_return != null && <p>盘中参考 {formatPct(interval.intraday_reference_return)}（不替代完整收盘正式收益）。</p>}</div>;
+}
+
+function HoldingHistory({ label, items }: { label: string; items?: NonNullable<SectorResearch["historical_strict_intervals"]> }) {
+  return <div className="holding-history"><h3>{label}</h3>{items?.length ? items.map((item, index) => <p key={`${label}-${item.start_report_date}-${index}`}>{item.start_report_date}（行情{item.start_market_as_of_date ?? "—"}）→ {item.end_report_date}（行情{item.end_market_as_of_date ?? "—"}），{item.trading_days ?? "—"}个交易日，{formatPct(item.eod_return)}，结束状态{PATH_LABELS[item.end_status ?? "watch"]}</p>) : <p>暂无已结束区间。</p>}</div>;
+}

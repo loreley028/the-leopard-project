@@ -1,0 +1,11 @@
+{
+  "version": "v1",
+  "start_status": "turn_hold",
+  "strict_allowed_statuses": ["turn_hold", "hold"],
+  "strict_end_statuses": ["strong_watch", "watch", "weak_watch", "turn_weak", "exit", "avoid"],
+  "broad_allowed_statuses": ["turn_hold", "hold", "strong_watch"],
+  "broad_end_statuses": ["watch", "weak_watch", "turn_weak", "exit", "avoid"],
+  "not_mentioned_behavior": "continue_effective_status",
+  "formal_return_source": "complete_eod",
+  "intraday_reference_source": "server_cached_intraday_only"
+}

@@ -15,6 +15,7 @@ class ReportSchedulePolicy:
     missing_report_alert_enabled: bool
     upload_time_is_report_date: bool
     report_date_requires_confirmation: bool
+    report_date_confirmation_required_for: frozenset[str]
 
     @classmethod
     def load(cls) -> "ReportSchedulePolicy":
@@ -26,6 +27,20 @@ class ReportSchedulePolicy:
             missing_report_alert_enabled=data["missing_report_alert_enabled"],
             upload_time_is_report_date=data["upload_time_is_report_date"],
             report_date_requires_confirmation=data["report_date_requires_confirmation"],
+            report_date_confirmation_required_for=frozenset(data["report_date_confirmation_required_for"]),
+        )
+
+    @classmethod
+    def load_v2(cls) -> "ReportSchedulePolicy":
+        data = json.loads((CONFIG_DIR / "report_schedule_policy_v2.json").read_text(encoding="utf-8"))
+        return cls(
+            timezone=data["timezone"],
+            expected_upload_weekdays=frozenset(data["expected_upload_weekdays"]),
+            no_report_expected_weekdays=frozenset(data["normally_no_report_weekdays"]),
+            missing_report_alert_enabled=data["missing_report_alert_enabled"],
+            upload_time_is_report_date=False,
+            report_date_requires_confirmation=False,
+            report_date_confirmation_required_for=frozenset({"low", "conflict"}),
         )
 
     def report_expected(self, day: date) -> bool:

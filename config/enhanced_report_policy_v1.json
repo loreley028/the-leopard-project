@@ -1,0 +1,17 @@
+{
+  "schema_version": "1.0.0",
+  "timezone": "Asia/Shanghai",
+  "market": "CN_A",
+  "safe_accept_after": "16:30:00",
+  "market_data_role": "best_effort_research_source",
+  "supported_sector_count": 65,
+  "catalog_count": 66,
+  "unsupported_sector_keys": ["hang_seng_tech"],
+  "allowed_eod_statuses_for_indicators": ["complete_eod"],
+  "viewer_network_refresh": false,
+  "automatic_scheduler": true,
+  "external_llm_enabled": false,
+  "amount_required": false,
+  "turnover_rate_required": false,
+  "report_snapshot_immutable_after_publish": true
+}

@@ -49,6 +49,28 @@ def upload(client: TestClient, name: str = "fixture.pdf"):
     return client.post("/api/v1/admin/reports", files={"file": (name, payload, "application/pdf")})
 
 
+def minimal_renderable_pdf() -> bytes:
+    """Build one blank, standards-compliant PDF page without a fixture dependency."""
+    objects = [
+        b"<< /Type /Catalog /Pages 2 0 R >>",
+        b"<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+        b"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 200 200] >>",
+    ]
+    payload = bytearray(b"%PDF-1.4\n")
+    offsets = [0]
+    for number, item in enumerate(objects, start=1):
+        offsets.append(len(payload))
+        payload.extend(f"{number} 0 obj\n".encode())
+        payload.extend(item + b"\nendobj\n")
+    xref = len(payload)
+    payload.extend(f"xref\n0 {len(objects) + 1}\n".encode())
+    payload.extend(b"0000000000 65535 f \n")
+    for offset in offsets[1:]:
+        payload.extend(f"{offset:010d} 00000 n \n".encode())
+    payload.extend(f"trailer\n<< /Size {len(objects) + 1} /Root 1 0 R >>\nstartxref\n{xref}\n%%EOF\n".encode())
+    return bytes(payload)
+
+
 def complete_report(client: TestClient) -> str:
     response = upload(client)
     report_id = response.json()["report"]["id"]
@@ -106,18 +128,61 @@ def test_admin_upload_rejects_invalid_pdf_without_server_path(web) -> None:
     assert str(settings.upload_dir) not in response.text
 
 
-def test_parse_requires_review_and_confirmed_report_date(web) -> None:
+def test_parse_auto_recognizes_high_confidence_report_date(web) -> None:
     client, _, _ = web
     login(client)
     report_id = upload(client).json()["report"]["id"]
     parsed = client.post(f"/api/v1/admin/reports/{report_id}/parse").json()
     assert parsed["status"] == "needs_review"
     assert parsed["candidate_report_date"] == "2026-07-19"
-    assert parsed["report_date"] is None
+    assert parsed["report_date"] == "2026-07-19"
+    assert parsed["report_date_confidence"] == "high"
     response = client.post(f"/api/v1/admin/reports/{report_id}/ready")
-    assert response.status_code == 409
-    assert response.json()["error"]["code"] == "report_date_confirmation_required"
-    assert client.get(f"/api/v1/reports/{report_id}/pdf").status_code == 200
+    assert response.status_code == 200
+    assert client.get(f"/api/v1/reports/{report_id}/pdf").status_code == 404
+
+
+def test_pdf_preview_is_page_images_and_only_download_is_attachment(web) -> None:
+    client, _, _ = web
+    login(client)
+    uploaded = client.post(
+        "/api/v1/admin/reports",
+        files={"file": ("renderable.pdf", minimal_renderable_pdf(), "application/pdf")},
+    )
+    assert uploaded.status_code == 201
+    report_id = uploaded.json()["report"]["id"]
+    preview = client.get(f"/api/v1/reports/{report_id}/pdf/preview")
+    first_page = client.get(f"/api/v1/reports/{report_id}/pdf/preview/pages/1")
+    download = client.get(f"/api/v1/reports/{report_id}/pdf/download")
+    assert preview.status_code == 200
+    assert preview.json()["render_mode"] == "server_memory_png"
+    assert preview.json()["source_pdf_requested"] is False
+    assert first_page.status_code == 200 and first_page.headers["content-type"] == "image/png"
+    assert first_page.headers["content-disposition"] == "inline"
+    assert download.status_code == 200
+    assert download.headers["content-disposition"].startswith("attachment;")
+
+
+def test_specification_backups_are_admin_versioned_and_parser_independent(web) -> None:
+    client, _, settings = web
+    login(client)
+    first = client.post("/api/v1/admin/specifications", data={"specification_name": "直播总结制作规范", "version": "2.3"}, files={"file": ("spec.md", b"# local specification", "text/markdown")})
+    assert first.status_code == 201
+    first_id = first.json()["id"]
+    duplicate = client.post("/api/v1/admin/specifications", data={"specification_name": "直播总结制作规范", "version": "2.3-copy"}, files={"file": ("spec.md", b"# local specification", "text/markdown")})
+    assert duplicate.status_code == 201 and duplicate.json()["id"] == first_id
+    second = client.post("/api/v1/admin/specifications", data={"specification_name": "直播总结制作规范", "version": "2.3.1"}, files={"file": ("spec.md", b"# next local specification", "text/markdown")})
+    assert second.status_code == 201
+    assert client.post(f"/api/v1/admin/specifications/{first_id}/set-current").status_code == 200
+    items = client.get("/api/v1/admin/specifications").json()
+    assert len(items) == 2 and next(item for item in items if item["id"] == first_id)["is_current"] is True
+    download = client.get(f"/api/v1/admin/specifications/{first_id}/file")
+    assert download.headers["content-disposition"].startswith("attachment;")
+    assert (settings.upload_dir.parent / "specifications").exists()
+    assert complete_report(client)
+    client.post("/api/v1/auth/logout")
+    login(client, "viewer")
+    assert client.get("/api/v1/admin/specifications").status_code == 403
 
 
 def test_state_machine_rejects_illegal_transition(web) -> None:
@@ -128,7 +193,7 @@ def test_state_machine_rejects_illegal_transition(web) -> None:
         report = ReportRepository(session).by_id(report_id)
         assert report is not None
         with pytest.raises(WebDomainError, match="Cannot transition"):
-            ReportService(ReportRepository(session), settings.upload_dir).publish(report, "admin")
+            ReportService(ReportRepository(session), settings.upload_dir).transition(report, ReportStatus.PUBLISHED)
 
 
 def test_end_to_end_publish_is_idempotent_and_viewer_only_sees_published(web) -> None:
@@ -141,6 +206,9 @@ def test_end_to_end_publish_is_idempotent_and_viewer_only_sees_published(web) ->
     login(client, "viewer")
     reports = client.get("/api/v1/reports").json()
     assert [item["id"] for item in reports] == [published_id]
+    assert reports[0]["published_at"] is not None
+    assert reports[0]["published_at_display"].count(":") == 1
+    assert reports[0]["status"] == "published"
     assert client.get("/api/v1/reports/latest").json()["change_summary"]["kind"] == "first_published_report"
     assert client.get(f"/api/v1/reports/{draft_id}").status_code == 404
 
@@ -180,6 +248,17 @@ def test_sector_catalog_and_hstech_dual_status(web) -> None:
     assert "港股跨市场" in hstech["market_status_detail"]
 
 
+def test_sector_research_query_supports_filter_sort_and_pagination(web) -> None:
+    client, _, _ = web
+    login(client)
+    complete_report(client)
+    rows = client.get("/api/v1/sectors", params={"mentioned": "true", "sort": "status", "page": 1, "page_size": 5}).json()
+    assert 1 <= len(rows) <= 5
+    assert all(item["mentioned_in_latest_published"] for item in rows)
+    searched = client.get("/api/v1/sectors", params={"search": "恒生科技"}).json()
+    assert [item["sector_key"] for item in searched] == ["hang_seng_tech"]
+
+
 def test_sector_timeline_uses_published_reports(web) -> None:
     client, _, _ = web
     login(client)
@@ -212,7 +291,8 @@ def test_weekend_schedule_has_no_missing_alert() -> None:
     assert policy.report_expected(date(2026, 7, 25)) is False  # Saturday
     assert policy.missing_report_alert(date(2026, 7, 24)) is False
     assert policy.upload_time_is_report_date is False
-    assert policy.report_date_requires_confirmation is True
+    assert policy.report_date_requires_confirmation is False
+    assert policy.report_date_confirmation_required_for == frozenset({"low", "conflict"})
 
 
 def test_policy_forbids_external_ai_and_keeps_upload_local() -> None:

@@ -1,0 +1,27 @@
+{
+  "schema_version": "1.0.0",
+  "calendar_version": "phase2a0-controlled-cn-a-v2",
+  "market": "CN_A",
+  "timezone": "Asia/Shanghai",
+  "purpose": "phase_2a0_controlled_local_research",
+  "source": "Shanghai Stock Exchange 2026 annual closure schedule",
+  "source_url": "https://www.sse.com.cn/disclosure/dealinstruc/closed/",
+  "production_approved": false,
+  "trading_dates": [
+    "2026-06-10", "2026-06-11", "2026-06-12", "2026-06-15", "2026-06-16",
+    "2026-06-17", "2026-06-18", "2026-06-22", "2026-06-23",
+    "2026-06-24", "2026-06-25", "2026-06-26", "2026-06-29", "2026-06-30",
+    "2026-07-01", "2026-07-02", "2026-07-03", "2026-07-06", "2026-07-07",
+    "2026-07-08", "2026-07-09", "2026-07-10", "2026-07-13", "2026-07-14",
+    "2026-07-15", "2026-07-16", "2026-07-17", "2026-07-20", "2026-07-21",
+    "2026-07-22", "2026-07-23", "2026-07-24", "2026-07-27", "2026-07-28"
+  ],
+  "non_trading_dates": [
+    "2026-06-19", "2026-06-20", "2026-06-21",
+    "2026-07-11", "2026-07-12", "2026-07-18", "2026-07-19"
+  ],
+  "limitations": [
+    "Controlled Phase 2A-0 calendar only; never use as a production exchange calendar.",
+    "Dates outside this explicit list fail closed."
+  ]
+}

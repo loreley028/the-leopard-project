@@ -14,9 +14,13 @@ def main() -> int:
     upload = json.loads((ROOT / "config/pdf_upload_policy_v1.json").read_text(encoding="utf-8"))
     ui_policy = json.loads((ROOT / "config/ui_dependency_policy_v1.json").read_text(encoding="utf-8"))
     support = json.loads((ROOT / "config/system_support_policy_v1.json").read_text(encoding="utf-8"))
+    intraday = json.loads((ROOT / "config/intraday_market_policy_v1.json").read_text(encoding="utf-8"))
+    visibility = json.loads((ROOT / "config/sector_visibility_policy_v1.json").read_text(encoding="utf-8"))
+    holding = json.loads((ROOT / "config/holding_interval_policy_v1.json").read_text(encoding="utf-8"))
     package = json.loads((ROOT / "frontend/package.json").read_text(encoding="utf-8"))
     workflow = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
     app = (ROOT / "backend/leopard_project/web/app.py").read_text(encoding="utf-8")
+    enhanced_routes = (ROOT / "backend/leopard_project/web/enhanced_routes.py").read_text(encoding="utf-8")
     expected_routes = (
         "/api/v1/auth/login", "/api/v1/auth/logout", "/api/v1/auth/me",
         "/api/v1/reports", "/api/v1/reports/latest", "/api/v1/reports/{report_id}",
@@ -39,7 +43,10 @@ def main() -> int:
         "schedule_timezone": schedule["timezone"] == "Asia/Shanghai",
         "schedule_sun_thu": schedule["expected_upload_weekdays"] == ["SUNDAY", "MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY"],
         "friday_saturday_normal": schedule["no_report_expected_weekdays"] == ["FRIDAY", "SATURDAY"] and schedule["missing_report_alert_enabled"] is False,
-        "report_date_confirmation": schedule["upload_time_is_report_date"] is False and schedule["report_date_requires_confirmation"] is True,
+        "report_date_confirmation": schedule["upload_time_is_report_date"] is False
+        and schedule["automatic_report_date_detection"] is True
+        and schedule["report_date_requires_confirmation"] is False
+        and schedule["report_date_confirmation_required_for"] == ["low", "conflict"],
         "local_pdf_only": upload["external_ai_enabled"] is False and upload["external_links_followed"] is False,
         "sqlite_and_upload_ignored": "var/uploads/" in (ROOT / ".gitignore").read_text() and "var/*.sqlite3" in (ROOT / ".gitignore").read_text(),
         "all_api_routes": all(route in app for route in expected_routes),
@@ -52,6 +59,26 @@ def main() -> int:
         "ci_retains_history": all(name in workflow for name in ("validate_phase0.py", "validate_phase1a.py", "validate_phase1b0.py", "validate_phase1b1.py")),
         "ci_has_frontend": all(name in workflow for name in ("npm ci", "npm run lint", "npm run typecheck", "npm run test", "npm run build")),
         "production_primary_false": support["production_primary_approved"] is False,
+        "intraday_five_minute_server_cache": intraday["refresh_interval_minutes"] == 5
+        and intraday["max_concurrency"] == 1
+        and intraday["viewer_provider_access"] is False,
+        "intraday_safe_auto_start": intraday["auto_start"] is True
+        and intraday["stop_at_market_close"] is True
+        and intraday["production_approved"] is False,
+        "intraday_routes": all(route in enhanced_routes for route in (
+            "/api/v1/market/intraday/status", "/api/v1/market/intraday/sectors",
+            "/api/v1/admin/market/intraday/start", "/api/v1/admin/market/intraday/pause",
+            "/api/v1/admin/market/intraday/refresh-now",
+        )),
+        "intraday_documented": (ROOT / "docs/intraday-market-data.md").is_file(),
+        "intraday_status_centralized": intraday["status_resolver"] == "centralized_v1",
+        "holding_interval_contract": holding["strict_allowed_statuses"] == ["turn_hold", "hold"]
+        and "strong_watch" in holding["broad_allowed_statuses"] and holding["formal_return_source"] == "complete_eod",
+        "visibility_contract": visibility["consecutive_not_mentioned_threshold"] == 10
+        and visibility["protect_active_broad_holding"] is True and visibility["allow_admin_pin"] is True,
+        "acceptance_docs_present": all((ROOT / f"docs/{name}").is_file() for name in (
+            "holding-intervals.md", "sector-visibility.md", "intraday-provider-evaluation.md",
+        )),
     }
     result = {"checks": checks, "passed": all(checks.values())}
     print(json.dumps(result, ensure_ascii=False, indent=2))

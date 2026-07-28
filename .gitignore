@@ -1,5 +1,7 @@
 .DS_Store
 .env
+.env.*
+!.env.example
 .venv/
 __pycache__/
 *.py[cod]
@@ -19,6 +21,12 @@ output/*
 !output/.gitkeep
 data/runtime/
 var/uploads/
+var/demo-enhanced/
+var/demo-interpretation/
+var/demo-fidelity/
+var/demo-real-fidelity/
+var/real-local/
+var/test/
 var/*.db
 var/*.sqlite
 var/*.sqlite3

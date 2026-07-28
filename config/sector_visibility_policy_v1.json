@@ -1,0 +1,10 @@
+{
+  "version": "v1",
+  "consecutive_not_mentioned_threshold": 10,
+  "protect_active_strict_holding": true,
+  "protect_active_broad_holding": true,
+  "protect_effective_statuses": ["turn_hold", "hold", "strong_watch"],
+  "protect_special_data_statuses": ["proxy", "short_history", "provider_failed", "needs_attention", "blocking_parse_error"],
+  "allow_admin_pin": true,
+  "hidden_means_deleted": false
+}

@@ -19,7 +19,7 @@ except ModuleNotFoundError:  # unittest remains the dependency-free local fallba
 class LiveProviderTests(unittest.TestCase):
     def test_representative_industry_endpoint(self) -> None:
         bars = ThsPublicValidationProvider().historical_daily_bars(
-            "881121", date(2026, 1, 1), date.today(), Market.CN_A
+            "881121", date(2026, 1, 1), date(2026, 7, 24), Market.CN_A
         )
         self.assertGreaterEqual(len(bars), 120)
 

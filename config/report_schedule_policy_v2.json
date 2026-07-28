@@ -1,0 +1,10 @@
+{
+  "version": 2,
+  "timezone": "Asia/Shanghai",
+  "expected_upload_weekdays": ["SUNDAY", "MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY"],
+  "normally_no_report_weekdays": ["FRIDAY", "SATURDAY"],
+  "missing_report_alert_enabled": false,
+  "production_calendar_approved": false,
+  "target_trade_date_inference": "disabled_without_approved_calendar",
+  "persist_only_on": ["upload", "skip", "publish", "revision", "admin_confirmation"]
+}

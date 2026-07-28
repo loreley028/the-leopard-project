@@ -15,6 +15,11 @@
   ],
   "missing_report_alert_enabled": false,
   "upload_time_is_report_date": false,
-  "report_date_requires_confirmation": true,
+  "automatic_report_date_detection": true,
+  "report_date_requires_confirmation": false,
+  "report_date_confirmation_required_for": [
+    "low",
+    "conflict"
+  ],
   "admin_report_date_override_allowed": true
 }

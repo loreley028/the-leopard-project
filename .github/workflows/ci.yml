@@ -31,6 +31,9 @@ jobs:
       - name: Run default offline pytest suite
         run: python -m pytest -p no:cacheprovider -m "not live"
 
+      - name: Validate compact matrix, intraday status, holding intervals and visibility
+        run: python -m pytest -p no:cacheprovider tests/test_phase2a0_history_intraday.py
+
       - name: Validate workflow YAML and policy
         run: python scripts/validate_workflow.py
 
@@ -48,6 +51,15 @@ jobs:
 
       - name: Validate Phase 2A-0 PDF Web MVP policy
         run: python scripts/validate_phase2a0.py
+
+      - name: Validate enhanced report contracts and deterministic fixtures
+        run: python scripts/validate_enhanced_report.py
+
+      - name: Validate upload-to-interpretation workflow
+        run: python scripts/validate_upload_interpretation.py
+
+      - name: Validate PDF parse quality and 20-report fidelity fixture
+        run: python -m pytest -p no:cacheprovider tests/test_upload_interpretation.py tests/test_demo_fidelity.py
 
       - name: Validate UI license boundary
         run: python scripts/check_ui_license_boundary.py

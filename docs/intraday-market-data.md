@@ -1,0 +1,11 @@
+# Intraday market data
+
+Phase 2A-0 provides a local research cache, not a production quote service. In `real_local` the backend safely starts one process-local session from versioned policy; Admin can pause or resume it. The configured interval is five minutes and an overlapping cycle is rejected. The Eastmoney board list adapter loads industry and concept lists once per cycle and serves sector lookups from that server cache.
+
+The controlled `CN_A` calendar and `Asia/Shanghai` sessions gate requests: 09:30-11:30 and 13:00-15:00 may refresh; lunch retains the morning cache as `market_break`; close and non-trading dates return `market_closed` without Provider access. The status contract exposes `intraday_trade_date` separately from every PDF date. A failed sector keeps its last snapshot for audit but the Viewer shows `暂无实时` rather than presenting that old value as current; it is never reset to zero or replaced by EOD.
+
+Viewer APIs read SQLite/cache only. Ten simultaneous viewers still produce zero additional Provider calls. Only Admin control endpoints can pause, resume or refresh. Eastmoney board spot is `research_provider`; the existing public historical endpoint remains `diagnostic_provider`. Neither has an SLA or approval as `production_primary`.
+
+Intraday snapshots store sector, trade date, observation/fetch time, index value, prior close, percentage, optional volume/amount, provider role, status and response hash. Retention is limited by versioned policy. They never enter `SectorDailyBar`, `SectorIndicatorSnapshot`, `ReportSectorMarketSnapshot`, the PDF path matrix, formal moving averages, multi-day returns or formal holding-period return.
+
+One centralized resolver maps open-session failures to `provider_failed`, lunch to `market_break`, post-close/non-trading periods to `market_closed`, and aged cache to `intraday_stale`. The research table has one `实时行情` column: fresh values show percentage plus `HH:MM`, lunch uses the morning value plus `午间休市`, completed same-day EOD shows `今日收盘`, and non-trading days show `休市`. Its low-noise header summary reads the latest run's success, failure, stale and refresh-time fields dynamically. Provider research is recorded in `intraday-provider-evaluation.md`.

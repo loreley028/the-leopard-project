@@ -57,6 +57,13 @@ class ThsPublicValidationProvider(MarketDataProvider):
     """
 
     provider_key = "ths_public_validation"
+
+    def fetch_intraday_snapshot(self, sector_mapping: object, as_of: datetime) -> DailyBar:
+        raise ProviderError(
+            ProviderErrorCategory.PROVIDER_UNAVAILABLE,
+            "同花顺公共历史日线端点未验证为当前交易日盘中快照接口",
+            retryable=False,
+        )
     board_url = "https://d.10jqka.com.cn/v4/line/bk_{symbol}/01/{year}.js"
     hk_url = "https://d.10jqka.com.cn/v6/line/176_HS2083/01/all.js"
 
@@ -121,7 +128,7 @@ class ThsPublicValidationProvider(MarketDataProvider):
             bars: list[DailyBar] = []
             for year in range(start.year, end.year + 1):
                 document, digest = _unwrap(self._get(self.board_url.format(symbol=symbol, year=year)))
-                bars.extend(self._parse_board(symbol, document, digest))
+                bars.extend(self._parse_board(symbol, document, digest, requested_end=end))
         selected = tuple(bar for bar in bars if start <= bar.trade_date <= end)
         self._calendars[market].update(bar.trade_date for bar in selected)
         return selected
@@ -161,16 +168,32 @@ class ThsPublicValidationProvider(MarketDataProvider):
         except (KeyError, TypeError, ValueError, ArithmeticError) as exc:
             raise ProviderError(ProviderErrorCategory.MALFORMED_RESPONSE, "bar row cannot be normalized", retryable=False) from exc
 
-    def _parse_board(self, symbol: str, document: Mapping[str, object], digest: str) -> list[DailyBar]:
+    def _parse_board(
+        self,
+        symbol: str,
+        document: Mapping[str, object],
+        digest: str,
+        *,
+        requested_end: date | None = None,
+    ) -> list[DailyBar]:
         data = document.get("data")
         if not isinstance(data, str) or not data:
             raise ProviderError(ProviderErrorCategory.NO_DATA, "board response contains no data", retryable=False)
         parsed: list[tuple[date, list[str]]] = []
         for row in data.split(";"):
             fields = row.split(",")
+            try:
+                row_date = datetime.strptime(fields[0], "%Y%m%d").date()
+            except (IndexError, ValueError) as exc:
+                raise ProviderError(ProviderErrorCategory.MALFORMED_RESPONSE, "board row date is malformed", retryable=False) from exc
+            # Public chart responses can expose an unfinished current/future row.
+            # It is safe to ignore only when it is strictly after the caller's
+            # explicit cutoff; malformed rows inside the requested window remain fatal.
+            if requested_end is not None and row_date > requested_end:
+                continue
             if len(fields) < 7:
                 raise ProviderError(ProviderErrorCategory.MALFORMED_RESPONSE, "board row has fewer than seven fields", retryable=False)
-            parsed.append((datetime.strptime(fields[0], "%Y%m%d").date(), fields))
+            parsed.append((row_date, fields))
         parsed.sort(key=lambda item: item[0])
         if len({day for day, _ in parsed}) != len(parsed):
             raise ProviderError(ProviderErrorCategory.MALFORMED_RESPONSE, "board response contains duplicate dates", retryable=False)

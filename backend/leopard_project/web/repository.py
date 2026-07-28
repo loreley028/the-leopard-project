@@ -32,8 +32,14 @@ class ReportRepository:
     def list_reports(self, *, published_only: bool = False) -> list[Report]:
         query = select(Report).options(*REPORT_LOADS)
         if published_only:
-            query = query.where(Report.status == "published")
+            query = query.where(Report.status == "published", Report.is_current.is_(True))
         return list(self.session.scalars(query.order_by(desc(Report.report_date), desc(Report.created_at))).unique())
+
+    def reports_on(self, report_date: date, *, exclude_id: str | None = None) -> list[Report]:
+        query = select(Report).where(Report.report_date == report_date).options(*REPORT_LOADS)
+        if exclude_id:
+            query = query.where(Report.id != exclude_id)
+        return list(self.session.scalars(query.order_by(desc(Report.revision_number))).unique())
 
     def create(self, report: Report, report_file: ReportFile) -> Report:
         report.file = report_file
@@ -51,6 +57,7 @@ class ReportRepository:
         report.sections.clear()
         report.mentions.clear()
         report.unmapped_terms.clear()
+        self.session.flush()
         report.sections.extend(sections)
         report.mentions.extend(mentions)
         report.unmapped_terms.extend(terms)

@@ -1,0 +1,16 @@
+{
+  "schema_version": "1.0.0",
+  "statuses": [
+    {"code": "avoid", "label": "不碰", "color": "#334155", "order": 1},
+    {"code": "strong_watch", "label": "强观", "color": "#facc15", "order": 2},
+    {"code": "watch", "label": "观察", "color": "#fde68a", "order": 3},
+    {"code": "weak_watch", "label": "弱观", "color": "#d6c7a1", "order": 4},
+    {"code": "turn_hold", "label": "转持", "color": "#f97316", "order": 5},
+    {"code": "hold", "label": "持有", "color": "#dc2626", "order": 6},
+    {"code": "turn_weak", "label": "转弱", "color": "#86efac", "order": 7},
+    {"code": "exit", "label": "离场", "color": "#15803d", "order": 8},
+    {"code": "not_mentioned", "label": "未提", "color": "#e5e7eb", "order": 9}
+  ],
+  "unknown_policy": "manual_review",
+  "not_mentioned_semantics": "current_report_has_no_explicit_view_and_does_not_invalidate_or_carry_forward_the_previous_view"
+}

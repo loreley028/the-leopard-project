@@ -76,6 +76,22 @@ class ThsPublicProviderTests(unittest.TestCase):
             self.provider(callback("x", {"data": f"{row};{row}"})).historical_daily_bars("881121", date(2026, 1, 1), date(2026, 12, 31), Market.CN_A)
         self.assertEqual(caught.exception.category, ProviderErrorCategory.MALFORMED_RESPONSE)
 
+    def test_unfinished_row_after_explicit_cutoff_is_ignored(self) -> None:
+        complete = "20260724,1,2,1,2,3,4,,,,0"
+        unfinished_future = "20260727,,,,2,0,,,,,0"
+        bars = self.provider(callback("x", {"data": f"{complete};{unfinished_future}"})).historical_daily_bars(
+            "881121", date(2026, 1, 1), date(2026, 7, 24), Market.CN_A,
+        )
+        self.assertEqual([bar.trade_date for bar in bars], [date(2026, 7, 24)])
+
+    def test_unfinished_row_inside_requested_window_still_fails(self) -> None:
+        unfinished = "20260724,,,,2,0,,,,,0"
+        with self.assertRaises(ProviderError) as caught:
+            self.provider(callback("x", {"data": unfinished})).historical_daily_bars(
+                "881121", date(2026, 1, 1), date(2026, 7, 24), Market.CN_A,
+            )
+        self.assertEqual(caught.exception.category, ProviderErrorCategory.MALFORMED_RESPONSE)
+
     def test_timeout_and_rate_limit_categories_are_preserved(self) -> None:
         for category in (ProviderErrorCategory.TIMEOUT, ProviderErrorCategory.RATE_LIMIT):
             def fail(_url: str, _timeout: float, category: ProviderErrorCategory = category) -> bytes:

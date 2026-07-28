@@ -1,0 +1,25 @@
+{
+  "schema_version": "1.0.0",
+  "timezone": "Asia/Shanghai",
+  "market": "CN_A",
+  "refresh_interval_minutes": 5,
+  "stale_after_minutes": 10,
+  "morning_session": {"start": "09:30", "end": "11:30"},
+  "afternoon_session": {"start": "13:00", "end": "15:00"},
+  "market_break": {"start": "11:30", "end": "13:00"},
+  "max_concurrency": 1,
+  "request_spacing_seconds": 0,
+  "retain_snapshot_days": 5,
+  "auto_start": true,
+  "stop_at_market_close": true,
+  "viewer_provider_access": false,
+  "production_approved": false,
+  "provider": "eastmoney_board_spot",
+  "provider_role": "research_provider",
+  "status_resolver": "centralized_v1",
+  "candidate_evaluations": [
+    {"provider": "eastmoney_board_spot_via_public_push2", "role": "research_provider", "result": "partially_validated", "authentication": "none", "lineage": "Eastmoney public push2; AKShare and efinance wrappers share this upstream", "write_real_local": true},
+    {"provider": "sina_industry_spot_public", "role": "research_provider", "result": "partially_validated", "authentication": "none", "lineage": "Sina Finance public industry aggregation", "write_real_local": false}
+  ],
+  "supported_sector_count": 65
+}

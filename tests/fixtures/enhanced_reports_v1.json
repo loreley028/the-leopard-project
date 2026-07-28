@@ -1,0 +1,61 @@
+{
+  "fixture": true,
+  "schema_version": "1.0.0",
+  "reports": [
+    {
+      "fixture_key": "sunday-0712",
+      "title": "虚构直播总结·航路起点",
+      "report_date": "2026-07-12",
+      "market_as_of_date": "2026-07-10",
+      "core_view": "先观察结构是否稳定，再决定下一步研究重点。",
+      "market_path": "震荡整理，等待量价确认。",
+      "risk_warning": "仅为脱敏演示，不构成投资建议。",
+      "focus_sectors": ["半导体", "证券", "机器人"],
+      "statuses": {"semiconductor": "watch", "securities": "strong_watch", "robotics": "watch", "bank": "hold", "electricity": "weak_watch", "hang_seng_tech": "watch"}
+    },
+    {
+      "fixture_key": "monday-0713",
+      "title": "虚构直播总结·潮汐确认",
+      "report_date": "2026-07-13",
+      "market_as_of_date": "2026-07-13",
+      "core_view": "局部方向得到确认，仍需观察持续性。",
+      "market_path": "指数稳定，结构机会增加。",
+      "risk_warning": "研究记录不等于买卖建议。",
+      "focus_sectors": ["半导体", "证券", "机器人", "酒店餐饮"],
+      "statuses": {"semiconductor": "turn_hold", "securities": "hold", "robotics": "strong_watch", "hotel_catering": "watch", "bank": "hold", "electricity": "turn_weak"}
+    },
+    {
+      "fixture_key": "tuesday-0714",
+      "title": "虚构直播总结·林间分化",
+      "report_date": "2026-07-14",
+      "market_as_of_date": "2026-07-14",
+      "core_view": "分化扩大，重视观察条件而非追逐波动。",
+      "market_path": "高位震荡，强弱切换。",
+      "risk_warning": "历史状态仅记录直播原意。",
+      "focus_sectors": ["半导体", "证券", "玻璃基板", "创新药/医药"],
+      "statuses": {"semiconductor": "hold", "securities": "turn_weak", "robotics": "weak_watch", "glass_substrate": "strong_watch", "innovative_drug_medicine": "watch", "bank": "turn_weak", "electricity": "exit"}
+    },
+    {
+      "fixture_key": "thursday-0716",
+      "title": "虚构直播总结·港湾复核",
+      "report_date": "2026-07-16",
+      "market_as_of_date": "2026-07-16",
+      "core_view": "确认核心方向，退出不满足条件的观察项。",
+      "market_path": "缩量整理，等待再度放量。",
+      "risk_warning": "行情为受控fixture，不代表真实市场。",
+      "focus_sectors": ["半导体", "机器人", "创新药/医药", "恒生科技"],
+      "statuses": {"semiconductor": "hold", "securities": "exit", "robotics": "turn_hold", "glass_substrate": "watch", "innovative_drug_medicine": "turn_hold", "bank": "avoid", "hang_seng_tech": "strong_watch"}
+    },
+    {
+      "fixture_key": "sunday-0719",
+      "title": "虚构直播总结·岛屿周报",
+      "report_date": "2026-07-19",
+      "market_as_of_date": "2026-07-17",
+      "core_view": "保留已确认方向，同时明确未提不代表观点失效。",
+      "market_path": "周末复盘，对照最近完整交易日。",
+      "risk_warning": "虚构脱敏fixture，仅用于页面验收。",
+      "focus_sectors": ["半导体", "机器人", "酒店餐饮", "恒生科技"],
+      "statuses": {"semiconductor": "hold", "robotics": "hold", "hotel_catering": "turn_hold", "glass_substrate": "not_mentioned", "innovative_drug_medicine": "hold", "bank": "not_mentioned", "hang_seng_tech": "watch"}
+    }
+  ]
+}
