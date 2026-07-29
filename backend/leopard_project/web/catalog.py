@@ -7,6 +7,20 @@ from typing import Any
 from leopard_project.config import load_seed_bundle
 
 
+def configured_groups() -> list[dict[str, Any]]:
+    """Return groups in the versioned catalog order used by every Viewer surface."""
+    sectors = load_seed_bundle().sectors
+    names = {item.group_order: item.category_level_1 for item in sectors}
+    return [
+        {
+            "group_order": group_order,
+            "group_name": names[group_order],
+            "sector_count": sum(item.group_order == group_order for item in sectors),
+        }
+        for group_order in sorted(names)
+    ]
+
+
 def configured_catalog(version: str = "v2.3", valid_from: date = date(2026, 6, 9)) -> dict[str, Any]:
     entries = [
         {

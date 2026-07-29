@@ -1,0 +1,40 @@
+{
+  "schema_version": "1.0.0",
+  "mapping_version": "intraday-provider-exact-v1",
+  "review_status": "phase2a0_local_validation",
+  "mappings": [
+    {
+      "sector_key": "computing_power_rental",
+      "canonical_sector": "算力租赁",
+      "provider": "ths_exact_spot",
+      "provider_symbol": "886050",
+      "provider_name": "算力租赁",
+      "mapping_rationale": "沿用V2.3正式同花顺精确代码；禁止替换为口径更宽的算力概念。",
+      "mapping_confidence": "high",
+      "source_reference": "https://q.10jqka.com.cn/thshy/detail/code/886050/",
+      "review_status": "confirmed_from_existing_mapping_and_public_page"
+    },
+    {
+      "sector_key": "retail",
+      "canonical_sector": "零售",
+      "provider": "ths_exact_spot",
+      "provider_symbol": "881158",
+      "provider_name": "零售",
+      "mapping_rationale": "沿用V2.3正式历史EOD代码；同花顺公开页面明确标识零售881158。",
+      "mapping_confidence": "high",
+      "source_reference": "https://q.10jqka.com.cn/thshy/detail/code/881158/",
+      "review_status": "confirmed_from_existing_mapping_and_public_page"
+    },
+    {
+      "sector_key": "small_appliances",
+      "canonical_sector": "小家电",
+      "provider": "ths_exact_spot",
+      "provider_symbol": "881173",
+      "provider_name": "小家电",
+      "mapping_rationale": "沿用V2.3正式同花顺精确代码；公共板块列表名称变化时不得静默替换为近似板块。",
+      "mapping_confidence": "high",
+      "source_reference": "https://q.10jqka.com.cn/thshy/detail/code/881173/",
+      "review_status": "confirmed_from_existing_mapping_and_public_page"
+    }
+  ]
+}

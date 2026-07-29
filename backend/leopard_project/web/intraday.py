@@ -15,13 +15,14 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from leopard_project.config import CONFIG_DIR, load_seed_bundle
 from leopard_project.models import DailyBar, Market
-from leopard_project.providers import EastmoneyBoardSpotProvider
+from leopard_project.providers import ProviderError, ResearchIntradayProviderChain
 
 from .models import (
     IntradayRefreshSession,
     MarketRefreshItem,
     MarketRefreshRun,
     SectorIntradaySnapshot,
+    SectorProviderNativeClose,
 )
 
 
@@ -77,6 +78,21 @@ def market_phase_detail(now: datetime, policy: dict | None = None, trading_dates
     return market_phase(now, policy, controlled)
 
 
+def market_session(now: datetime, policy: dict | None = None, trading_dates: set[date] | None = None) -> str:
+    """Expose the user-facing five-state session contract without weakening fail-closed checks."""
+    phase = market_phase(now, policy, trading_dates)
+    detail = market_phase_detail(now, policy, trading_dates)
+    if detail == "non_trading_day":
+        return "non_trading_day"
+    if detail == "before_open":
+        return "pre_open"
+    if phase == "intraday_open":
+        return "open"
+    if phase == "market_break":
+        return "market_break"
+    return "closed"
+
+
 def resolve_intraday_data_status(
     *, phase: str, snapshot: dict | None, latest_result: str | None,
     now: datetime, stale_after_minutes: int, unsupported: bool = False,
@@ -100,6 +116,54 @@ def resolve_intraday_data_status(
 IntradayFetcher = Callable[[str, object, datetime], DailyBar]
 
 
+def calculate_intraday_ma5(current_value: Decimal, previous_complete_closes: list[Decimal]) -> tuple[Decimal, Decimal] | None:
+    """Pure arithmetic helper; callers must validate Provider-native lineage first."""
+    if len(previous_complete_closes) != 4 or any(value <= 0 for value in previous_complete_closes) or current_value <= 0:
+        return None
+    average = (current_value + sum(previous_complete_closes, Decimal("0"))) / Decimal("5")
+    return average, (current_value / average - Decimal("1")) * Decimal("100")
+
+
+def provider_native_history_status(bar: DailyBar) -> str:
+    """Classify Provider-native history without consulting formal EOD data."""
+    provider_symbol = bar.provider_symbol or bar.symbol
+    history = tuple(sorted(bar.provider_native_history, key=lambda item: item.trade_date))
+    if bar.provider_native_history_status != "complete" or len(history) != 4:
+        return bar.provider_native_history_status if bar.provider_native_history_status != "complete" else "insufficient"
+    if len({item.trade_date for item in history}) != 4 or any(item.trade_date >= bar.trade_date for item in history):
+        return "invalid_dates"
+    expected_days = sorted(day for day in controlled_trading_dates() if day < bar.trade_date)[-4:]
+    if [item.trade_date for item in history] != expected_days:
+        return "invalid_dates"
+    if any(item.provider != bar.provider for item in history):
+        return "provider_mismatch"
+    if any(item.provider_symbol != provider_symbol for item in history):
+        return "symbol_mismatch"
+    latest_close = history[-1].close
+    if latest_close <= 0 or abs(bar.pre_close / latest_close - Decimal("1")) > Decimal("0.005"):
+        return "series_scale_mismatch"
+    return "complete"
+
+
+def calculate_provider_native_intraday_ma5(bar: DailyBar) -> tuple[Decimal, Decimal] | None:
+    """Fail closed unless current and all four closes share Provider, symbol and scale."""
+    if provider_native_history_status(bar) != "complete":
+        return None
+    history = tuple(sorted(bar.provider_native_history, key=lambda item: item.trade_date))
+    return calculate_intraday_ma5(bar.close, [item.close for item in history])
+
+
+def provider_failure_contract(exc: Exception) -> tuple[str, str]:
+    """Return an Admin-safe failure without serializing arbitrary exception data."""
+    if isinstance(exc, ProviderError):
+        return exc.category.value, str(exc)
+    if isinstance(exc, ValueError) and str(exc) in {"stale_snapshot", "inconsistent_pct_change"}:
+        return str(exc), str(exc)
+    if isinstance(exc, TimeoutError):
+        return "timeout", "Provider request timed out"
+    return "provider_error", "Provider request failed"
+
+
 class IntradayRefreshCoordinator:
     """One process-wide refresh loop with Admin pause/resume controls.
 
@@ -120,7 +184,7 @@ class IntradayRefreshCoordinator:
         self._now = now or (lambda: datetime.now(timezone.utc))
         self._uses_default_fetcher = fetcher is None
         self._fetcher = fetcher or self._provider_fetch
-        self._provider = EastmoneyBoardSpotProvider()
+        self._provider = ResearchIntradayProviderChain()
         self._sleep = sleep
         self._enabled = False
         self._running_cycle = False
@@ -187,7 +251,7 @@ class IntradayRefreshCoordinator:
         started = self._now()
         try:
             result = self.refresh_once()
-            if result.get("status") == "market_closed" and self.policy.get("stop_at_market_close"):
+            if result.get("status") in {"market_closed", "non_trading_day"} and self.policy.get("stop_at_market_close"):
                 self.pause()
             self._last_runtime_error = None
         except Exception as exc:
@@ -212,7 +276,9 @@ class IntradayRefreshCoordinator:
             now = self._now()
             phase = market_phase(now, self.policy)
             if phase != "intraday_open":
-                return {"status": phase, "provider_requests": 0, "trade_date": now.astimezone(ZoneInfo(self.policy["timezone"])).date().isoformat()}
+                detail = market_phase_detail(now, self.policy)
+                status = "pre_open" if detail == "before_open" else "non_trading_day" if detail == "non_trading_day" else phase
+                return {"status": status, "provider_requests": 0, "trade_date": now.astimezone(ZoneInfo(self.policy["timezone"])).date().isoformat()}
             return self._execute_cycle(now)
         finally:
             with self._lock:
@@ -227,15 +293,19 @@ class IntradayRefreshCoordinator:
         # Provider I/O must happen before opening a SQLite write transaction.
         # Otherwise a slow public endpoint can block login/Admin writes for the
         # whole network timeout window even though Viewer reads use only cache.
-        fetched: list[tuple[object, DailyBar | None, str | None]] = []
+        fetched: list[tuple[object, DailyBar | None, str | None, str | None]] = []
         for index, sector in enumerate(sectors):
             try:
                 bar = self._fetcher(sector.sector_key, mappings[sector.sector_key], now)
                 if bar.trade_date != now.astimezone(ZoneInfo(self.policy["timezone"])).date():
                     raise ValueError("stale_snapshot")
-                fetched.append((sector, bar, None))
+                expected_pct = (bar.close / bar.pre_close - Decimal("1")) * Decimal("100")
+                if abs(expected_pct - bar.pct_change) > Decimal("0.06"):
+                    raise ValueError("inconsistent_pct_change")
+                fetched.append((sector, bar, None, None))
             except Exception as exc:  # one Provider failure must not abort the cycle
-                fetched.append((sector, None, type(exc).__name__))
+                error_code, error_message = provider_failure_contract(exc)
+                fetched.append((sector, None, error_code, error_message))
             if index < len(sectors) - 1 and self.policy["request_spacing_seconds"] > 0:
                 self._sleep(float(self.policy["request_spacing_seconds"]))
 
@@ -246,8 +316,25 @@ class IntradayRefreshCoordinator:
             )
             session.add(run)
             session.flush()
-            for sector, bar, failure in fetched:
+            for sector, bar, error_code, error_message in fetched:
                 if bar is not None:
+                    provider_symbol = bar.provider_symbol or bar.symbol
+                    native_status = provider_native_history_status(bar)
+                    intraday_ma = calculate_provider_native_intraday_ma5(bar)
+                    for native in bar.provider_native_history if native_status == "complete" else ():
+                        existing = session.scalar(select(SectorProviderNativeClose).where(
+                            SectorProviderNativeClose.sector_key == sector.sector_key,
+                            SectorProviderNativeClose.provider == native.provider,
+                            SectorProviderNativeClose.provider_symbol == native.provider_symbol,
+                            SectorProviderNativeClose.trade_date == native.trade_date,
+                        ))
+                        if existing is None:
+                            session.add(SectorProviderNativeClose(
+                                sector_key=sector.sector_key, provider=native.provider,
+                                provider_symbol=native.provider_symbol, trade_date=native.trade_date,
+                                close=native.close, source_response_hash=native.source_payload_hash,
+                                lineage=native.lineage, fetched_at=bar.fetched_at,
+                            ))
                     session.add(SectorIntradaySnapshot(
                         sector_key=sector.sector_key,
                         trade_date=bar.trade_date,
@@ -258,7 +345,14 @@ class IntradayRefreshCoordinator:
                         volume=bar.volume,
                         amount=bar.amount,
                         provider=bar.provider,
+                        provider_symbol=provider_symbol,
                         provider_role=self.policy["provider_role"],
+                        lineage=bar.lineage or bar.provider,
+                        source_status="available",
+                        freshness_status="intraday_fresh",
+                        intraday_ma5=intraday_ma[0] if intraday_ma else None,
+                        intraday_vs_ma5=intraday_ma[1] if intraday_ma else None,
+                        native_history_status=native_status,
                         data_status="intraday_fresh",
                         response_hash=bar.source_payload_hash,
                         fetched_at=bar.fetched_at,
@@ -266,10 +360,19 @@ class IntradayRefreshCoordinator:
                     ))
                     run.success_count += 1
                     run.intraday_count += 1
-                    session.add(MarketRefreshItem(run_id=run.id, sector_key=sector.sector_key, status="intraday_fresh", trade_date=bar.trade_date, detail="server_cache"))
+                    session.add(MarketRefreshItem(
+                        run_id=run.id, sector_key=sector.sector_key, status="intraday_fresh",
+                        trade_date=bar.trade_date, provider=bar.provider,
+                        provider_symbol=provider_symbol,
+                        lineage=bar.lineage or bar.provider, detail="server_cache",
+                    ))
                 else:
                     run.failure_count += 1
-                    session.add(MarketRefreshItem(run_id=run.id, sector_key=sector.sector_key, status="provider_failed", detail=failure or "ProviderError"))
+                    session.add(MarketRefreshItem(
+                        run_id=run.id, sector_key=sector.sector_key, status="provider_failed",
+                        provider=self.policy["provider"], error_code=error_code or "provider_error",
+                        error_message=error_message or "Provider request failed", detail="provider_failed",
+                    ))
                 session.flush()
             run.unsupported_count = 1
             run.status = "completed_with_failures" if run.failure_count else "completed"
@@ -307,6 +410,7 @@ class IntradayRefreshCoordinator:
                 "session_status": "running" if self._enabled else "paused",
                 "market_phase": market_phase(now, self.policy),
                 "market_phase_detail": market_phase_detail(now, self.policy),
+                "market_session": market_session(now, self.policy),
                 "intraday_trade_date": local_trade_date,
                 "refresh_interval_minutes": self.policy["refresh_interval_minutes"],
                 "provider": self.policy["provider"],

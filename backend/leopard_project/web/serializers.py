@@ -150,6 +150,7 @@ def sector_payloads(repo: ReportRepository) -> list[dict]:
             "path_status_color": path_statuses()[item.path_status]["color"],
             "explicitly_mentioned": bool(item.detail_report_id and item.path_status != "not_mentioned"),
         } for item in reversed(path_history[:10])]
+        recent_mention_count = sum(item["explicitly_mentioned"] for item in recent_path)
         statuses = [item.path_status for item in reversed(path_history)]
         effective = effective_statuses(statuses)
         current_effective = effective[-1] if effective else None
@@ -170,6 +171,11 @@ def sector_payloads(repo: ReportRepository) -> list[dict]:
         is_low_attention = bool(
             ten_not_mentioned and not intervals["strict_holding_interval"] and not intervals["broad_holding_interval"]
             and current_effective not in {"turn_hold", "hold", "strong_watch"} and not special and not is_pinned
+        )
+        attention_level = (
+            "high" if is_pinned or sector.sector_key in latest_report_keys or holding
+            or current_effective in {"turn_hold", "hold", "strong_watch"}
+            else "low" if is_low_attention else "normal"
         )
         recent_days = [] if unsupported else enhanced.recent_complete_days(sector.sector_key)
         if market is not None:
@@ -198,6 +204,8 @@ def sector_payloads(repo: ReportRepository) -> list[dict]:
             "intraday_last_attempt_at": _display_short_time(latest_run.started_at) if latest_run else None,
             "recent_5_trading_days": recent_days,
             "recent_path": recent_path,
+            "recent_mention_count": recent_mention_count,
+            "attention_level": attention_level,
             "active_holding_interval": holding,
             "historical_holding_intervals": intervals["historical_holding_intervals"],
             "strict_holding_interval": intervals["strict_holding_interval"],

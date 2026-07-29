@@ -200,6 +200,19 @@ def market_payload(bar: SectorDailyBar | None, indicator: SectorIndicatorSnapsho
     return payload
 
 
+def intraday_matches_complete_eod_scale(intraday: dict[str, Any] | None, latest_bar: SectorDailyBar | None) -> bool:
+    """Do not calculate a holding return across Provider or point-value scales."""
+    if intraday is None or latest_bar is None:
+        return False
+    if intraday.get("index_value") is None or intraday.get("pre_close") is None:
+        return False
+    if intraday.get("provider") != latest_bar.data_source:
+        return False
+    pre_close = Decimal(str(intraday["pre_close"]))
+    formal_close = Decimal(str(latest_bar.close))
+    return pre_close > 0 and formal_close > 0 and abs(pre_close / formal_close - Decimal("1")) <= Decimal("0.005")
+
+
 @dataclass
 class EnhancedReportService:
     session: Session
@@ -640,7 +653,14 @@ class EnhancedReportService:
             "volume": _number(item.volume),
             "amount": _number(item.amount),
             "provider": item.provider,
+            "provider_symbol": item.provider_symbol,
             "provider_role": item.provider_role,
+            "lineage": item.lineage,
+            "source_status": item.source_status,
+            "freshness_status": item.freshness_status,
+            "intraday_ma5": _number(item.intraday_ma5),
+            "intraday_vs_ma5": _number(item.intraday_vs_ma5),
+            "native_history_status": item.native_history_status,
             "data_status": item.data_status,
             "response_hash": item.response_hash,
             "fetched_at": fetched_at.isoformat(),
@@ -718,7 +738,7 @@ class EnhancedReportService:
                     active["trading_days"] = max(0, sum(start_bar.trade_date <= bar.trade_date <= latest_bar.trade_date for bar in bars) - 1)
                     active["eod_return"] = float((Decimal(str(latest_bar.close)) / Decimal(str(start_bar.close)) - 1) * 100)
                     active["return_pct"] = active["eod_return"]
-                    if latest_intraday and latest_intraday.get("index_value") is not None:
+                    if intraday_matches_complete_eod_scale(latest_intraday, latest_bar):
                         active["intraday_reference_return"] = float((Decimal(str(latest_intraday["index_value"])) / Decimal(str(start_bar.close)) - 1) * 100)
             return active, list(reversed(historical))
 
@@ -732,7 +752,6 @@ class EnhancedReportService:
             "historical_strict_intervals": strict_history,
             "historical_broad_intervals": broad_history,
         }
-
     def holding_interval_for_sector(self, report: Report, sector_key: str) -> dict[str, Any] | None:
         return self.holding_intervals_for_sector(sector_key, report.report_date).get("active_holding_interval")
 

@@ -291,20 +291,25 @@ def create_app(settings: WebSettings | None = None, session_factory: sessionmake
         if data_status:
             rows = [item for item in rows if item["data_status"] == data_status]
         status_rank = {"turn_hold": 0, "hold": 1, "strong_watch": 2, "watch": 3, "weak_watch": 4, "turn_weak": 5, "exit": 6, "avoid": 7, "not_mentioned": 8}
-        if sort in {"research", "status"}:
+        if sort == "research":
             rows.sort(key=lambda item: (
-                -int(item["mentioned_in_latest_published"]) if sort == "research" else 0,
-                -int(item["status_changed"]) if sort == "research" else 0,
-                status_rank.get(item["current_path_status"], 99),
+                item["group_order"],
+                -int(item["is_pinned_for_research"]),
+                -int(item["mentioned_in_latest_published"]),
+                -int(bool(item.get("active_holding_interval"))),
+                status_rank.get(item.get("effective_status") or item["current_path_status"], 99),
+                -int(item.get("recent_mention_count") or 0),
                 -(int((item.get("latest_view_date") or "0000-00-00").replace("-", ""))),
-                item["group_order"], item["overall_order"],
+                item["overall_order"],
             ))
+        elif sort == "status":
+            rows.sort(key=lambda item: (item["group_order"], status_rank.get(item["current_path_status"], 99), -(int((item.get("latest_view_date") or "0000-00-00").replace("-", ""))), item["overall_order"]))
         elif sort == "daily":
-            rows.sort(key=lambda item: item.get("latest_market", {}).get("daily_pct_change", -10_000) if item.get("latest_market") else -10_000, reverse=True)
+            rows.sort(key=lambda item: (item["group_order"], -(item.get("latest_market", {}).get("daily_pct_change", -10_000) if item.get("latest_market") else -10_000), item["overall_order"]))
         elif sort == "five_day":
-            rows.sort(key=lambda item: item.get("latest_market", {}).get("return_5d", -10_000) if item.get("latest_market") else -10_000, reverse=True)
+            rows.sort(key=lambda item: (item["group_order"], -(item.get("latest_market", {}).get("return_5d", -10_000) if item.get("latest_market") else -10_000), item["overall_order"]))
         elif sort == "view_date":
-            rows.sort(key=lambda item: item.get("latest_view_date") or "", reverse=True)
+            rows.sort(key=lambda item: (item["group_order"], -(int((item.get("latest_view_date") or "0000-00-00").replace("-", ""))), item["overall_order"]))
         elif sort == "group":
             rows.sort(key=lambda item: (item["group_order"], item["overall_order"]))
         start = (page - 1) * page_size

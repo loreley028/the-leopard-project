@@ -15,6 +15,11 @@ def payload(rows: list[dict]) -> bytes:
     return json.dumps({"data": {"diff": rows}}, ensure_ascii=False).encode()
 
 
+def history_payload(symbol: str, closes: tuple[int, int, int, int] = (96, 97, 98, 100)) -> bytes:
+    rows = [f"2026-07-{day},{close},{close},{close},{close},1,1,0,0,0,0" for day, close in zip((22, 23, 24, 27), closes, strict=True)]
+    return json.dumps({"data": {"code": symbol, "name": symbol, "klines": rows}}).encode()
+
+
 def test_eastmoney_spot_uses_two_request_cache_and_real_fields() -> None:
     calls: list[str] = []
     documents = iter([
@@ -28,6 +33,8 @@ def test_eastmoney_spot_uses_two_request_cache_and_real_fields() -> None:
 
     def transport(url: str, _timeout: float) -> bytes:
         calls.append(url)
+        if "kline/get" in url:
+            return history_payload("BK1036", (2600, 2620, 2650, 2675))
         return next(documents)
 
     mapping = next(item for item in load_seed_bundle().mappings if item.sector_key == "semiconductor")
@@ -37,33 +44,82 @@ def test_eastmoney_spot_uses_two_request_cache_and_real_fields() -> None:
     assert (str(bar.close), str(bar.pre_close), str(bar.pct_change)) == ("2564.28", "2675.21", "-4.15")
     assert bar.volume and bar.amount and bar.source_payload_hash
     provider.fetch_intraday_snapshot(mapping, datetime(2026, 7, 28, 5, 15, tzinfo=timezone.utc))
-    assert len(calls) == provider.request_count == 2
+    assert len(calls) == provider.request_count == 3
+    assert len(bar.provider_native_history) == 4
+    assert bar.provider_native_history_status == "complete"
 
 
 def test_eastmoney_spot_cache_expires_at_next_server_cycle() -> None:
     calls: list[str] = []
+    spot_calls = 0
 
     def transport(url: str, _timeout: float) -> bytes:
+        nonlocal spot_calls
         calls.append(url)
+        if "kline/get" in url:
+            return history_payload("BK1036", (2600, 2620, 2650, 2675))
+        spot_calls += 1
         return payload([{
             "f2": 2564.28, "f3": -4.15, "f5": 33550000, "f6": 27040000000,
             "f12": "BK1036", "f14": "半导体", "f15": 2675.09, "f16": 2543.61,
             "f17": 2611.05, "f18": 2675.21,
-        }]) if len(calls) % 2 else payload([])
+        }]) if spot_calls % 2 else payload([])
 
     mapping = next(item for item in load_seed_bundle().mappings if item.sector_key == "semiconductor")
     provider = EastmoneyBoardSpotProvider(transport=transport)
     provider.fetch_intraday_snapshot(mapping, datetime(2026, 7, 28, 5, 14, tzinfo=timezone.utc))
     provider.begin_cycle()
     provider.fetch_intraday_snapshot(mapping, datetime(2026, 7, 28, 5, 19, tzinfo=timezone.utc))
-    assert len(calls) == 4 and provider.request_count == 2
+    assert len(calls) == 5 and provider.request_count == 2
 
 
-def test_eastmoney_spot_rejects_unmapped_custom_composite() -> None:
-    mapping = next(item for item in load_seed_bundle().mappings if item.primary_symbol.startswith("CUSTOM_"))
-    provider = EastmoneyBoardSpotProvider(transport=lambda *_: payload([]))
-    with pytest.raises(ProviderError, match="custom composite"):
-        provider.fetch_intraday_snapshot(mapping, datetime(2026, 7, 28, 5, 14, tzinfo=timezone.utc))
+def test_eastmoney_spot_builds_custom_composite_from_real_components() -> None:
+    documents = iter([
+        payload([
+            {"f2": 102, "f3": 2, "f5": 1000, "f6": 2000, "f12": "BK1001", "f14": "食品加工制造", "f15": 103, "f16": 99, "f17": 100, "f18": 100},
+            {"f2": 99, "f3": -1, "f5": 1200, "f6": 2200, "f12": "BK1002", "f14": "饮料制造", "f15": 101, "f16": 98, "f17": 100, "f18": 100},
+        ]),
+        payload([]),
+    ])
+    mapping = next(item for item in load_seed_bundle().mappings if item.sector_key == "food_beverage")
+    def transport(url: str, _timeout: float) -> bytes:
+        if "kline/get" in url:
+            symbol = "BK1001" if "BK1001" in url else "BK1002"
+            return history_payload(symbol)
+        return next(documents)
+
+    provider = EastmoneyBoardSpotProvider(transport=transport)
+    bar = provider.fetch_intraday_snapshot(mapping, datetime(2026, 7, 28, 5, 14, tzinfo=timezone.utc))
+    assert bar.symbol == "CUSTOM_FOOD_BEVERAGE"
+    assert bar.close == 1005 and bar.pre_close == 1000 and bar.pct_change == pytest.approx(0.5)
+    assert bar.provider_symbol == "BK1001+BK1002"
+    assert bar.lineage and "881134->BK1001" in bar.lineage
+
+
+def test_eastmoney_spot_paginates_beyond_first_hundred_rows() -> None:
+    first_page = [{
+        "f2": 101, "f3": 1, "f5": 1, "f6": 1, "f12": f"BK{i:04d}", "f14": f"占位板块{i}",
+        "f15": 102, "f16": 99, "f17": 100, "f18": 100,
+    } for i in range(100)]
+    documents = iter([
+        payload(first_page),
+        payload([{"f2": 102, "f3": 2, "f5": 1, "f6": 1, "f12": "BK1036", "f14": "半导体", "f15": 103, "f16": 99, "f17": 100, "f18": 100}]),
+        payload([]),
+    ])
+    mapping = next(item for item in load_seed_bundle().mappings if item.sector_key == "semiconductor")
+    provider = EastmoneyBoardSpotProvider(
+        transport=lambda url, _timeout: history_payload("BK1036") if "kline/get" in url else next(documents)
+    )
+    assert provider.fetch_intraday_snapshot(mapping, datetime(2026, 7, 28, 5, 14, tzinfo=timezone.utc)).symbol == "BK1036"
+    assert provider.request_count == 4
+
+
+def test_eastmoney_spot_uses_only_explicit_taxonomy_translations() -> None:
+    assert EastmoneyBoardSpotProvider.provider_name_candidates["cpo"] == ("CPO概念",)
+    assert EastmoneyBoardSpotProvider.provider_name_candidates["securities"] == ("证券Ⅱ",)
+    assert "computing_power_rental" not in EastmoneyBoardSpotProvider.provider_name_candidates
+    assert "retail" not in EastmoneyBoardSpotProvider.provider_name_candidates
+    assert EastmoneyBoardSpotProvider.component_candidates["881160"] == (2, ("酒店餐饮",))
 
 
 def test_eastmoney_transport_classifies_remote_disconnect(monkeypatch: pytest.MonkeyPatch) -> None:

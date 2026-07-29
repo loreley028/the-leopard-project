@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session, sessionmaker
 from leopard_project.config import load_seed_bundle
 
 from .auth import Principal
+from .catalog import configured_groups
 from .enhanced import (
     EnhancedReportService,
     active_holding_interval,
@@ -158,10 +159,13 @@ def register_enhanced_routes(
                     "weekday": ["周一", "周二", "周三", "周四", "周五", "周六", "周日"][item.report_date.weekday()],
                     "is_weekend_report": item.report_date.weekday() >= 5,
                 } for item in fallback_reports],
+                "groups": configured_groups(),
                 "rows": [{
                     "sector_key": sector.sector_key,
                     "sector_name": sector.sector_name,
                     "group_name": sector.category_level_1,
+                    "group_order": sector.group_order,
+                    "overall_order": sector.overall_order,
                     "cells": [{
                         "report_id": item.id,
                         "detail_report_id": item.id,
@@ -213,6 +217,8 @@ def register_enhanced_routes(
                 "sector_key": sector.sector_key,
                 "sector_name": sector.sector_name,
                 "group_name": sector.category_level_1,
+                "group_order": sector.group_order,
+                "overall_order": sector.overall_order,
                 "cells": [{
                     "id": (entry := by_sector_date[(sector.sector_key, path_date)]).id,
                     "sector_key": sector.sector_key,
@@ -241,6 +247,7 @@ def register_enhanced_routes(
             "default_period": "20",
             "available_period_count": len(available_dates),
             "dates": columns,
+            "groups": configured_groups(),
             "rows": rows,
             "status_contract": path_status_document(),
             "history_origin": "sector_path_history_ledger",
@@ -611,7 +618,17 @@ def register_enhanced_routes(
             "started_at": run.started_at.isoformat(),
             "finished_at": run.finished_at.isoformat() if run.finished_at else None,
             "duration_ms": round((run.finished_at - run.started_at).total_seconds() * 1000) if run.finished_at else None,
-            "items": [{"sector_key": item.sector_key, "status": item.status, "trade_date": item.trade_date.isoformat() if item.trade_date else None, "detail": item.detail} for item in items],
+            "items": [{
+                "sector_key": item.sector_key,
+                "status": item.status,
+                "trade_date": item.trade_date.isoformat() if item.trade_date else None,
+                "provider": item.provider,
+                "provider_symbol": item.provider_symbol,
+                "lineage": item.lineage,
+                "error_code": item.error_code,
+                "error_message": item.error_message,
+                "detail": item.detail,
+            } for item in items],
         }
 
     @app.post("/api/v1/admin/reports/{report_id}/market-snapshot", response_model=ApiObjectResponse)

@@ -117,6 +117,8 @@ export interface Sector {
   recent_5_trading_days?: RecentTradingDay[];
   timeline?: Array<{ report_id: string; report_date: string; report_title: string; summary: string }>;
   recent_path?: Array<PathEntry & { report_id: string; report_date: string }>;
+  recent_mention_count?: number;
+  attention_level?: "high" | "normal" | "low";
   status_changed?: boolean;
   reported_status?: PathStatus;
   effective_status?: PathStatus | null;
@@ -214,7 +216,14 @@ export interface IntradaySnapshot {
   volume: number | null;
   amount: number | null;
   provider: string;
+  provider_symbol?: string | null;
   provider_role: string;
+  lineage?: string | null;
+  source_status?: string;
+  freshness_status?: string;
+  intraday_ma5?: number | null;
+  intraday_vs_ma5?: number | null;
+  native_history_status?: "complete" | "insufficient" | "provider_failed" | "unavailable";
   data_status: "intraday_fresh" | "intraday_stale" | "provider_failed";
   fetched_at: string;
 }
@@ -223,6 +232,7 @@ export interface IntradayStatus {
   session_status: "running" | "paused";
   market_phase: "intraday_open" | "market_break" | "market_closed";
   market_phase_detail?: "non_trading_day" | "before_open" | "after_close" | "intraday_open" | "market_break";
+  market_session?: "pre_open" | "open" | "market_break" | "closed" | "non_trading_day";
   intraday_trade_date?: string;
   refresh_interval_minutes: number;
   provider: string;
@@ -300,7 +310,8 @@ export interface EnhancedReport {
 export interface PathMatrix {
   caption: string;
   dates: Array<{ report_id: string; detail_report_id: string | null; has_detailed_report: boolean; report_date: string; market_as_of_date: string | null; market_weekday: string | null; weekday: string; is_weekend_report: boolean }>;
-  rows: Array<{ sector_key: string; sector_name: string; group_name: string; cells: Array<PathEntry & { report_id: string; report_date: string }> }>;
+  groups: Array<{ group_order: number; group_name: string; sector_count: number }>;
+  rows: Array<{ sector_key: string; sector_name: string; group_name: string; group_order: number; overall_order: number; cells: Array<PathEntry & { report_id: string; report_date: string }> }>;
   status_contract: { statuses: Array<{ code: PathStatus; label: string; color: string; order: number }> };
   period?: string;
   default_period?: string;

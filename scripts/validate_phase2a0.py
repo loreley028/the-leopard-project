@@ -15,6 +15,7 @@ def main() -> int:
     ui_policy = json.loads((ROOT / "config/ui_dependency_policy_v1.json").read_text(encoding="utf-8"))
     support = json.loads((ROOT / "config/system_support_policy_v1.json").read_text(encoding="utf-8"))
     intraday = json.loads((ROOT / "config/intraday_market_policy_v1.json").read_text(encoding="utf-8"))
+    intraday_mappings = json.loads((ROOT / "config/intraday_provider_mappings_v1.json").read_text(encoding="utf-8"))
     visibility = json.loads((ROOT / "config/sector_visibility_policy_v1.json").read_text(encoding="utf-8"))
     holding = json.loads((ROOT / "config/holding_interval_policy_v1.json").read_text(encoding="utf-8"))
     package = json.loads((ROOT / "frontend/package.json").read_text(encoding="utf-8"))
@@ -65,6 +66,14 @@ def main() -> int:
         "intraday_safe_auto_start": intraday["auto_start"] is True
         and intraday["stop_at_market_close"] is True
         and intraday["production_approved"] is False,
+        "intraday_research_chain": intraday["provider"] == "research_intraday_chain"
+        and intraday["provider_role"] == "research_provider"
+        and intraday["candidate_evaluations"][0]["result"] == "local_live_validated"
+        and all(symbol in intraday["candidate_evaluations"][0]["lineage"] for symbol in ("886050", "881158", "881173")),
+        "intraday_exact_mappings": {
+            item["sector_key"]: item["provider_symbol"] for item in intraday_mappings["mappings"]
+        } == {"computing_power_rental": "886050", "retail": "881158", "small_appliances": "881173"}
+        and all(item["review_status"].startswith("confirmed_") for item in intraday_mappings["mappings"]),
         "intraday_routes": all(route in enhanced_routes for route in (
             "/api/v1/market/intraday/status", "/api/v1/market/intraday/sectors",
             "/api/v1/admin/market/intraday/start", "/api/v1/admin/market/intraday/pause",

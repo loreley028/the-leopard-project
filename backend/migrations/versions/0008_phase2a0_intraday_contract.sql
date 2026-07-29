@@ -1,0 +1,11 @@
+ALTER TABLE sector_intraday_snapshots ADD COLUMN provider_symbol VARCHAR(120);
+ALTER TABLE sector_intraday_snapshots ADD COLUMN lineage TEXT;
+ALTER TABLE sector_intraday_snapshots ADD COLUMN source_status VARCHAR(40) NOT NULL DEFAULT 'available';
+ALTER TABLE sector_intraday_snapshots ADD COLUMN freshness_status VARCHAR(40) NOT NULL DEFAULT 'intraday_fresh';
+ALTER TABLE sector_intraday_snapshots ADD COLUMN intraday_ma5 NUMERIC(20, 6);
+ALTER TABLE sector_intraday_snapshots ADD COLUMN intraday_vs_ma5 NUMERIC(16, 6);
+ALTER TABLE market_refresh_items ADD COLUMN provider VARCHAR(100);
+ALTER TABLE market_refresh_items ADD COLUMN provider_symbol VARCHAR(120);
+ALTER TABLE market_refresh_items ADD COLUMN lineage TEXT;
+ALTER TABLE market_refresh_items ADD COLUMN error_code VARCHAR(80);
+ALTER TABLE market_refresh_items ADD COLUMN error_message TEXT;

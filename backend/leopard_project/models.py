@@ -102,6 +102,18 @@ class SectorMapping(BaseModel):
     research_date: date
 
 
+class ProviderNativeClose(BaseModel):
+    """A completed close in the exact Provider-native index series."""
+
+    model_config = ConfigDict(frozen=True)
+    provider: str
+    provider_symbol: str
+    trade_date: date
+    close: Decimal
+    source_payload_hash: str
+    lineage: str
+
+
 class DailyBar(BaseModel):
     model_config = ConfigDict(frozen=True)
     symbol: str
@@ -123,6 +135,11 @@ class DailyBar(BaseModel):
     fetched_at: datetime
     source_payload_hash: str
     data_status: DataStatus = DataStatus.NORMAL
+    provider_symbol: str | None = None
+    lineage: str | None = None
+    provider_native_history: tuple[ProviderNativeClose, ...] = ()
+    provider_native_history_status: str = "unavailable"
+    provider_native_history_error: str | None = None
 
     @model_validator(mode="after")
     def validate_liquidity_status(self) -> "DailyBar":

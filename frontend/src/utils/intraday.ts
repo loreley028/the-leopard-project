@@ -16,7 +16,7 @@ export function realtimePresentation(item: Sector, system?: IntradayStatus): Rea
   if (system?.market_phase === "market_closed" && system.market_phase_detail === "non_trading_day") return { value: "休市", tone: "flat" };
   if (system?.market_phase === "market_closed" && system.market_phase_detail === "after_close") {
     const complete = item.latest_market && item.latest_market.trade_date === system.intraday_trade_date;
-    return complete ? { value: formatPct(item.latest_market?.daily_pct_change), detail: "今日收盘", tone: tone(item.latest_market?.daily_pct_change) } : { value: "暂无实时", detail: "等待收盘数据", tone: "flat" };
+    return complete ? { value: formatPct(item.latest_market?.daily_pct_change), detail: "今日收盘", tone: tone(item.latest_market?.daily_pct_change) } : { value: "暂无实时", tone: "flat" };
   }
   if (system?.market_phase === "market_break") {
     return sameTradeDate ? { value: formatPct(snapshot?.pct_change), detail: "午间休市", tone: tone(snapshot?.pct_change) } : { value: "暂无实时", detail: "午间休市", tone: "flat" };
@@ -27,6 +27,8 @@ export function realtimePresentation(item: Sector, system?: IntradayStatus): Rea
 
 export function intradaySystemLabel(status?: IntradayStatus): string {
   if (!status) return "状态读取中";
+  if (status.market_session === "pre_open") return "盘前";
+  if (status.market_session === "non_trading_day") return "休市";
   if (status.market_phase === "market_break") return "午间休市";
   if (status.market_phase === "market_closed") return status.market_phase_detail === "after_close" ? "已收盘" : "休市";
   if (status.failure_count > 0 && !status.latest_snapshot_at) return "盘中行情获取失败";

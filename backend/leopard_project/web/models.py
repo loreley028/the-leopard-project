@@ -391,7 +391,31 @@ class MarketRefreshItem(Base):
     sector_key: Mapped[str] = mapped_column(String(120))
     status: Mapped[str] = mapped_column(String(40))
     trade_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    provider: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    provider_symbol: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    lineage: Mapped[str | None] = mapped_column(Text, nullable=True)
+    error_code: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
     detail: Mapped[str] = mapped_column(Text, default="")
+
+
+class SectorProviderNativeClose(Base):
+    __tablename__ = "sector_provider_native_closes"
+    __table_args__ = (
+        UniqueConstraint(
+            "sector_key", "provider", "provider_symbol", "trade_date",
+            name="uq_sector_provider_native_close",
+        ),
+    )
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=new_id)
+    sector_key: Mapped[str] = mapped_column(String(120), index=True)
+    provider: Mapped[str] = mapped_column(String(100), index=True)
+    provider_symbol: Mapped[str] = mapped_column(String(120), index=True)
+    trade_date: Mapped[date] = mapped_column(Date, index=True)
+    close: Mapped[float] = mapped_column(Numeric(20, 6))
+    source_response_hash: Mapped[str] = mapped_column(String(64))
+    lineage: Mapped[str] = mapped_column(Text)
+    fetched_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
 
 
 class SectorIntradaySnapshot(Base):
@@ -409,7 +433,14 @@ class SectorIntradaySnapshot(Base):
     volume: Mapped[float | None] = mapped_column(Numeric(24, 4), nullable=True)
     amount: Mapped[float | None] = mapped_column(Numeric(24, 4), nullable=True)
     provider: Mapped[str] = mapped_column(String(100))
+    provider_symbol: Mapped[str | None] = mapped_column(String(120), nullable=True)
     provider_role: Mapped[str] = mapped_column(String(60))
+    lineage: Mapped[str | None] = mapped_column(Text, nullable=True)
+    source_status: Mapped[str] = mapped_column(String(40), default="available")
+    freshness_status: Mapped[str] = mapped_column(String(40), default="intraday_fresh")
+    intraday_ma5: Mapped[float | None] = mapped_column(Numeric(20, 6), nullable=True)
+    intraday_vs_ma5: Mapped[float | None] = mapped_column(Numeric(16, 6), nullable=True)
+    native_history_status: Mapped[str] = mapped_column(String(40), default="unavailable")
     data_status: Mapped[str] = mapped_column(String(40))
     response_hash: Mapped[str] = mapped_column(String(64))
     fetched_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
