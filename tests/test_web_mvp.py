@@ -193,7 +193,7 @@ def test_state_machine_rejects_illegal_transition(web) -> None:
         report = ReportRepository(session).by_id(report_id)
         assert report is not None
         with pytest.raises(WebDomainError, match="Cannot transition"):
-            ReportService(ReportRepository(session), settings.upload_dir).transition(report, ReportStatus.PUBLISHED)
+            ReportService(ReportRepository(session), settings.upload_dir).transition(report, ReportStatus.UPLOADED)
 
 
 def test_end_to_end_publish_is_idempotent_and_viewer_only_sees_published(web) -> None:

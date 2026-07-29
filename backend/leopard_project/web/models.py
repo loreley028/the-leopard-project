@@ -20,6 +20,7 @@ class ReportStatus(StrEnum):
     UPLOADED = "uploaded"
     PARSING = "parsing"
     NEEDS_REVIEW = "needs_review"
+    BLOCKED = "blocked"
     READY_TO_PUBLISH = "ready_to_publish"
     PUBLISHED = "published"
     WITHDRAWN = "withdrawn"
@@ -28,9 +29,10 @@ class ReportStatus(StrEnum):
 
 ALLOWED_TRANSITIONS: dict[ReportStatus, set[ReportStatus]] = {
     ReportStatus.UPLOADED: {ReportStatus.PARSING},
-    ReportStatus.PARSING: {ReportStatus.NEEDS_REVIEW, ReportStatus.PARSE_FAILED},
-    ReportStatus.NEEDS_REVIEW: {ReportStatus.PARSING, ReportStatus.READY_TO_PUBLISH},
-    ReportStatus.READY_TO_PUBLISH: {ReportStatus.NEEDS_REVIEW, ReportStatus.PUBLISHED},
+    ReportStatus.PARSING: {ReportStatus.NEEDS_REVIEW, ReportStatus.BLOCKED, ReportStatus.PARSE_FAILED},
+    ReportStatus.NEEDS_REVIEW: {ReportStatus.PARSING, ReportStatus.BLOCKED, ReportStatus.READY_TO_PUBLISH},
+    ReportStatus.BLOCKED: {ReportStatus.PARSING, ReportStatus.NEEDS_REVIEW, ReportStatus.READY_TO_PUBLISH},
+    ReportStatus.READY_TO_PUBLISH: {ReportStatus.PARSING, ReportStatus.NEEDS_REVIEW, ReportStatus.PUBLISHED},
     ReportStatus.PUBLISHED: {ReportStatus.WITHDRAWN},
     ReportStatus.WITHDRAWN: set(),
     ReportStatus.PARSE_FAILED: {ReportStatus.PARSING},
@@ -154,6 +156,30 @@ class ReportRevision(Base):
     changed_by: Mapped[str] = mapped_column(String(120))
     snapshot_json: Mapped[str] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+
+
+class ReportReviewIssue(Base):
+    __tablename__ = "report_review_issues"
+    __table_args__ = (UniqueConstraint("report_id", "issue_key", name="uq_report_review_issue"),)
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=new_id)
+    report_id: Mapped[str] = mapped_column(ForeignKey("reports.id"), index=True)
+    issue_key: Mapped[str] = mapped_column(String(240))
+    issue_type: Mapped[str] = mapped_column(String(80))
+    severity: Mapped[str] = mapped_column(String(30), default="suggestion")
+    subject_key: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    subject_label: Mapped[str] = mapped_column(String(200), default="报告内容")
+    explanation: Mapped[str] = mapped_column(Text)
+    original_value_json: Mapped[str] = mapped_column(Text, default="null")
+    suggested_value_json: Mapped[str] = mapped_column(Text, default="null")
+    options_json: Mapped[str] = mapped_column(Text, default="[]")
+    evidence_json: Mapped[str] = mapped_column(Text, default="{}")
+    final_value_json: Mapped[str | None] = mapped_column(Text, nullable=True)
+    resolution_source: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    resolved_by: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    optional_note: Mapped[str] = mapped_column(Text, default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, onupdate=utc_now)
 
 
 class ReportDay(Base):
@@ -458,6 +484,14 @@ class IntradayRefreshSession(Base):
     paused_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     last_refresh_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     next_refresh_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class MarketAutomationControl(Base):
+    __tablename__ = "market_automation_controls"
+    control_key: Mapped[str] = mapped_column(String(40), primary_key=True, default="intraday")
+    admin_paused: Mapped[bool] = mapped_column(Boolean, default=False)
+    changed_by: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    changed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, onupdate=utc_now)
 
 
 class SectorResearchPreference(Base):

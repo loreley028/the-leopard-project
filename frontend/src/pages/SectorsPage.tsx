@@ -48,8 +48,17 @@ export function SectorsPage() {
   const groupTargets = useRef(new Map<string, HTMLTableRowElement>());
   const [activeGroup, setActiveGroup] = useState("");
   useEffect(() => {
-    const load = () => { void Promise.all([api.sectors(true), api.intradayStatus(), api.me()]).then(([items, status, me]) => { setSectors(items); setIntraday(status); setPrincipal(me); }); };
-    load(); const timer = window.setInterval(load, 60_000); return () => window.clearInterval(timer);
+    let disposed = false; let timer = 0; let failures = 0;
+    const schedule = () => { timer = window.setTimeout(() => void load(), Math.min(240_000, 45_000 * 2 ** failures)); };
+    const load = async () => {
+      window.clearTimeout(timer);
+      try { const [items, status, me] = await Promise.all([api.sectors(true), api.intradayStatus(), api.me()]); if (!disposed) { setSectors(items); setIntraday(status); setPrincipal(me); failures = 0; } }
+      catch { failures = Math.min(3, failures + 1); }
+      finally { if (!disposed && document.visibilityState === "visible") schedule(); }
+    };
+    const visible = () => { if (document.visibilityState === "visible") void load(); else window.clearTimeout(timer); };
+    document.addEventListener("visibilitychange", visible); void load();
+    return () => { disposed = true; window.clearTimeout(timer); document.removeEventListener("visibilitychange", visible); };
   }, []);
   const groups = useMemo(() => Array.from(new Map(
     [...sectors].sort((a, b) => a.group_order - b.group_order || a.overall_order - b.overall_order)

@@ -19,6 +19,7 @@ from leopard_project.providers import ProviderError, ResearchIntradayProviderCha
 
 from .models import (
     IntradayRefreshSession,
+    MarketAutomationControl,
     MarketRefreshItem,
     MarketRefreshRun,
     SectorIntradaySnapshot,
@@ -204,6 +205,18 @@ class IntradayRefreshCoordinator:
         with self._lock:
             if self._enabled:
                 return self.status()
+            with self.sessions() as session:
+                control = session.get(MarketAutomationControl, "intraday")
+                if control and control.admin_paused and actor == "system_auto_resume":
+                    return self.status()
+                if actor != "system_auto_resume":
+                    if control is None:
+                        control = MarketAutomationControl(control_key="intraday")
+                        session.add(control)
+                    control.admin_paused = False
+                    control.changed_by = actor
+                    control.changed_at = self._now()
+                    session.commit()
             self._enabled = True
             now = self._now()
             with self.sessions() as session:
@@ -218,10 +231,10 @@ class IntradayRefreshCoordinator:
                 session.add(record)
                 session.commit()
                 self._session_id = record.id
-            self._schedule(0.05)
+            self._schedule(self._startup_delay_seconds(now))
         return self.status()
 
-    def pause(self) -> dict:
+    def pause(self, actor: str | None = None, *, persistent: bool = False) -> dict:
         with self._lock:
             self._enabled = False
             if self._timer is not None:
@@ -235,14 +248,52 @@ class IntradayRefreshCoordinator:
                         record.paused_at = self._now()
                         record.next_refresh_at = None
                         session.commit()
+            if persistent:
+                with self.sessions() as session:
+                    control = session.get(MarketAutomationControl, "intraday")
+                    if control is None:
+                        control = MarketAutomationControl(control_key="intraday")
+                        session.add(control)
+                    control.admin_paused = True
+                    control.changed_by = actor
+                    control.changed_at = self._now()
+                    session.commit()
         return self.status()
 
     def shutdown(self) -> None:
-        self.pause()
+        self.pause(persistent=False)
+
+    def _startup_delay_seconds(self, now: datetime) -> float:
+        """Refresh stale/missing open-market cache immediately; reuse a fresh complete run."""
+        if market_phase(now, self.policy) != "intraday_open":
+            return min(60.0, float(self.policy["refresh_interval_minutes"] * 60))
+        with self.sessions() as session:
+            latest_run = session.scalar(
+                select(MarketRefreshRun)
+                .where(MarketRefreshRun.mode == "intraday_refresh")
+                .order_by(desc(MarketRefreshRun.started_at))
+            )
+            latest_snapshot = session.scalar(select(SectorIntradaySnapshot).order_by(desc(SectorIntradaySnapshot.observed_at)))
+            if not latest_run or latest_run.success_count != 65 or not latest_snapshot:
+                return 0.05
+            observed = latest_snapshot.observed_at
+            observed = observed if observed.tzinfo else observed.replace(tzinfo=timezone.utc)
+            local_now = now.astimezone(ZoneInfo(self.policy["timezone"]))
+            if latest_snapshot.trade_date != local_now.date():
+                return 0.05
+            interval = float(self.policy["refresh_interval_minutes"] * 60)
+            age = max(0.0, (now - observed.astimezone(timezone.utc)).total_seconds())
+            return 0.05 if age >= interval else max(0.05, interval - age)
 
     def _schedule(self, seconds: float) -> None:
         if not self._enabled:
             return
+        if self._session_id:
+            with self.sessions() as session:
+                record = session.get(IntradayRefreshSession, self._session_id)
+                if record:
+                    record.next_refresh_at = self._now() + timedelta(seconds=seconds)
+                    session.commit()
         self._timer = threading.Timer(seconds, self._timer_cycle)
         self._timer.daemon = True
         self._timer.start()
@@ -251,8 +302,6 @@ class IntradayRefreshCoordinator:
         started = self._now()
         try:
             result = self.refresh_once()
-            if result.get("status") in {"market_closed", "non_trading_day"} and self.policy.get("stop_at_market_close"):
-                self.pause()
             self._last_runtime_error = None
         except Exception as exc:
             # A transient local lock or Provider error must not kill the
@@ -397,6 +446,7 @@ class IntradayRefreshCoordinator:
         now = self._now()
         local_trade_date = now.astimezone(ZoneInfo(self.policy["timezone"])).date().isoformat()
         with self.sessions() as session:
+            control = session.get(MarketAutomationControl, "intraday")
             record = session.get(IntradayRefreshSession, self._session_id) if self._session_id else None
             latest_run = session.scalar(select(MarketRefreshRun).where(MarketRefreshRun.mode == "intraday_refresh").order_by(desc(MarketRefreshRun.started_at)))
             latest_snapshot = session.scalar(select(SectorIntradaySnapshot).order_by(desc(SectorIntradaySnapshot.observed_at)))
@@ -408,6 +458,8 @@ class IntradayRefreshCoordinator:
 
             return {
                 "session_status": "running" if self._enabled else "paused",
+                "admin_paused": bool(control and control.admin_paused),
+                "scheduler_registered": self._enabled,
                 "market_phase": market_phase(now, self.policy),
                 "market_phase_detail": market_phase_detail(now, self.policy),
                 "market_session": market_session(now, self.policy),

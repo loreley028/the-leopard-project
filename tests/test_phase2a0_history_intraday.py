@@ -20,6 +20,7 @@ from leopard_project.web.models import (
     MarketRefreshItem,
     MarketRefreshRun,
     IntradayRefreshSession,
+    MarketAutomationControl,
     Report,
     ReportFile,
     ReportSectorMarketSnapshot,
@@ -325,6 +326,32 @@ def test_intraday_market_phases_and_cycle_overlap_fail_closed() -> None:
     stale = {"observed_at": (now - timedelta(minutes=11)).isoformat()}
     assert resolve_intraday_data_status(phase="intraday_open", snapshot=fresh, latest_result="intraday_fresh", now=now, stale_after_minutes=10) == "intraday_fresh"
     assert resolve_intraday_data_status(phase="intraday_open", snapshot=stale, latest_result="intraday_fresh", now=now, stale_after_minutes=10) == "intraday_stale"
+
+
+def test_admin_pause_persists_but_process_pause_and_market_break_do_not(tmp_path: Path) -> None:
+    sessions = create_session_factory(f"sqlite:///{tmp_path / 'pause.sqlite3'}")
+    lunch = datetime(2026, 7, 27, 4, 0, tzinfo=timezone.utc)
+    coordinator = IntradayRefreshCoordinator(sessions, now=lambda: lunch, fetcher=lambda key, mapping, observed: daily_bar(key, observed.date()))
+    coordinator.start("admin")
+    assert coordinator.status()["scheduler_registered"] is True
+    assert coordinator.refresh_once()["status"] == "market_break"
+    assert coordinator.enabled is True
+    coordinator.pause("admin", persistent=True)
+    assert coordinator.status()["admin_paused"] is True
+
+    restarted = IntradayRefreshCoordinator(sessions, now=lambda: lunch, fetcher=lambda key, mapping, observed: daily_bar(key, observed.date()))
+    restarted.start("system_auto_resume")
+    assert restarted.enabled is False
+    restarted.start("admin")
+    assert restarted.status()["admin_paused"] is False
+    restarted.shutdown()
+    with sessions() as session:
+        assert session.get(MarketAutomationControl, "intraday").admin_paused is False
+
+    again = IntradayRefreshCoordinator(sessions, now=lambda: lunch, fetcher=lambda key, mapping, observed: daily_bar(key, observed.date()))
+    again.start("system_auto_resume")
+    assert again.enabled is True
+    again.shutdown()
 
 
 def test_strict_and_broad_holding_end_status_contracts_use_full_path_ledger(tmp_path: Path) -> None:

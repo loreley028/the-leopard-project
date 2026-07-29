@@ -35,10 +35,10 @@ def main() -> int:
         and schedule["report_date_confirmation_required_for"] == ["low", "conflict"],
         "one_primary_upload_action": "上传并解读" in upload_page and "本地解析" not in upload_page and "增强解析" not in upload_page,
         "result_page_has_one_publish_action": result_page.count("确认并发布") == 1,
-        "advanced_default_collapsed": "<details" in result_page and "查看全部66个板块路径" in result_page and "高级操作" in result_page,
-        "market_not_blocking": "行情辅助数据" in result_page and "尚未绑定" in result_page,
+        "advanced_default_collapsed": "<details" in result_page and "查看全部66个板块路径" in result_page and "高级技术信息" in result_page,
+        "market_not_blocking": "行情辅助数据缺失不影响确认与发布" in result_page,
         "parse_quality_gate": all(value in services for value in ("verified_structure", "blocking_parse_error", "history_matrix_quality")),
-        "admin_anomaly_first": "发布质量闸门" in result_page and "默认只列异常项" in result_page and "原始PDF与解读结果核对" in result_page,
+        "admin_anomaly_first": all(value in result_page for value in ("自动确认", "建议检查", "必须处理", "查看PDF原文")),
         "ci_includes_validator": "validate_upload_interpretation.py" in workflow,
         "documents_present": all((ROOT / path).is_file() for path in (
             "docs/pdf-upload-workflow.md",

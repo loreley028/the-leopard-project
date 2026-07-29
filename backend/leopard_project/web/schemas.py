@@ -72,6 +72,12 @@ class PublishConfirmationRequest(BaseModel):
     warning_note: str = Field(default="", max_length=1000)
 
 
+class ReviewIssueResolutionRequest(BaseModel):
+    final_value: str | bool | int | float | None = None
+    resolution_source: str = Field(pattern="^(accepted_suggestion|manual_override)$")
+    optional_note: str = Field(default="", max_length=1000)
+
+
 class ApiObjectResponse(BaseModel):
     model_config = {"extra": "allow"}
 

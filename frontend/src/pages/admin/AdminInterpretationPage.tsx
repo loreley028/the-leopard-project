@@ -5,19 +5,50 @@ import { api, ApiError } from "../../api/client";
 import { IslandButton } from "../../components/island/IslandButton";
 import { IslandCard } from "../../components/island/IslandCard";
 import { IslandField } from "../../components/island/IslandField";
-import type { Interpretation, Report } from "../../types";
 import { PdfPagePreview } from "../../components/PdfPagePreview";
+import type { Interpretation, Report, ReviewIssue } from "../../types";
 
 const STATUS_LABELS: Record<string, string> = {
   avoid: "不碰", strong_watch: "强观", watch: "观察", weak_watch: "弱观",
   turn_hold: "转持", hold: "持有", turn_weak: "转弱", exit: "离场", not_mentioned: "未提",
 };
 
-const CONFIDENCE_LABELS = {
-  high: "已自动识别",
-  medium: "建议检查",
-  low: "需要确认",
-};
+const valueLabel = (value: unknown) => typeof value === "string" ? (STATUS_LABELS[value] ?? value) : String(value ?? "未识别");
+const resolvedTime = (value: string | null) => value ? new Intl.DateTimeFormat("zh-CN", {
+  timeZone: "Asia/Shanghai", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit",
+}).format(new Date(value)) : "—";
+
+function ReviewIssueCard({ issue, report, onSaved }: { issue: ReviewIssue; report: Report; onSaved: (result: { report: Report; interpretation: Interpretation }, message: string) => void }) {
+  const [choice, setChoice] = useState(String(issue.final_value ?? issue.suggested_value ?? ""));
+  const [busy, setBusy] = useState(false);
+  const [showEvidence, setShowEvidence] = useState(false);
+  const save = async (finalValue: unknown, source: "accepted_suggestion" | "manual_override") => {
+    setBusy(true);
+    try {
+      const result = await api.resolveReviewIssue(report.id, issue.issue_key, finalValue, source);
+      onSaved(result, "已保存，本页剩余数量已更新");
+    } finally { setBusy(false); }
+  };
+  return <article className={`review-issue-card ${issue.resolved ? "resolved" : issue.severity}`} aria-labelledby={`issue-${issue.issue_key}`}>
+    <div className="review-issue-heading">
+      <div><p className="eyebrow">{issue.subject_label}</p><h3 id={`issue-${issue.issue_key}`}>{issue.resolved ? "已处理" : issue.severity === "required" ? "需要您选择" : "建议检查"}</h3></div>
+      <span className={`review-state review-state-${issue.resolved ? "resolved" : issue.severity}`}>{issue.resolved ? "已处理" : issue.severity === "required" ? "必须处理" : "有明确建议"}</span>
+    </div>
+    <p>{issue.explanation}</p>
+    <dl className="review-decision-summary">
+      <div><dt>系统识别</dt><dd>{valueLabel(issue.original_value)}</dd></div>
+      <div><dt>{issue.resolved ? "最终采用" : "系统建议"}</dt><dd><strong>{valueLabel(issue.resolved ? issue.final_value : issue.suggested_value)}</strong></dd></div>
+    </dl>
+    {issue.resolved ? <div className="resolved-note"><strong>确认记录已保留</strong><span>{issue.resolution_source === "manual_override" ? "人工选择" : issue.resolution_source === "bulk_accept" ? "批量接受建议" : "接受系统建议"} · {resolvedTime(issue.resolved_at)} · {issue.resolved_by}</span>{report.status !== "published" && <button type="button" onClick={() => setChoice(String(issue.final_value ?? issue.suggested_value ?? ""))}>重新编辑</button>}</div> : <div className="review-actions">
+      <IslandButton disabled={busy} onClick={() => void save(issue.suggested_value, "accepted_suggestion")}>接受“{valueLabel(issue.suggested_value)}”<small>建议</small></IslandButton>
+      <label>改为<select value={choice} onChange={event => setChoice(event.target.value)}>{issue.options.map(option => <option key={option} value={option}>{valueLabel(option)}</option>)}</select></label>
+      <IslandButton className="secondary" disabled={busy || choice === String(issue.suggested_value ?? "")} onClick={() => void save(choice, "manual_override")}>保存其他选择</IslandButton>
+    </div>}
+    <button className="evidence-toggle" type="button" aria-expanded={showEvidence} onClick={() => setShowEvidence(value => !value)}>{showEvidence ? "收起PDF原文" : "查看PDF原文"}</button>
+    {showEvidence && <div className="review-evidence"><div><h4>PDF证据</h4><p>{issue.evidence.excerpt || "系统未能定位更具体的原文片段。"}</p><p className="muted">当前系统识别：{valueLabel(issue.original_value)}</p></div>{issue.evidence.page && <PdfPagePreview reportId={report.id} initialPage={issue.evidence.page} />}</div>}
+    <details className="technical-details"><summary>查看技术详情</summary><dl><div><dt>页码</dt><dd>{issue.evidence.page ?? "未定位"}</dd></div><div><dt>解析方式</dt><dd>{issue.evidence.extraction_method ?? "本地规则"}</dd></div><div><dt>置信度</dt><dd>{issue.evidence.confidence ?? "未单列"}</dd></div><div><dt>异常代码</dt><dd>{issue.evidence.technical_codes?.join("、") || "无"}</dd></div></dl></details>
+  </article>;
+}
 
 export function AdminInterpretationPage() {
   const { reportId = "" } = useParams();
@@ -26,134 +57,60 @@ export function AdminInterpretationPage() {
   const [interpretation, setInterpretation] = useState<Interpretation | null>(null);
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
-  const [previewLoaded, setPreviewLoaded] = useState(false);
-  const [warningsConfirmed, setWarningsConfirmed] = useState(false);
-  const [warningNote, setWarningNote] = useState("");
+  const [showBulkConfirm, setShowBulkConfirm] = useState(false);
 
-  const load = useCallback(() => api.interpretation(reportId).then(result => {
-    setReport(result.report);
-    setInterpretation(result.interpretation);
-  }).catch(error => setMessage(error instanceof ApiError ? error.message : "无法读取解读结果")), [reportId]);
-
+  const applyResult = useCallback((result: { report: Report; interpretation: Interpretation }, nextMessage = "") => {
+    setReport(result.report); setInterpretation(result.interpretation); setMessage(nextMessage);
+  }, []);
+  const load = useCallback(() => api.interpretation(reportId).then(result => applyResult(result)).catch(error => setMessage(error instanceof ApiError ? error.message : "无法读取解读结果")), [applyResult, reportId]);
   useEffect(() => { void load(); }, [load]);
 
   const groupedPaths = useMemo(() => {
     const groups = new Map<string, Interpretation["all_path_entries"]>();
-    for (const item of interpretation?.all_path_entries ?? []) {
-      groups.set(item.group_name, [...(groups.get(item.group_name) ?? []), item]);
-    }
+    for (const item of interpretation?.all_path_entries ?? []) groups.set(item.group_name, [...(groups.get(item.group_name) ?? []), item]);
     return [...groups.entries()];
   }, [interpretation]);
 
   if (!report || !interpretation) return <p role="status">{message || "正在读取解读结果…"}</p>;
+  const workflow = interpretation.review_workflow;
+  const unresolved = workflow.issues.filter(item => !item.resolved);
+  const resolved = workflow.issues.filter(item => item.resolved);
   const lowDate = interpretation.report_date_confidence === "low" && !interpretation.report_date_confirmed_by_user;
-  const blocking = interpretation.attention_items.filter(item => item.severity === "blocking");
-  const warnings = interpretation.attention_items.filter(item => item.severity !== "blocking");
-  const anomalies = interpretation.mentioned_assessments.filter(item => item.quality_status !== "verified_structure");
 
   const confirmDate = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    const form = new FormData(event.currentTarget);
-    const reportDate = String(form.get("reportDate") ?? "");
-    if (!reportDate) return;
-    const result = await api.patchInterpretation(report.id, { report_date: reportDate, report_date_confirmed: true });
-    setReport(result.report);
-    setInterpretation(result.interpretation);
-    setMessage("报告日期已确认");
+    event.preventDefault(); const form = new FormData(event.currentTarget); const reportDate = String(form.get("reportDate") ?? "");
+    if (reportDate) applyResult(await api.patchInterpretation(report.id, { report_date: reportDate, report_date_confirmed: true }), "报告日期已确认");
   };
-
+  const bulkAccept = async () => {
+    setBusy(true); try { applyResult(await api.bulkAcceptReviewIssues(report.id), "系统建议已采用，人工选择未被修改"); setShowBulkConfirm(false); } finally { setBusy(false); }
+  };
   const publish = async () => {
-    setBusy(true);
-    setMessage("");
-    try {
-      const published = await api.publish(report.id, warningsConfirmed, warningNote);
-      navigate(`/reports/${published.id}`);
-    } catch (error) {
-      setMessage(error instanceof ApiError ? error.message : "发布失败");
-      setBusy(false);
-    }
+    setBusy(true); setMessage("");
+    try { const published = await api.publish(report.id); navigate(`/reports/${published.id}`); }
+    catch (error) { setMessage(error instanceof ApiError ? error.message : "发布失败"); setBusy(false); }
   };
 
-  return <div className="page interpretation-result-page">
-    <header className="report-header">
-      <div>
-        <p className="eyebrow">解读结果 · {interpretation.status === "needs_attention" ? "有少量内容需要确认" : "解读完成"}</p>
-        <h1>{report.title}</h1>
-        <div className="date-contract">
-          <span>报告日期<strong>{report.report_date ?? "待确认"}</strong></span>
-          <span>识别状态<strong>{CONFIDENCE_LABELS[interpretation.report_date_confidence]}</strong></span>
-          <span>行情辅助数据<strong>{interpretation.market_data_status === "attached" ? "已附加" : "尚未绑定"}</strong></span>
-        </div>
-        {interpretation.report_date_confidence === "medium" && <p className="notice">报告日期识别为 {report.report_date}，请检查；不阻断查看。</p>}
-      </div>
-    </header>
+  return <div className="page interpretation-result-page simple-review-flow">
+    <ol className="review-stepper" aria-label="报告发布步骤">{workflow.steps.map((step, index) => <li key={step.key} className={step.state} aria-current={step.state === "current" ? "step" : undefined}><span>{index + 1}</span><strong>{step.label}</strong></li>)}</ol>
+    <header className="report-header"><div><p className="eyebrow">报告解读</p><h1>解读完成</h1><h2>{report.title}</h2><div className="date-contract"><span>报告日期<strong>{report.report_date ?? "待确认"}</strong></span><span>当前状态<strong>{workflow.workflow_status === "published" ? "已发布" : workflow.workflow_status === "ready_to_publish" ? "可以发布" : workflow.workflow_status === "blocked" ? "需完成选择" : "待确认"}</strong></span></div><p className="muted">行情辅助数据缺失不影响确认与发布。</p></div></header>
 
-    <section className={`quality-gate quality-${interpretation.quality_status}`} aria-labelledby="quality-gate-heading">
-      <div><p className="eyebrow">发布质量闸门</p><h2 id="quality-gate-heading">{interpretation.quality_status === "verified_structure" ? "结构校验通过" : interpretation.quality_status === "blocking_parse_error" ? "存在阻塞级解析异常" : "存在需要复核的内容"}</h2><p>详细观点已恢复 {String(interpretation.quality_summary.assessment_rows ?? 0)} 条，历史矩阵 {String(interpretation.quality_summary.history_matrix_rows ?? interpretation.quality_summary.history_rows ?? 0)}/66 行，阻塞项 {blocking.length} 个。</p></div>
-      <dl><div><dt>报告结构</dt><dd>{String(interpretation.quality_summary.report_structure ?? "待检查")}</dd></div><div><dt>历史矩阵</dt><dd>{String(interpretation.quality_summary.history_matrix ?? "待检查")}</dd></div><div><dt>可靠观点</dt><dd>{String(interpretation.quality_summary.assessment_verified ?? 0)}</dd></div></dl>
+    <section className="review-summary" aria-labelledby="review-summary-title"><h2 id="review-summary-title" className="sr-only">确认结果摘要</h2><div className="review-summary-card auto"><span>自动确认</span><strong>{workflow.summary.auto_confirmed}项</strong><small>系统已可靠完成</small></div><div className="review-summary-card suggestion"><span>建议检查</span><strong>{workflow.summary.suggested_review}项</strong><small>已有明确建议</small></div><div className="review-summary-card required"><span>必须处理</span><strong>{workflow.summary.must_handle}项</strong><small>需要您作出选择</small></div></section>
+
+    <section className="review-primary-action" aria-live="polite">
+      {workflow.workflow_status === "published" ? <><strong>全部疑问已处理，报告已发布</strong><Link to={`/reports/${report.id}`}>查看已发布报告</Link></> : workflow.summary.must_handle > 0 ? <><strong>还需处理 {workflow.summary.must_handle} 项</strong><a href="#review-issues">处理剩余问题</a></> : workflow.summary.suggested_review > 0 ? <><strong>系统已给出 {workflow.summary.suggested_review} 项建议</strong><IslandButton onClick={() => setShowBulkConfirm(true)}>接受全部系统建议</IslandButton><a href="#review-issues">逐项检查</a></> : <><strong>全部疑问已处理，报告可以发布</strong><IslandButton disabled={busy || lowDate} onClick={() => void publish()}>确认并发布</IslandButton></>}
+    </section>
+    {showBulkConfirm && <div className="bulk-confirm" role="dialog" aria-modal="true" aria-labelledby="bulk-confirm-title"><h2 id="bulk-confirm-title">接受全部系统建议？</h2><p>将采用系统建议处理 {workflow.summary.suggested_review} 项提醒，不会修改已确认项目。</p><div className="form-actions"><IslandButton disabled={busy} onClick={() => void bulkAccept()}>确认接受</IslandButton><IslandButton className="secondary" onClick={() => setShowBulkConfirm(false)}>返回</IslandButton></div></div>}
+
+    {lowDate && <IslandCard title="需要确认报告日期"><form className="form-actions" onSubmit={confirmDate}><IslandField label="报告日期" name="reportDate" type="date" defaultValue={report.report_date ?? report.detected_report_date ?? ""} /><IslandButton type="submit">确认日期</IslandButton></form></IslandCard>}
+
+    <section id="review-issues" aria-labelledby="review-issues-title"><div className="section-heading"><div><p className="eyebrow">第二步</p><h2 id="review-issues-title">检查少量疑问</h2></div><span>{unresolved.length ? `剩余 ${unresolved.length} 项` : "已全部处理"}</span></div>
+      {unresolved.length ? <div className="review-issue-list">{unresolved.map(issue => <ReviewIssueCard key={issue.issue_key} issue={issue} report={report} onSaved={applyResult} />)}</div> : <p className="quality-success">当前没有未处理的问题。</p>}
+      {resolved.length > 0 && <details className="resolved-issues" open><summary>已处理 {resolved.length} 项</summary><div className="review-issue-list">{resolved.map(issue => <ReviewIssueCard key={issue.issue_key} issue={issue} report={report} onSaved={applyResult} />)}</div></details>}
     </section>
 
-    {lowDate && <IslandCard title="需要确认报告日期">
-      <form className="form-actions" onSubmit={confirmDate}>
-        <IslandField label="报告日期" name="reportDate" type="date" defaultValue={report.report_date ?? report.detected_report_date ?? ""} />
-        <IslandButton type="submit">确认日期</IslandButton>
-      </form>
-    </IslandCard>}
-
-    <section aria-labelledby="interpretation-overview">
-      <h2 id="interpretation-overview">自动解读结果</h2>
-      <div className="dashboard-grid">
-        <IslandCard title="核心观点"><p>{report.core_view || "未可靠识别，已列入待确认项。"}</p></IslandCard>
-        <IslandCard title="大盘路径"><p>{report.market_path || "未可靠识别，已列入待确认项。"}</p></IslandCard>
-        <IslandCard title="风险提示"><p>{report.risk_warning || "本报告未单列风险提示。"}</p></IslandCard>
-        <IslandCard title="重点板块"><div className="tag-list">{report.focus_sectors.length ? report.focus_sectors.map(item => <span key={item}>{item}</span>) : <span>本报告未单列重点板块</span>}</div></IslandCard>
-      </div>
-    </section>
-
-    <section aria-labelledby="status-summary">
-      <h2 id="status-summary">当期板块状态摘要</h2>
-      <div className="status-distribution">{Object.entries(interpretation.status_counts).map(([status, count]) => <IslandCard key={status}><span className={`path-dot path-${status}`} aria-hidden="true" /><strong>{STATUS_LABELS[status]}</strong><b>{count}</b></IslandCard>)}</div>
-    </section>
-
-    <section aria-labelledby="mentioned-assessments">
-      <h2 id="mentioned-assessments">原始PDF与解读结果核对</h2>
-      <p className="muted">默认只列异常项；结构校验通过的板块收起在下方，避免重复人工检查。</p>
-      <div className="pdf-review-split"><div className="pdf-preview">{previewLoaded ? <PdfPagePreview reportId={report.id} initialPage={anomalies[0]?.source_page ?? undefined} /> : <button type="button" onClick={() => setPreviewLoaded(true)}>加载PDF对照预览</button>}</div><div className="anomaly-review"><h3>需要处理的异常 · {anomalies.length}</h3>{anomalies.length ? anomalies.map(item => <IslandCard key={item.id}><div className="card-heading"><h4>{item.sector_name}</h4><strong>{item.path_status_label}</strong></div><p><b>问题：</b>{item.validation_flags?.join("、") || "结构需要人工确认"}</p><p><b>来源：</b>{item.source_page ? `第${item.source_page}页` : "页码待确认"} · {item.source_text_excerpt || item.source_text_reference}</p><p><Link to={`/admin/reports/${report.id}/review`}>进入修正工作台</Link></p></IslandCard>) : <p className="quality-success">全部详细观点均通过结构校验，无需逐项复核。</p>}</div></div>
-    </section>
-
-    <details className="advanced-review"><summary>查看已可靠恢复的 {interpretation.mentioned_assessments.length - anomalies.length} 条详细观点</summary><div className="assessment-list">{interpretation.mentioned_assessments.filter(item => item.quality_status === "verified_structure").map(item => <IslandCard key={item.id}><div className="card-heading"><h3>{item.sector_name}</h3><strong>{item.path_status_label}</strong></div><dl className="assessment-fields"><div><dt>历史路径</dt><dd>{item.recent_path_summary}</dd></div><div><dt>当期判断</dt><dd>{item.current_judgement}</dd></div><div><dt>主要依据</dt><dd>{item.main_basis}</dd></div><div><dt>观察条件</dt><dd>{item.observation_condition}</dd></div><div><dt>来源</dt><dd>{item.source_page ? `PDF第${item.source_page}页 · ` : ""}{item.source_text_excerpt}</dd></div></dl></IslandCard>)}</div></details>
-
-    <aside aria-labelledby="attention-heading">
-      <IslandCard title="待确认项">
-        <h2 id="attention-heading" className="sr-only">待确认项</h2>
-        {interpretation.attention_items.length ? <ul>{interpretation.attention_items.map((item, index) => <li key={`${item.kind}-${index}`}>{item.message}</li>)}</ul> : <p>没有需要人工处理的异常。</p>}
-        <p className="muted">已明确匹配的 {interpretation.mapping_summary.confirmed ?? 0} 个板块不会重复列入复核清单。</p>
-      </IslandCard>
-    </aside>
-
-    <details className="advanced-review">
-      <summary>查看全部66个板块路径</summary>
-      <div className="grouped-path-review">{groupedPaths.map(([group, items]) => <section key={group}><h3>{group}</h3><ul>{items.map(item => <li key={item.id}><span>{item.sector_name}</span><strong>{item.path_status_label}</strong></li>)}</ul></section>)}</div>
-    </details>
-
-    <details className="advanced-review">
-      <summary>高级操作</summary>
-      <div className="stack">
-        <p>高级操作用于少数异常场景，普通发布流程不需要使用。</p>
-        <div className="form-actions">
-          <Link to={`/admin/reports/${report.id}/review`}>进入高级复核工作台</Link>
-          <a href={report.pdf_download_url}>下载原始PDF</a>
-        </div>
-        <details><summary>查看原始提取文本</summary><pre className="raw-text-collapsed">{report.raw_text || "尚无原始文本"}</pre></details>
-        <details><summary>查看解析诊断</summary><pre>{JSON.stringify({ field_provenance: interpretation.field_provenance, mapping_summary: interpretation.mapping_summary, external_llm_calls: 0, ocr_used: false }, null, 2)}</pre></details>
-      </div>
-    </details>
-
-    <div className="interpretation-publish-bar">
-      {warnings.length > 0 && <div className="warning-confirmation"><label><input type="checkbox" checked={warningsConfirmed} onChange={event => setWarningsConfirmed(event.target.checked)} />我已查看 {warnings.length} 项提醒，仍确认发布</label><input value={warningNote} onChange={event => setWarningNote(event.target.value)} placeholder="可选：确认说明" /></div>}
-      <IslandButton className="secondary" onClick={() => setMessage("草稿已自动保存")}>保存草稿</IslandButton>
-      <IslandButton disabled={busy || blocking.length > 0 || lowDate || (warnings.length > 0 && !warningsConfirmed)} onClick={publish}>确认并发布</IslandButton>
-    </div>
+    <details className="advanced-review"><summary>查看自动解读内容</summary><div className="dashboard-grid"><IslandCard title="核心观点"><p>{report.core_view}</p></IslandCard><IslandCard title="大盘路径"><p>{report.market_path}</p></IslandCard><IslandCard title="风险提示"><p>{report.risk_warning}</p></IslandCard><IslandCard title="重点板块"><div className="tag-list">{report.focus_sectors.map(item => <span key={item}>{item}</span>)}</div></IslandCard></div></details>
+    <details className="advanced-review"><summary>查看全部66个板块路径</summary><div className="grouped-path-review">{groupedPaths.map(([group, items]) => <section key={group}><h3>{group}</h3><ul>{items.map(item => <li key={item.id}><span>{item.sector_name}</span><strong>{item.path_status_label}</strong></li>)}</ul></section>)}</div></details>
+    <details className="advanced-review"><summary>高级技术信息</summary><p>以下内容仅用于少数恢复场景，不影响普通确认流程。</p><details><summary>原始提取文本</summary><pre className="raw-text-collapsed">{report.raw_text}</pre></details><details><summary>解析诊断</summary><pre>{JSON.stringify({ field_provenance: interpretation.field_provenance, quality_summary: interpretation.quality_summary, external_llm_calls: 0, ocr_used: false }, null, 2)}</pre></details><a href={report.pdf_download_url}>下载原始PDF</a></details>
     <p role={message.includes("失败") ? "alert" : "status"}>{message}</p>
   </div>;
 }

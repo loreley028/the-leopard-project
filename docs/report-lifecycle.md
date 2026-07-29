@@ -3,11 +3,12 @@
 内部状态仍保持可审计的状态机：
 
 ```text
-uploaded → parsing → needs_review → ready_to_publish → published → withdrawn
-                ↘ parse_failed → parsing
+uploaded → parsing → needs_review ─┐
+                   ↘ blocked ─────┼→ ready_to_publish → published → withdrawn
+                   ↘ failed → parsing
 ```
 
-普通界面将内部状态简化为 `uploading`、`interpreting`、`ready`、`needs_attention` 和 `failed`。上传后自动完成解析与增强，不要求再次发送“本地解析”或“增强解析”请求。
+普通界面统一显示 `parsing`、`needs_review`、`blocked`、`ready_to_publish`、`published` 和 `failed`。只有真正缺少必要选择时才是`blocked`；有明确系统建议的普通提醒属于`needs_review`。上传后自动完成解析与增强，不要求再次发送“本地解析”或“增强解析”请求。
 
 “确认并发布”是结果页唯一主要发布动作。服务会在一次操作中完成最低发布检查以及必要的 `needs_review → ready_to_publish → published` 转换。最低条件为：
 

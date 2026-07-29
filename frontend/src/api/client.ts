@@ -38,6 +38,8 @@ export const api = {
   interpretation: (id: string) => request<{ report: Report; interpretation: Interpretation }>(`/admin/reports/${id}/interpretation`),
   interpretationStatus: (id: string) => request<{ report_id: string; status: string; attention_count: number; recoverable: boolean }>(`/admin/reports/${id}/interpretation-status`),
   patchInterpretation: (id: string, changes: object) => request<{ report: Report; interpretation: Interpretation }>(`/admin/reports/${id}/interpretation`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(changes) }),
+  resolveReviewIssue: (id: string, issueKey: string, finalValue: unknown, resolutionSource: "accepted_suggestion" | "manual_override", optionalNote = "") => request<{ report: Report; interpretation: Interpretation }>(`/admin/reports/${id}/review-issues/${encodeURIComponent(issueKey)}/resolve`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ final_value: finalValue, resolution_source: resolutionSource, optional_note: optionalNote }) }),
+  bulkAcceptReviewIssues: (id: string) => request<{ report: Report; interpretation: Interpretation }>(`/admin/reports/${id}/review-issues/bulk-accept`, { method: "POST" }),
   parse: (id: string) => request<Report>(`/admin/reports/${id}/parse`, { method: "POST" }),
   patch: (id: string, changes: object) => request<Report>(`/admin/reports/${id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(changes) }),
   ready: (id: string) => request<Report>(`/admin/reports/${id}/ready`, { method: "POST" }),

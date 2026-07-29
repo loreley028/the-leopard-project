@@ -22,7 +22,7 @@ from .database import create_session_factory
 from .models import Report, ReportDay, ReportStatus, SectorDailyBar, SectorResearchPreference, SpecificationDocument
 from .schedule import ReportSchedulePolicy
 from .repository import ReportRepository
-from .schemas import LoginRequest, PrincipalResponse, PublishConfirmationRequest, ReportPatch, ResolveTermRequest, WithdrawRequest
+from .schemas import LoginRequest, PrincipalResponse, PublishConfirmationRequest, ReportPatch, ResolveTermRequest, ReviewIssueResolutionRequest, WithdrawRequest
 from .serializers import objective_change_summary, report_payload, sector_payloads
 from .services import ReportService, WebDomainError
 from .enhanced import EnhancedReportService
@@ -30,6 +30,7 @@ from .enhanced_routes import register_enhanced_routes
 from .intraday import IntradayRefreshCoordinator
 from .market_automation import EodBackfillCoordinator
 from .path_history import ensure_latest_path_history
+from .review_workflow import ReviewWorkflowService
 
 
 COOKIE_NAME = "leopard_session"
@@ -390,9 +391,11 @@ def create_app(settings: WebSettings | None = None, session_factory: sessionmake
         else:
             EnhancedReportService(session).ensure_structure(report, current.username)
         enhanced = EnhancedReportService(session)
+        interpretation = enhanced.interpretation(report)
+        interpretation["review_workflow"] = ReviewWorkflowService(session).payload(report, interpretation["path_entry_count"])
         return {
             "report": report_payload(report, admin=True),
-            "interpretation": enhanced.interpretation(report),
+            "interpretation": interpretation,
             "duplicate": duplicate,
             "interpretation_error": interpretation_error,
             "processing_steps": [
@@ -491,10 +494,43 @@ def create_app(settings: WebSettings | None = None, session_factory: sessionmake
     @app.get("/api/v1/admin/reports/{report_id}/interpretation")
     def interpretation_result(report_id: str, current: Principal = Depends(admin), session: Session = Depends(db_session)) -> dict:
         report = required_report(report_id, session)
+        interpretation = EnhancedReportService(session).interpretation(report)
+        interpretation["review_workflow"] = ReviewWorkflowService(session).payload(
+            report, interpretation["path_entry_count"]
+        )
         return {
             "report": report_payload(report, admin=True),
-            "interpretation": EnhancedReportService(session).interpretation(report),
+            "interpretation": interpretation,
         }
+
+    @app.post("/api/v1/admin/reports/{report_id}/review-issues/{issue_key}/resolve")
+    def resolve_review_issue(
+        report_id: str,
+        issue_key: str,
+        payload: ReviewIssueResolutionRequest,
+        current: Principal = Depends(admin),
+        session: Session = Depends(db_session),
+    ) -> dict:
+        report = required_report(report_id, session)
+        ReviewWorkflowService(session).resolve(
+            report, issue_key, payload.final_value, current.username,
+            source=payload.resolution_source, note=payload.optional_note,
+        )
+        interpretation = EnhancedReportService(session).interpretation(report)
+        interpretation["review_workflow"] = ReviewWorkflowService(session).payload(report, interpretation["path_entry_count"])
+        return {"report": report_payload(report, admin=True), "interpretation": interpretation}
+
+    @app.post("/api/v1/admin/reports/{report_id}/review-issues/bulk-accept")
+    def bulk_accept_review_issues(
+        report_id: str,
+        current: Principal = Depends(admin),
+        session: Session = Depends(db_session),
+    ) -> dict:
+        report = required_report(report_id, session)
+        ReviewWorkflowService(session).bulk_accept(report, current.username)
+        interpretation = EnhancedReportService(session).interpretation(report)
+        interpretation["review_workflow"] = ReviewWorkflowService(session).payload(report, interpretation["path_entry_count"])
+        return {"report": report_payload(report, admin=True), "interpretation": interpretation}
 
     @app.get("/api/v1/admin/reports/{report_id}/interpretation-status")
     def interpretation_status(report_id: str, current: Principal = Depends(admin), session: Session = Depends(db_session)) -> dict:
@@ -520,9 +556,11 @@ def create_app(settings: WebSettings | None = None, session_factory: sessionmake
             payload.model_dump(exclude_unset=True),
             current.username,
         )
+        interpretation = EnhancedReportService(session).interpretation(report)
+        interpretation["review_workflow"] = ReviewWorkflowService(session).payload(report, interpretation["path_entry_count"])
         return {
             "report": report_payload(report, admin=True),
-            "interpretation": EnhancedReportService(session).interpretation(report),
+            "interpretation": interpretation,
         }
 
     @app.post("/api/v1/admin/reports/{report_id}/ready")

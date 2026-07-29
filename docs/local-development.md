@@ -64,12 +64,12 @@ LEOPARD_UPLOAD_DIR=var/real-local/uploads
 
 This path is separate from every demo database. Startup fails if fixture-origin reports or fixture market rows are found. Do not run `run_enhanced_demo.py` against this directory.
 
-In `real_local`, open `/admin/market` to inspect the server intraday cache and gap-only EOD backfill, pause/resume the loop, perform an explicitly confirmed low-rate historical refresh, or preview/confirm a CSV/XLSX import. Set `LEOPARD_MARKET_AUTOMATION_ENABLED=false` for a fully paused local start. Open `/admin/specifications` to keep ignored local copies of PDF-production specifications; those files are versioned independently and never enter the report parser.
+In `real_local`, open `/admin/market` to inspect the server intraday cache and gap-only EOD backfill, pause/resume the loop, perform an explicitly confirmed low-rate historical refresh, or preview/confirm a CSV/XLSX import. Automatic intraday refresh is enabled by default, starts one process-local scheduler, refreshes stale/missing open-market cache on startup, and then runs every five minutes. An Admin pause is persisted; `LEOPARD_MARKET_AUTOMATION_ENABLED=false` is only a process-level temporary disable and does not write a permanent pause. Market break, close and non-trading days are displayed separately and never become an Admin pause. Open `/admin/specifications` to keep ignored local copies of PDF-production specifications; those files are versioned independently and never enter the report parser.
 
 The PDF preview is lazy: report navigation and refresh do not request the PDF. `/api/v1/reports/{id}/pdf/preview` returns page metadata and `/pdf/preview/pages/{page}` renders an in-memory PNG without persisting it. `/pdf/download` is the only endpoint that returns the original PDF and always uses attachment disposition.
 
 The intraday session safely starts in `real_local` when enabled. An Admin may pause or resume it from the market page; only controlled CN-A sessions issue research-grade requests. The five-minute loop and cache are local-only and must not be exposed on `0.0.0.0`.
 
-The SQLite schema gains additive Phase 2A-0 tables for frozen path history and intraday cache. Existing reports, PDFs, EOD rows, indicators and snapshots are retained. Back up `var/real-local/leopard_project.sqlite3` before the first revised start.
+The SQLite schema gains additive Phase 2A-0 tables for frozen path history, review decisions, runtime pause control and intraday cache. Existing reports, decisions, PDFs, EOD rows, indicators and snapshots are retained. Back up `var/real-local/leopard_project.sqlite3` before the first revised start.
 
-Migration `0007` adds only research visibility preferences. Local Provider evaluation outputs remain under temporary directories and must not be committed.
+Migration `0010` adds only review decisions and runtime pause control. Local Provider evaluation outputs remain under temporary directories and must not be committed.

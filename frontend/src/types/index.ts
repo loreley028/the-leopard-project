@@ -1,5 +1,5 @@
 export type Role = "viewer" | "admin";
-export type ReportStatus = "uploaded" | "parsing" | "needs_review" | "ready_to_publish" | "published" | "withdrawn" | "parse_failed";
+export type ReportStatus = "uploaded" | "parsing" | "needs_review" | "blocked" | "ready_to_publish" | "published" | "withdrawn" | "parse_failed";
 
 export interface Principal { username: string; role: Role }
 
@@ -93,6 +93,33 @@ export interface Interpretation {
   quality_status: "verified_structure" | "needs_attention" | "blocking_parse_error";
   quality_summary: Record<string, string | number>;
   pdf_history_matrix: { dates: string[]; rows: Array<{ sector_key: string; sector_name: string; statuses: string[] }>; row_count?: number };
+  review_workflow: ReviewWorkflow;
+}
+
+export interface ReviewIssue {
+  issue_key: string;
+  issue_type: string;
+  severity: "suggestion" | "required";
+  subject_key: string | null;
+  subject_label: string;
+  explanation: string;
+  original_value: unknown;
+  suggested_value: unknown;
+  options: string[];
+  evidence: { page?: number | null; excerpt?: string | null; source_reference?: string; extraction_method?: string; confidence?: string; technical_codes?: string[] };
+  resolved: boolean;
+  final_value: unknown;
+  resolution_source: "accepted_suggestion" | "manual_override" | "bulk_accept" | null;
+  resolved_at: string | null;
+  resolved_by: string | null;
+  optional_note: string;
+}
+
+export interface ReviewWorkflow {
+  workflow_status: "parsing" | "needs_review" | "blocked" | "ready_to_publish" | "published" | "failed";
+  summary: { auto_confirmed: number; suggested_review: number; must_handle: number; handled: number };
+  steps: Array<{ key: "upload" | "review" | "publish"; label: string; state: "complete" | "current" | "pending" }>;
+  issues: ReviewIssue[];
 }
 
 export interface Sector {
@@ -250,6 +277,8 @@ export interface IntradayStatus {
   unsupported_count: number;
   viewer_provider_access: false;
   auto_start: boolean;
+  admin_paused?: boolean;
+  scheduler_registered?: boolean;
 }
 
 export interface SectorAssessment {

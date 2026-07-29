@@ -556,7 +556,7 @@ def register_enhanced_routes(
 
     @app.post("/api/v1/admin/market/intraday/pause", response_model=ApiObjectResponse)
     def pause_intraday(current: Principal = Depends(admin)) -> dict:
-        return intraday.pause()
+        return intraday.pause(current.username, persistent=True)
 
     @app.post("/api/v1/admin/market/intraday/refresh-now", response_model=ApiObjectResponse)
     def refresh_intraday_now(current: Principal = Depends(admin)) -> dict:

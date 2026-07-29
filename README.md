@@ -17,7 +17,7 @@ Market snapshots and MA/return/volume metrics are secondary research context, no
 - SQLite through SQLAlchemy Repository for local MVP use; runtime DB and uploads stay under ignored `var/` paths.
 - PDF parsing is local and text-layer first. Upload automatically creates the structured interpretation, but publication always remains an explicit one-click confirmation.
 - Reports are normally uploaded Sunday through Thursday evenings. Friday and Saturday are normal no-report days and never create missing-report alerts.
-- Viewer sees only `published`; Admin normally uses upload-and-interpret followed by confirm-and-publish. Technical reparse and full 66-sector review remain collapsed advanced operations.
+- Viewer sees only `published`; Admin normally uses the three-step upload → question review → publication flow. Each question has a stable persisted decision, while PDF evidence, technical diagnostics, reparse and full 66-sector review remain collapsed advanced operations.
 - The 66-sector opinion catalog remains intact. Market support remains 65/1; HSTECH opinions display normally while automatic HK market data stays `unsupported`.
 - Versioned path states, native cross-report matrix, five-field sector assessments and deterministic report comparison are first-class structures.
 
@@ -82,6 +82,6 @@ Supported templates are V2.3, V2.3.1 and V2.4. Upload returns JSON; PDF navigati
 
 The local acceptance build keeps three independent lanes: frozen PDF path history, `complete_eod` market history, and cached intraday snapshots. A complete V2.4 PDF can initialize all reliable historical path dates without requiring every older PDF to be uploaded. Weekend reports retain their own `report_date` while market cells use the separately frozen `market_as_of_date`.
 
-Intraday refresh is a process-local five-minute server cache which safely starts in `real_local` and remains pausable by Admin. Viewer requests never call a Provider, and intraday values never enter formal moving averages, multi-day returns, holding-period EOD returns, or report snapshots. Eastmoney board spot is retained as a research-only line; existing public historical endpoints remain diagnostic and `production_primary` does not exist.
+Intraday refresh is a process-local five-minute server cache which starts automatically in `real_local`, refreshes stale or missing open-market data on startup, and remains persistently pausable by Admin. Test/process-level disabling and natural market closure do not persist an Admin pause. Viewer requests only poll the local cache and never call a Provider; intraday values never enter formal moving averages, multi-day returns, holding-period EOD returns, or report snapshots. Eastmoney board spot is retained as a research-only line; existing public historical endpoints remain diagnostic and `production_primary` does not exist.
 
 The final acceptance view adds compact dual-date matrix headers, centralized intraday status, strict/broad holding intervals and reversible low-attention filtering. No researched intraday source is yet `live_validated`.

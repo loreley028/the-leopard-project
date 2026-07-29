@@ -82,7 +82,7 @@ def test_upload_triggers_complete_interpretation_without_second_parse_request(in
     body = response.json()
     report = body["report"]
     interpretation = body["interpretation"]
-    assert report["status"] == "needs_review"
+    assert report["status"] == "ready_to_publish"
     assert report["interpretation_status"] == "ready"
     assert report["report_date"] == "2026-07-22"
     assert report["report_date_confidence"] == "high"

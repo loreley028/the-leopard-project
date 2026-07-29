@@ -12,7 +12,7 @@ Viewer can read the latest and historical published reports, open the published 
 
 Admin can upload a PDF, run local parsing, confirm the report date, edit controlled structured fields, resolve an unmapped term to an existing sector, mark ready, publish and withdraw. The formal sector catalog is not editable in the Web MVP.
 
-Viewer and Admin share one React application, one FastAPI backend and one SQLite repository. Phase 2A-0 is local only: no cloud deployment, public access, production database, scheduler, automatic live market request, external LLM, HSTECH integration or Phase 1B-2 observation. Admin may explicitly run a low-rate diagnostic refresh or confirmed file import in `real_local`.
+Viewer and Admin share one React application, one FastAPI backend and one SQLite repository. Phase 2A-0 is local only: no cloud deployment, public access, production database, production scheduler, external LLM, HSTECH integration or Phase 1B-2 observation. In `real_local`, one process-local five-minute research cache may refresh automatically during controlled A-share sessions; Viewer remains cache-only and no Provider is promoted.
 ## Upload-to-Interpretation acceptance scope
 
 For the current private noncommercial MVP, the repeated user job is: upload an already generated V2.3/V2.3.1/V2.4 live-summary PDF, inspect the automatically populated Web interpretation, and explicitly publish it. Raw transcripts, OCR, external LLM interpretation, production market collection and automatic publication are outside scope.
