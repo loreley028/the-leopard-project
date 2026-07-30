@@ -118,9 +118,11 @@ class EodGatingTests(unittest.TestCase):
         result = self.assess((), "2026-07-22T17:00:00+08:00", provider_failed=True)
         self.assertEqual(result.status, EodStatus.PROVIDER_FAILED)
 
-    def test_supported_plan_remains_65_and_hstech_absent(self) -> None:
+    def test_supported_plan_uses_dynamic_market_paths_and_hstech_absent(self) -> None:
         plan = build_collection_plan(date(2026, 7, 22))
-        self.assertEqual(len(plan.tasks), 65)
+        self.assertEqual(len(plan.tasks), 66)
+        self.assertEqual({"hotel", "catering"} <= {task.sector_key for task in plan.tasks}, True)
+        self.assertNotIn("hotel_catering", {task.sector_key for task in plan.tasks})
         self.assertNotIn("hang_seng_tech", {task.sector_key for task in plan.tasks})
 
 

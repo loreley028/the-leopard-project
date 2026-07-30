@@ -1,0 +1,96 @@
+{
+  "schema_version": "2.0.0",
+  "matrix_version": "phase2a0-market-path-split-20260730",
+  "base_matrix": "provider_capability_matrix_v1.json",
+  "market_path_registry": "market_path_registry_v1.json",
+  "remove_sector_keys": [
+    "hotel_catering"
+  ],
+  "cloud_validated_sector_keys": [
+    "food_beverage",
+    "photovoltaic_energy_storage",
+    "general_equipment",
+    "nonferrous_metals",
+    "rare_earth",
+    "minor_metals",
+    "chemicals",
+    "oil_petrochemical",
+    "glass_fiber",
+    "gold_concept",
+    "steel",
+    "lithium_mining",
+    "commercial_space",
+    "defense_military",
+    "aerospace_equipment",
+    "port_shipping",
+    "real_estate"
+  ],
+  "cloud_validation": {
+    "environment": "aliyun_ecs_isolated_docker",
+    "validated_at": "2026-07-30T14:48:00+08:00",
+    "source_commit": "c48594bcb4108ec2580af85103cb276c1c720342",
+    "request_policy": "one spot and one history request per exact symbol; batches of at most five",
+    "evidence_path": "/opt/the-leopard-project/staging/provider-validation/c48594b-hotel-catering-split/reports"
+  },
+  "replacement_market_paths": [
+    {
+      "canonical_sector_key": "hotel",
+      "display_name": "酒店",
+      "parent_report_topic": "hotel_catering",
+      "category": "医药、消费与服务",
+      "mapping_type": "proxy",
+      "approved_semantics": "881160正式名称为旅游及酒店，仅作为酒店的显式代理，不代表餐饮。",
+      "primary_provider": "ths_exact_spot",
+      "primary_symbol": "881160",
+      "fallback_provider": null,
+      "fallback_symbol": null,
+      "spot_supported": true,
+      "daily_history_supported": true,
+      "exact_mapping": false,
+      "proxy_mapping": true,
+      "composite_mapping": false,
+      "short_history": false,
+      "validation_status": "validated",
+      "validation_time": "2026-07-30T14:45:00+08:00",
+      "evidence_summary": "Aliyun Docker returned HTTP 200 HTML with official name 旅游及酒店, complete spot labels and 137 history rows; old parser failed only because it expected the superseded name 酒店餐饮.",
+      "notes": "Viewer must display 酒店（旅游及酒店代理口径）.",
+      "candidates": [
+        {
+          "provider": "ths_exact_spot",
+          "symbol": "881160",
+          "provider_name": "旅游及酒店",
+          "mapping_type": "proxy",
+          "priority": 10,
+          "spot_supported": true,
+          "history_supported": true,
+          "exact_mapping": true,
+          "validation_status": "validated",
+          "components": []
+        }
+      ]
+    },
+    {
+      "canonical_sector_key": "catering",
+      "display_name": "餐饮",
+      "parent_report_topic": "hotel_catering",
+      "category": "医药、消费与服务",
+      "mapping_type": "direct",
+      "approved_semantics": "只接受餐饮服务、连锁餐饮、餐饮企业或语义等价的正式板块。",
+      "primary_provider": "",
+      "primary_symbol": "UNVERIFIED_CATERING",
+      "fallback_provider": null,
+      "fallback_symbol": null,
+      "spot_supported": false,
+      "daily_history_supported": false,
+      "exact_mapping": false,
+      "proxy_mapping": false,
+      "composite_mapping": false,
+      "short_history": false,
+      "validation_status": "unverified",
+      "validation_time": "2026-07-30T14:46:00+08:00",
+      "evidence_summary": "Aliyun Docker audited the official THS industry and concept directories; no independent catering board was present.",
+      "notes": "No prepared-food, food-and-beverage, hotel, tourism, retail or guessed basket substitution is permitted.",
+      "candidates": []
+    }
+  ]
+}

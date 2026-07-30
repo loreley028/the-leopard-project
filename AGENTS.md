@@ -31,7 +31,9 @@ The repository is at Phase 2A-0 Upload-to-Interpretation acceptance revision.
 
 ## Invariants
 
-- Catalog/support/unsupported/denominator remain 66/65/1/65.
+- Report topics remain 66. The explicit `hotel_catering` report-topic split yields
+  67 market paths: 66 supported CN-A paths and one unsupported HSTECH path. Runtime
+  denominators must be derived from `config/market_path_registry_v1.json`.
 - HSTECH opinions may display; HSTECH market data remains `unsupported` and excluded from EOD/reconciliation.
 - Viewer reads only `published`; Admin operations require backend role authorization.
 - Upload time is not report date. High-confidence PDF dates are accepted automatically; only low-confidence or conflicting dates require confirmation.

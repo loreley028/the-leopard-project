@@ -25,13 +25,13 @@ def main() -> int:
     )
     plan = build_collection_plan(date(2026, 7, 21))
     assertions = {
-        "support_scope_66_65_1": (
+        "current_report_and_market_path_scope": (
             support["total_business_sectors"] == 66
-            and support["supported_market_sectors"] == 65
+            and support["supported_market_sectors"] == 66
             and len(support["unsupported_sectors"]) == 1
         ),
-        "denominator_65": support["collection_denominator"] == 65,
-        "hstech_excluded": len(plan.tasks) == 65 and all(task.sector_key != "hang_seng_tech" for task in plan.tasks),
+        "dynamic_denominator": support["collection_denominator"] == len(plan.tasks) == 66,
+        "hstech_excluded": all(task.sector_key != "hang_seng_tech" for task in plan.tasks),
         "safe_accept_after_configured": eod.safe_accept_after == "16:30",
         "cn_a_calendar_only": calendar.market.value == "CN_A" and not eod.production_calendar_approved,
         "amount_optional": "amount" in eod.optional_fields and "amount" not in eod.minimum_required_fields,
@@ -50,7 +50,7 @@ def main() -> int:
             compare_lineages(public, akshare) == IndependenceStatus.SHARED_UPSTREAM
             and public.endpoint_host == akshare.endpoint_host == "d.10jqka.com.cn"
         ),
-        "replay_exactly_65": summary["plan_sector_count"] == 65 and len(details["records"]) == 65,
+        "historical_replay_exactly_65": summary["plan_sector_count"] == 65 and len(details["records"]) == 65,
         "three_intraday_reclassified": summary["intraday_snapshot_count"] == 3,
         "no_independent_secondary": (
             summary["provider_b_success_count"] == 0

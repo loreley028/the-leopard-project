@@ -1,0 +1,48 @@
+{
+  "schema_version": "1.0.0",
+  "registry_version": "market-paths-20260730",
+  "effective_date": "2026-07-30",
+  "derivation": "one market path per report topic except the explicit hotel_catering split",
+  "report_topic_market_paths": {
+    "hotel_catering": [
+      "hotel",
+      "catering"
+    ]
+  },
+  "market_path_overrides": [
+    {
+      "market_path_key": "hotel",
+      "display_name": "酒店",
+      "parent_report_topic": "hotel_catering",
+      "mapping_type": "proxy",
+      "provider_symbol": "881160",
+      "provider_name": "旅游及酒店",
+      "semantic_difference": "旅游及酒店包含旅游业务，范围宽于纯酒店",
+      "display_detail": "酒店（旅游及酒店代理口径）",
+      "support_status": "supported"
+    },
+    {
+      "market_path_key": "catering",
+      "display_name": "餐饮",
+      "parent_report_topic": "hotel_catering",
+      "mapping_type": "direct",
+      "provider_symbol": "UNVERIFIED_CATERING",
+      "provider_name": "",
+      "semantic_difference": "同花顺公开行业及概念目录未发现独立餐饮板块",
+      "display_detail": "餐饮行情源待验证",
+      "support_status": "supported"
+    }
+  ],
+  "inactive_market_paths": [
+    "hotel_catering"
+  ],
+  "unsupported_market_paths": [
+    "hang_seng_tech"
+  ],
+  "history_policy": {
+    "preserve_report_topic_keys": true,
+    "split_published_report_records": false,
+    "backfill_new_market_paths": false,
+    "legacy_market_path_status": "report_only"
+  }
+}

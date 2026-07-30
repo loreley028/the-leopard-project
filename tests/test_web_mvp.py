@@ -240,8 +240,11 @@ def test_sector_catalog_and_hstech_dual_status(web) -> None:
     client.post("/api/v1/auth/logout")
     login(client, "viewer")
     sectors = client.get("/api/v1/sectors").json()
-    assert len(sectors) == 66
-    assert sum(item["market_support_status"] == "supported" for item in sectors) == 65
+    assert len(sectors) == 67
+    assert sum(item["market_support_status"] == "supported" for item in sectors) == 66
+    assert {"hotel", "catering"} <= {item["sector_key"] for item in sectors}
+    assert "hotel_catering" not in {item["sector_key"] for item in sectors}
+    assert all(item["parent_report_topic"] == "hotel_catering" for item in sectors if item["sector_key"] in {"hotel", "catering"})
     hstech = next(item for item in sectors if item["sector_key"] == "hang_seng_tech")
     assert hstech["latest_view"] is not None
     assert hstech["market_support_status"] == "unsupported"

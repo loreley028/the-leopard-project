@@ -1,11 +1,16 @@
 {
   "schema_version": 1,
-  "policy_version": "system-support-v1-20260722",
-  "effective_date": "2026-07-22",
+  "policy_version": "system-support-v2-market-paths-20260730",
+  "effective_date": "2026-07-30",
   "total_business_sectors": 66,
-  "supported_market_sectors": 65,
+  "report_topic_count": 66,
+  "market_path_count": 67,
+  "supported_market_sectors": 66,
+  "supported_market_path_count": 66,
   "unsupported_sector_count": 1,
-  "collection_denominator": 65,
+  "unsupported_market_path_count": 1,
+  "collection_denominator": 66,
+  "market_path_registry": "market_path_registry_v1.json",
   "unsupported_reason_codes": [
     "cross_market_not_integrated"
   ],

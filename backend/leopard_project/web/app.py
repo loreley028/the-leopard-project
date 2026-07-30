@@ -15,7 +15,8 @@ from fastapi.responses import FileResponse, JSONResponse, Response
 from sqlalchemy import select
 from sqlalchemy.orm import Session, sessionmaker
 
-from leopard_project.config import PROJECT_ROOT, load_seed_bundle
+from leopard_project.config import PROJECT_ROOT
+from leopard_project.market_paths import load_market_path_registry, report_topic_for_market_path
 
 from .auth import AuthenticationError, Principal, SessionAuth
 from .database import create_session_factory
@@ -325,7 +326,7 @@ def create_app(settings: WebSettings | None = None, session_factory: sessionmake
 
     @app.post("/api/v1/admin/sectors/{sector_key}/pin")
     def pin_sector(sector_key: str, current: Principal = Depends(admin), session: Session = Depends(db_session)) -> dict:
-        if not any(item.sector_key == sector_key for item in load_seed_bundle().sectors):
+        if not any(item.market_path_key == sector_key for item in load_market_path_registry().market_paths):
             raise WebDomainError("sector_not_found", "Sector not found", 404)
         item = session.get(SectorResearchPreference, sector_key)
         if item is None:
@@ -354,7 +355,7 @@ def create_app(settings: WebSettings | None = None, session_factory: sessionmake
             raise WebDomainError("sector_not_found", "Sector not found", 404)
         sector["timeline"] = [
             {"report_id": report.id, "report_date": report.report_date.isoformat(), "report_title": report.title, "summary": mention.summary}
-            for report, mention in repo.sector_timeline(sector_key)
+            for report, mention in repo.sector_timeline(report_topic_for_market_path(sector_key) or sector_key)
         ]
         return sector
 

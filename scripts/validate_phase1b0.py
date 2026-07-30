@@ -19,17 +19,18 @@ def main() -> int:
     unsupported = plan.unsupported_sectors[0]
     assertions = {
         "business_catalog_66": len(load_seed_bundle().sectors) == plan.total_business_sectors == 66,
-        "supported_65": len(plan.tasks) == plan.supported_market_sectors == 65,
+        "current_market_paths_dynamic": len(plan.tasks) == plan.supported_market_sectors == plan.collection_denominator == 66,
         "unsupported_1": len(plan.unsupported_sectors) == 1,
         "hstech_unsupported": unsupported.sector_key == "hang_seng_tech" and unsupported.support_status == SupportStatus.UNSUPPORTED and unsupported.data_status == DataStatus.UNSUPPORTED,
-        "collection_denominator_65": plan.collection_denominator == 65,
+        "report_topics_66": plan.report_topic_count == 66 and plan.market_path_count == 67,
         "no_hstech_provider_request": all(task.sector_key != "hang_seng_tech" for task in plan.tasks),
-        "hotel_proxy": next(task for task in plan.tasks if task.sector_key == "hotel_catering").data_status == DataStatus.PROXY,
+        "hotel_proxy": next(task for task in plan.tasks if task.sector_key == "hotel").data_status == DataStatus.PROXY,
+        "catering_unverified_path_present": any(task.sector_key == "catering" for task in plan.tasks),
         "glass_short_history": next(task for task in plan.tasks if task.sector_key == "glass_substrate").data_status == DataStatus.SHORT_HISTORY,
-        "three_custom_composites": sum(task.mapping_type == "custom_composite" for task in plan.tasks) == 3,
+        "three_custom_composites": sum(task.mapping_type == "composite" for task in plan.tasks) == 3,
         "pdf_independent": bool(policy["pdf_report_independence"]["independent"]),
         "no_production_provider": policy["production_primary_approved"] is False and policy["production_fallback_approved"] is False,
-        "coverage_65_present": coverage is not None and coverage["summary"]["supported_sector_count"] == 65,
+        "phase1b0_historical_coverage_65_present": coverage is not None and coverage["summary"]["supported_sector_count"] == 65,
         "comparison_present": comparison is not None and comparison["production_primary_approved"] is False,
     }
     failed = [name for name, passed in assertions.items() if not passed]

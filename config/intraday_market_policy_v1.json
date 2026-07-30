@@ -22,5 +22,5 @@
     {"provider": "eastmoney_board_spot_via_public_push2", "role": "research_provider", "result": "partially_validated", "authentication": "none", "lineage": "Eastmoney public push2; AKShare and efinance wrappers share this upstream", "write_real_local": true},
     {"provider": "sina_industry_spot_public", "role": "research_provider", "result": "partially_validated", "authentication": "none", "lineage": "Sina Finance public industry aggregation", "write_real_local": false}
   ],
-  "supported_sector_count": 65
+  "market_path_registry": "market_path_registry_v1.json"
 }

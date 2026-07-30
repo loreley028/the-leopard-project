@@ -132,7 +132,10 @@ export interface Sector {
   latest_view_date?: string | null;
   mentioned_in_latest_published: boolean;
   market_support_status: "supported" | "unsupported";
-  data_status: "supported" | "proxy" | "short_history" | "unsupported";
+  market_path_key?: string;
+  parent_report_topic?: string;
+  report_topic_name?: string;
+  data_status: "supported" | "proxy" | "short_history" | "unsupported" | "unverified";
   market_status_detail: string;
   current_path_status: PathStatus;
   current_path_status_label: string;
@@ -275,6 +278,7 @@ export interface IntradayStatus {
   failure_count: number;
   stale_count: number;
   unsupported_count: number;
+  supported_market_path_count?: number;
   viewer_provider_access: false;
   auto_start: boolean;
   admin_paused?: boolean;
@@ -363,6 +367,9 @@ export interface PathMatrix {
 export interface SectorResearch {
   sector_key: string;
   sector_name: string;
+  market_path_key?: string;
+  parent_report_topic?: string;
+  report_topic_name?: string;
   group_name: string;
   latest_explicit_view: { report_id: string; report_date: string; path: PathEntry; assessment: SectorAssessment; report_snapshot: MarketSnapshot | null } | null;
   current_latest_market: MarketSnapshot | null;

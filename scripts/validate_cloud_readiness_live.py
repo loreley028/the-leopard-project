@@ -99,15 +99,16 @@ def main() -> int:
                 "temporary_database_removed_on_exit": True,
             }
             print(json.dumps(payload, ensure_ascii=False, indent=2))
+            denominator = len(coordinator._provider.capabilities)
             passed = (
-                result.requested_count == 65
-                and result.success_count == 65
+                result.requested_count == denominator
+                and result.success_count == denominator
                 and result.failure_count == 0
-                and result.intraday_count == 65
+                and result.intraday_count == denominator
                 and result.stale_count == 0
                 and result.unsupported_count == 1
-                and snapshot_count == 65
-                and ma5_count == 65
+                and snapshot_count == denominator
+                and ma5_count == denominator
                 and hstech_items == 0
                 and provider_requests_after_viewer == provider_requests_before_viewer
             )

@@ -9,6 +9,8 @@ from sqlalchemy import desc, select
 from sqlalchemy.orm import Session, sessionmaker
 
 from leopard_project.config import load_seed_bundle
+from leopard_project.market_paths import load_market_path_registry, market_path_for_key, report_topic_sector
+from leopard_project.providers.capabilities import load_provider_capabilities, provider_capability_summary
 
 from .auth import Principal
 from .catalog import configured_groups
@@ -281,9 +283,12 @@ def register_enhanced_routes(
         current: Principal = Depends(principal),
         session: Session = Depends(db_session),
     ) -> dict:
-        sector = next((item for item in load_seed_bundle().sectors if item.sector_key == sector_key), None)
-        if sector is None:
+        market_path = market_path_for_key(sector_key)
+        if market_path is None:
             raise WebDomainError("sector_not_found", "Sector not found", 404)
+        sector = report_topic_sector(market_path)
+        market_key = market_path.market_path_key
+        report_key = market_path.parent_report_topic
         service = EnhancedReportService(session)
         reports = list(session.scalars(select(Report).where(Report.status == "published").order_by(desc(Report.report_date))))
         if reports:
@@ -293,18 +298,18 @@ def register_enhanced_routes(
             raise WebDomainError("invalid_path_period", "路径期数仅支持10、20、40或60期", 422)
         if market_days not in {20, 40, 60}:
             raise WebDomainError("invalid_market_days", "行情范围仅支持20、40或60个交易日", 422)
-        path_rows = service.path_history(sector_key, selected_path_period, reports[0].report_date if reports else None)
-        all_path_rows = service.path_history(sector_key, through=reports[0].report_date if reports else None)
+        path_rows = service.path_history(report_key, selected_path_period, reports[0].report_date if reports else None)
+        all_path_rows = service.path_history(report_key, through=reports[0].report_date if reports else None)
         report_by_id = {item.id: item for item in reports}
         assessment_by_report = {
-            item.id: next((assessment for assessment in service.assessments(item.id) if assessment.sector_key == sector_key), None)
+            item.id: next((assessment for assessment in service.assessments(item.id) if assessment.sector_key == report_key), None)
             for item in reports
         }
         detailed_history = []
         latest_explicit = None
         for report in reports:
             service.ensure_structure(report)
-            entry = session.scalar(select(SectorPathEntry).where(SectorPathEntry.report_id == report.id, SectorPathEntry.sector_key == sector_key))
+            entry = session.scalar(select(SectorPathEntry).where(SectorPathEntry.report_id == report.id, SectorPathEntry.sector_key == report_key))
             assessment = assessment_by_report[report.id]
             if entry:
                 item = {
@@ -312,7 +317,7 @@ def register_enhanced_routes(
                     "report_date": report.report_date.isoformat(),
                     "path": path_entry_payload(entry),
                     "assessment": assessment_payload(assessment) if assessment else None,
-                    "report_snapshot": next((row for row in service.report_snapshots(report.id) if row["sector_key"] == sector_key), None),
+                    "report_snapshot": None if report_key == "hotel_catering" else next((row for row in service.report_snapshots(report.id) if row["sector_key"] == market_key), None),
                 }
                 detailed_history.append(item)
                 if latest_explicit is None and entry.explicitly_mentioned and entry.path_status != "not_mentioned":
@@ -346,7 +351,7 @@ def register_enhanced_routes(
         } for item in path_rows]
         if not recent_path_entries and reports:
             matrix = (json.loads(reports[0].interpretation_meta_json or "{}").get("pdf_history_matrix") or {})
-            source_row = next((item for item in matrix.get("rows", []) if item.get("sector_key") == sector_key), None)
+            source_row = next((item for item in matrix.get("rows", []) if item.get("sector_key") == report_key), None)
             raw_dates = matrix.get("dates") or []
             if source_row and len(source_row.get("statuses") or []) == len(raw_dates):
                 resolved = matrix_dates(reports[0].report_date, raw_dates)
@@ -354,7 +359,7 @@ def register_enhanced_routes(
                 selected_effective = effective_statuses([status for _, status in selected])
                 detailed_by_date = {item.report_date: item for item in reports if item.report_date}
                 recent_path_entries = list(reversed([{
-                    "id": f"path:{sector_key}:{path_date.isoformat()}",
+                    "id": f"path:{report_key}:{path_date.isoformat()}",
                     "report_id": detailed_by_date[path_date].id if path_date in detailed_by_date else f"path:{path_date.isoformat()}",
                     "detail_report_id": detailed_by_date[path_date].id if path_date in detailed_by_date else None,
                     "has_detailed_assessment": path_date in detailed_by_date,
@@ -363,7 +368,7 @@ def register_enhanced_routes(
                     "reported_status": status,
                     "effective_status": effective_value,
                     "path": {
-                        "id": f"path:{sector_key}:{path_date.isoformat()}", "sector_key": sector_key,
+                        "id": f"path:{report_key}:{path_date.isoformat()}", "sector_key": report_key,
                         "sector_name": sector.sector_name, "path_status": status,
                         "path_status_label": path_statuses()[status]["label"],
                         "path_status_color": path_statuses()[status]["color"],
@@ -372,24 +377,27 @@ def register_enhanced_routes(
                         "manually_modified": False, "revision_id": reports[0].id,
                     },
                 } for (path_date, status), effective_value in zip(selected, selected_effective)]))
-        unsupported = sector_key == "hang_seng_tech"
-        intervals = service.holding_intervals_for_sector(sector_key, reports[0].report_date if reports else None)
-        latest_market = None if unsupported else service.latest_market(sector_key)
-        recent_days = [] if unsupported else service.recent_complete_days(sector_key)
+        unsupported = market_path.support_status.value == "unsupported"
+        intervals = service.holding_intervals_for_sector(report_key, reports[0].report_date if reports else None)
+        latest_market = None if unsupported else service.latest_market(market_key)
+        recent_days = [] if unsupported else service.recent_complete_days(market_key)
         if latest_market is not None:
             latest_market["recent_5_trading_days"] = recent_days
-        intraday_snapshot = None if unsupported else service.latest_intraday(sector_key)
+        intraday_snapshot = None if unsupported else service.latest_intraday(market_key)
         runtime_status = intraday.status()
-        latest_intraday_result = latest_intraday_item_status(session, sector_key)
+        latest_intraday_result = latest_intraday_item_status(session, market_key)
         runtime_phase = runtime_status["market_phase"]
         resolved_intraday_status = resolve_intraday_data_status(
             phase=runtime_phase, snapshot=intraday_snapshot, latest_result=latest_intraday_result,
             now=datetime.now(timezone.utc), stale_after_minutes=intraday_policy()["stale_after_minutes"], unsupported=unsupported,
         )
-        pref = session.get(SectorResearchPreference, sector_key)
+        capability = load_provider_capabilities().get(market_key)
+        if capability and not capability.selectable_candidates:
+            resolved_intraday_status = "provider_failed"
+        pref = session.get(SectorResearchPreference, market_key)
         is_pinned = bool(pref and pref.is_pinned_for_research)
         last_ten = all_path_rows[:10]
-        data_status = "unsupported" if unsupported else "proxy" if sector_key == "hotel_catering" else "short_history" if sector_key == "glass_substrate" else "supported"
+        data_status = "unsupported" if unsupported else "proxy" if market_path.mapping_type == "proxy" else "short_history" if market_key == "glass_substrate" else "unverified" if capability and not capability.selectable_candidates else "supported"
         is_low_attention = bool(
             len(last_ten) == 10 and all(item.path_status == "not_mentioned" for item in last_ten)
             and not intervals["strict_holding_interval"] and not intervals["broad_holding_interval"]
@@ -397,8 +405,11 @@ def register_enhanced_routes(
             and data_status == "supported" and not is_pinned
         )
         return {
-            "sector_key": sector.sector_key,
-            "sector_name": sector.sector_name,
+            "sector_key": market_key,
+            "sector_name": market_path.display_name,
+            "market_path_key": market_key,
+            "parent_report_topic": report_key,
+            "report_topic_name": sector.sector_name,
             "group_name": sector.category_level_1,
             "latest_explicit_view": latest_explicit,
             "current_latest_market": latest_market,
@@ -409,22 +420,22 @@ def register_enhanced_routes(
             "intraday_session": runtime_status,
             "market_support_status": "unsupported" if unsupported else "supported",
             "data_status": data_status,
-            "market_status_detail": "港股跨市场行情暂未接入" if unsupported else "881160代理口径" if sector_key == "hotel_catering" else "历史较短，指标不足时显示历史不足" if sector_key == "glass_substrate" else "研究辅助数据，非生产级行情服务。",
+            "market_status_detail": "港股跨市场行情暂未接入" if unsupported else market_path.display_detail if market_key in {"hotel", "catering"} else "历史较短，指标不足时显示历史不足" if market_key == "glass_substrate" else "研究辅助数据，非生产级行情服务。",
             "recent_path": recent_path_entries,
             "recent_path_entries": recent_path_entries,
             "path_periods": selected_path_period,
             "available_path_periods": len(all_path_rows) or len(recent_path_entries),
             "reported_status": path_rows[0].path_status if path_rows else recent_path_entries[0]["reported_status"] if recent_path_entries else "not_mentioned",
             "effective_status": effective_statuses([item.path_status for item in reversed(all_path_rows)])[-1] if all_path_rows else recent_path_entries[0]["effective_status"] if recent_path_entries else None,
-            "active_holding_interval": intervals["active_holding_interval"],
-            "historical_holding_intervals": intervals["historical_holding_intervals"],
-            "strict_holding_interval": intervals["strict_holding_interval"],
-            "broad_holding_interval": intervals["broad_holding_interval"],
-            "historical_strict_intervals": intervals["historical_strict_intervals"],
-            "historical_broad_intervals": intervals["historical_broad_intervals"],
+            "active_holding_interval": None if report_key == "hotel_catering" else intervals["active_holding_interval"],
+            "historical_holding_intervals": [] if report_key == "hotel_catering" else intervals["historical_holding_intervals"],
+            "strict_holding_interval": None if report_key == "hotel_catering" else intervals["strict_holding_interval"],
+            "broad_holding_interval": None if report_key == "hotel_catering" else intervals["broad_holding_interval"],
+            "historical_strict_intervals": [] if report_key == "hotel_catering" else intervals["historical_strict_intervals"],
+            "historical_broad_intervals": [] if report_key == "hotel_catering" else intervals["historical_broad_intervals"],
             "is_low_attention": is_low_attention,
             "is_pinned_for_research": is_pinned,
-            "market_history": [] if unsupported else service.market_history(sector_key, market_days),
+            "market_history": [] if unsupported else service.market_history(market_key, market_days),
             "market_days": market_days,
             "history": detailed_history,
             "detailed_history": detailed_history,
@@ -432,7 +443,10 @@ def register_enhanced_routes(
 
     @app.get("/api/v1/sectors/{sector_key}/market/latest", response_model=ApiObjectResponse)
     def sector_latest_market(sector_key: str, current: Principal = Depends(principal), session: Session = Depends(db_session)) -> dict:
-        if sector_key == "hang_seng_tech":
+        market_path = market_path_for_key(sector_key)
+        if market_path is None:
+            raise WebDomainError("sector_not_found", "Sector not found", 404)
+        if market_path.support_status.value == "unsupported":
             return {"sector_key": sector_key, "status": "unsupported", "detail": "港股跨市场行情暂未接入"}
         payload = EnhancedReportService(session).latest_market(sector_key)
         return {"sector_key": sector_key, "status": "available" if payload else "unavailable", "market": payload}
@@ -561,21 +575,25 @@ def register_enhanced_routes(
         policy = intraday_policy()
         now = datetime.now(timezone.utc)
         output = []
-        for sector in sorted(load_seed_bundle().sectors, key=lambda item: item.overall_order):
-            if sector.sector_key == "hang_seng_tech":
+        capabilities = load_provider_capabilities()
+        for market_path in load_market_path_registry().market_paths:
+            if market_path.support_status.value == "unsupported":
                 output.append({
-                    "sector_key": sector.sector_key, "sector_name": sector.sector_name,
+                    "sector_key": market_path.market_path_key, "sector_name": market_path.display_name,
                     "data_status": "unsupported", "snapshot": None,
                 })
                 continue
-            snapshot = service.latest_intraday(sector.sector_key)
+            snapshot = service.latest_intraday(market_path.market_path_key)
             data_status = resolve_intraday_data_status(
                 phase=status["market_phase"], snapshot=snapshot,
-                latest_result=latest_intraday_item_status(session, sector.sector_key), now=now,
+                latest_result=latest_intraday_item_status(session, market_path.market_path_key), now=now,
                 stale_after_minutes=policy["stale_after_minutes"],
             )
+            capability = capabilities[market_path.market_path_key]
+            if not capability.selectable_candidates:
+                data_status = "provider_failed"
             output.append({
-                "sector_key": sector.sector_key, "sector_name": sector.sector_name,
+                "sector_key": market_path.market_path_key, "sector_name": market_path.display_name,
                 "data_status": data_status, "snapshot": snapshot,
             })
         return output
@@ -595,12 +613,18 @@ def register_enhanced_routes(
     @app.get("/api/v1/admin/market/summary", response_model=ApiObjectResponse)
     def market_summary(current: Principal = Depends(admin), session: Session = Depends(db_session)) -> dict:
         latest = session.scalar(select(MarketRefreshRun).order_by(desc(MarketRefreshRun.started_at)))
+        registry = load_market_path_registry()
+        capability_summary = provider_capability_summary()
         return {
             "provider": "ths_public_validation",
             "provider_role": "diagnostic_provider",
             "production_primary": None,
-            "supported_count": 65,
-            "estimated_request_count": 65,
+            "report_topic_count": registry.report_topic_count,
+            "market_path_count": registry.market_path_count,
+            "supported_count": len(registry.supported_market_paths),
+            "unsupported_count": len(registry.unsupported_market_paths),
+            "estimated_request_count": len(registry.supported_market_paths),
+            "capability_summary": capability_summary,
             "automatic_scheduler": data_mode == "real_local",
             "latest_run": None if latest is None else {
                 "run_id": latest.id,
@@ -616,6 +640,23 @@ def register_enhanced_routes(
             },
             "notice": "研究辅助数据，无生产SLA。real_local可执行受控盘中刷新和EOD缺口补齐；Viewer不会访问Provider。",
         }
+
+    @app.get("/api/v1/admin/market/provider-capabilities", response_model=list[ApiListItem])
+    def provider_capabilities(current: Principal = Depends(admin)) -> list[dict]:
+        rows = load_provider_capabilities()
+        return [{
+            "market_path_key": item.sector_key,
+            "display_name": item.display_name,
+            "parent_report_topic": item.parent_report_topic,
+            "mapping_type": item.mapping_type,
+            "validation_status": "validated" if item.selectable_candidates else "unverified",
+            "selected_provider": item.selectable_candidates[0].provider if item.selectable_candidates else None,
+            "selected_symbol": item.selectable_candidates[0].symbol if item.selectable_candidates else None,
+            "provider_name": item.selectable_candidates[0].provider_name if item.selectable_candidates else None,
+            "spot_supported": bool(item.selectable_candidates),
+            "history_supported": bool(item.selectable_candidates),
+            "ma5_capable": bool(item.selectable_candidates),
+        } for item in rows.values()]
 
     @app.get("/api/v1/admin/market/refresh-runs", response_model=list[ApiListItem])
     def refresh_runs(current: Principal = Depends(admin), session: Session = Depends(db_session)) -> list[dict]:

@@ -18,28 +18,30 @@ const report: Report = {
   mentions: [{ sector_key: "semiconductor", sector_name: "半导体", summary: "关注需求验证。", extraction_status: "explicit" }], raw_text: "fixture", original_filename: "fixture.pdf", unmapped_terms: [],
 };
 
-const sectors: Sector[] = Array.from({ length: 66 }, (_, index) => ({
-  sector_key: index === 65 ? "hang_seng_tech" : `sector-${index + 1}`,
-  sector_name: index === 65 ? "恒生科技" : `板块${index + 1}`,
+const sectors: Sector[] = Array.from({ length: 67 }, (_, index) => ({
+  sector_key: index === 64 ? "hotel" : index === 65 ? "catering" : index === 66 ? "hang_seng_tech" : `sector-${index + 1}`,
+  sector_name: index === 64 ? "酒店" : index === 65 ? "餐饮" : index === 66 ? "恒生科技" : `板块${index + 1}`,
+  parent_report_topic: index === 64 || index === 65 ? "hotel_catering" : index === 66 ? "hang_seng_tech" : `sector-${index + 1}`,
+  report_topic_name: index === 64 || index === 65 ? "酒店餐饮" : index === 66 ? "恒生科技" : `板块${index + 1}`,
   group_name: `分组${Math.floor(index / 9) + 1}`,
   group_order: Math.floor(index / 9) + 1,
   overall_order: index + 1,
-  latest_view: index === 65 ? "直播观点正常展示" : null,
-  mentioned_in_latest_published: index === 65,
-  market_support_status: index === 65 ? "unsupported" : "supported",
-  data_status: index === 65 ? "unsupported" : "supported",
-  market_status_detail: index === 65 ? "港股跨市场行情暂未接入" : "研究辅助数据",
-  current_path_status: index === 65 ? "watch" : "not_mentioned",
-  current_path_status_label: index === 65 ? "观察" : "未提",
-  effective_status: index === 0 ? "hold" : index === 65 ? "watch" : "not_mentioned",
-  effective_status_label: index === 0 ? "持有" : index === 65 ? "观察" : "未提",
+  latest_view: index === 66 ? "直播观点正常展示" : null,
+  mentioned_in_latest_published: index === 66,
+  market_support_status: index === 66 ? "unsupported" : "supported",
+  data_status: index === 64 ? "proxy" : index === 65 ? "unverified" : index === 66 ? "unsupported" : "supported",
+  market_status_detail: index === 64 ? "酒店（旅游及酒店代理口径）" : index === 65 ? "餐饮行情源待验证" : index === 66 ? "港股跨市场行情暂未接入" : "研究辅助数据",
+  current_path_status: index === 66 ? "watch" : "not_mentioned",
+  current_path_status_label: index === 66 ? "观察" : "未提",
+  effective_status: index === 0 ? "hold" : index === 66 ? "watch" : "not_mentioned",
+  effective_status_label: index === 0 ? "持有" : index === 66 ? "观察" : "未提",
   strict_holding_interval: index === 0 ? { status: "active", start_report_date: "2026-07-15", start_market_as_of_date: "2026-07-15", eod_return: 1.25, calculation_status: "complete_eod" } : null,
   broad_holding_interval: index === 0 ? { status: "active", start_report_date: "2026-07-15", start_market_as_of_date: "2026-07-15", eod_return: 2.5, calculation_status: "complete_eod" } : null,
   is_low_attention: false,
   is_pinned_for_research: false,
   recent_mention_count: index === 0 ? 3 : 0,
   attention_level: index === 0 ? "high" : "normal",
-  intraday_status: index === 0 ? "intraday_fresh" : index === 65 ? "unsupported" : "provider_failed",
+  intraday_status: index === 0 ? "intraday_fresh" : index === 66 ? "unsupported" : "provider_failed",
   intraday_snapshot: index === 0 ? { sector_key: "sector-1", trade_date: "2026-07-28", observed_at: "07/28 14:20", index_value: 101, pre_close: 100, pct_change: 1.26, volume: null, amount: null, provider: "eastmoney_board_spot", provider_role: "research_provider", data_status: "intraday_fresh", fetched_at: "2026-07-28T06:20:00Z", intraday_ma5: 99.2, intraday_vs_ma5: 1.81 } : null,
   intraday_last_attempt_at: "07/28 14:20",
   latest_market: index === 0 ? { trade_date: "2026-07-27", close: 101, pre_close: 100, daily_pct_change: 1, return_5d: 1.86, return_10d: 2, return_20d: 3, ma5: 100, ma10: 99, ma20: 98, close_vs_ma5_pct: 1.97, close_vs_ma10_pct: 2, close_vs_ma20_pct: .61, volume: 100, volume_average_5d: 90, volume_average_20d: 80, volume_ratio_5d: 1.1, volume_ratio_20d: 1.25, amount: null, history_status: "complete", eod_status: "complete_eod", data_source: "fixture", provider_role: "research_provider", fetched_at: "2026-07-27T08:00:00Z", source_response_hash: "a".repeat(64) } : null,
@@ -75,7 +77,7 @@ function mockApi(options: { empty?: boolean; duplicate?: boolean } = {}) {
     if (url.includes("/reports/report-1") && !url.includes("admin")) return response(report);
     if (url.includes("/sectors?")) return response(sectors);
     if (url.endsWith("/auth/me")) return response({ username: "viewer", role: "viewer" });
-    if (url.endsWith("/market/intraday/status")) return response({ session_status: "running", market_phase: "intraday_open", market_phase_detail: "intraday_open", intraday_trade_date: "2026-07-28", refresh_interval_minutes: 5, provider: "eastmoney_board_spot", provider_role: "research_provider", production_primary: null, production_primary_approved: false, research_notice: "研究辅助数据", last_refresh_at: "07/28 14:20", last_attempt_at: "07/28 14:20", next_refresh_at: "07/28 14:25", latest_snapshot_at: "07/28 14:20", success_count: 8, failure_count: 57, stale_count: 0, unsupported_count: 1, viewer_provider_access: false, auto_start: true });
+    if (url.endsWith("/market/intraday/status")) return response({ session_status: "running", market_phase: "intraday_open", market_phase_detail: "intraday_open", intraday_trade_date: "2026-07-28", refresh_interval_minutes: 5, provider: "eastmoney_board_spot", provider_role: "research_provider", production_primary: null, production_primary_approved: false, research_notice: "研究辅助数据", last_refresh_at: "07/28 14:20", last_attempt_at: "07/28 14:20", next_refresh_at: "07/28 14:25", latest_snapshot_at: "07/28 14:20", success_count: 8, failure_count: 58, stale_count: 0, supported_market_path_count: 66, unsupported_count: 1, viewer_provider_access: false, auto_start: true });
     if (url.includes("/sectors/sector-2/research")) return response(research);
     if (url.includes("/sectors/semiconductor/research")) return response({ ...research, sector_key: "semiconductor", sector_name: "半导体" });
     if (url.includes("/sectors/sector-2")) return response(sectors[1]);
@@ -96,8 +98,9 @@ describe("Viewer research pages", () => {
   it("shows the latest published report", async () => { renderAt("/"); expect(await screen.findByRole("heading", { name: report.title })).toBeInTheDocument(); expect(screen.getByText(report.core_view)).toBeInTheDocument(); });
   it("shows the report list without weekend missing warnings", async () => { renderAt("/reports"); expect(await screen.findByRole("table", { name: "已发布报告" })).toBeInTheDocument(); expect(screen.getByText(/周五、周六无报告属于正常节奏/)).toBeInTheDocument(); });
   it("shows report details without requesting PDF or preview pages until requested", async () => { const user = userEvent.setup(); renderAt("/reports/report-1"); expect(await screen.findByRole("heading", { level: 1, name: report.title })).toBeInTheDocument(); expect(screen.getByRole("table", { name: /板块历史路径矩阵/ })).toBeInTheDocument(); expect(screen.getByRole("button", { name: "最近20期" })).toHaveClass("active"); expect(screen.queryByLabelText("原始PDF逐页预览")).not.toBeInTheDocument(); expect(screen.getByRole("link", { name: "下载原始PDF" })).toHaveAttribute("href", report.pdf_download_url); expect(fetch).not.toHaveBeenCalledWith(expect.stringContaining("/pdf/preview"), expect.anything()); await user.click(screen.getByRole("button", { name: "加载逐页预览" })); expect(await screen.findByLabelText("原始PDF逐页预览")).toBeInTheDocument(); expect(screen.getByAltText("原始PDF第1页")).toHaveAttribute("src", "/preview/1"); });
-  it("renders the 66-sector research table in eight fixed groups", async () => { renderAt("/sectors"); const table = await screen.findByRole("table", { name: /板块研究档案/ }); expect(within(table).getAllByRole("row")).toHaveLength(75); expect(screen.getByRole("navigation", { name: "板块研究一级分组快捷导航" }).querySelectorAll("button")).toHaveLength(8); });
-  it("keeps one realtime column and reports partial live coverage honestly", async () => { renderAt("/sectors"); const table = await screen.findByRole("table", { name: /板块研究档案/ }); expect(screen.getByText("实时行情 8/65")).toBeInTheDocument(); expect(screen.getByText("暂无数据57项")).toBeInTheDocument(); expect(screen.getByText("更新14:20")).toBeInTheDocument(); expect(within(table).getByRole("columnheader", { name: "实时行情" })).toBeInTheDocument(); expect(within(table).queryByRole("columnheader", { name: "完整行情" })).not.toBeInTheDocument(); expect(within(table).getByText("+1.26%")).toBeInTheDocument(); expect(within(table).getAllByText("暂无实时").length).toBeGreaterThan(0); expect(table).not.toHaveTextContent("2026-07-28T"); });
+  it("renders 67 market paths from 66 report topics in eight fixed groups", async () => { renderAt("/sectors"); const table = await screen.findByRole("table", { name: /板块研究档案/ }); expect(within(table).getAllByRole("row")).toHaveLength(76); expect(screen.getByRole("navigation", { name: "板块研究一级分组快捷导航" }).querySelectorAll("button")).toHaveLength(8); });
+  it("keeps one realtime column and reports partial live coverage honestly", async () => { renderAt("/sectors"); const table = await screen.findByRole("table", { name: /板块研究档案/ }); expect(screen.getByText("实时行情 8/66")).toBeInTheDocument(); expect(screen.getByText("暂无数据58项")).toBeInTheDocument(); expect(screen.getByText("更新14:20")).toBeInTheDocument(); expect(within(table).getByRole("columnheader", { name: "实时行情" })).toBeInTheDocument(); expect(within(table).queryByRole("columnheader", { name: "完整行情" })).not.toBeInTheDocument(); expect(within(table).getByText("+1.26%")).toBeInTheDocument(); expect(within(table).getAllByText("暂无实时").length).toBeGreaterThan(0); expect(table).not.toHaveTextContent("2026-07-28T"); });
+  it("shows hotel and catering as independent market paths under one report topic", async () => { renderAt("/sectors"); expect(await screen.findByRole("link", { name: "酒店" })).toHaveAttribute("href", "/sectors/hotel"); expect(screen.getByRole("link", { name: "餐饮" })).toHaveAttribute("href", "/sectors/catering"); expect(screen.getAllByText("报告主题：酒店餐饮")).toHaveLength(2); expect(screen.getByText("代理口径")).toBeInTheDocument(); expect(screen.getByText("行情待验证")).toBeInTheDocument(); });
   it("separates HSTECH opinion and unsupported market status", async () => { renderAt("/sectors"); expect(await screen.findByTitle("直播观点正常展示")).toBeInTheDocument(); expect(screen.getByText("暂不支持")).toBeInTheDocument(); });
   it("shows compact strict and broad holding results", async () => { renderAt("/sectors"); expect(await screen.findByText("绝对 +1.25%")).toBeInTheDocument(); expect(screen.getByText("广义 +2.50%")).toBeInTheDocument(); });
   it("shows realtime MA5 and an accessible holding explanation", async () => { const user = userEvent.setup(); renderAt("/sectors"); expect(await screen.findByText("实时MA5 ↑1.81%")).toBeInTheDocument(); expect(screen.getByText("正式MA20 ↑0.61%")).toBeInTheDocument(); expect(screen.getByText(/只连续计算“转持、持有”/)).toBeVisible(); const summary = screen.getByText("查看详细定义"); expect(summary.parentElement).not.toHaveAttribute("open"); await user.click(summary); expect(summary.parentElement).toHaveAttribute("open"); expect(screen.getByText(/“未提”沿用上一期有效状态/)).toBeVisible(); });

@@ -9,7 +9,8 @@ from zoneinfo import ZoneInfo
 from sqlalchemy import desc, func, select
 from sqlalchemy.orm import Session, sessionmaker
 
-from leopard_project.config import CONFIG_DIR, load_seed_bundle
+from leopard_project.config import CONFIG_DIR
+from leopard_project.market_paths import load_market_path_registry
 from leopard_project.providers import ThsPublicValidationProvider
 
 from .intraday import controlled_trading_dates
@@ -61,11 +62,10 @@ class EodBackfillCoordinator:
             return [], [], {}
         trading = sorted(day for day in controlled_trading_dates() if day <= expected)
         missing_by_sector: dict[str, list[date]] = {}
-        for sector in load_seed_bundle().sectors:
-            if sector.sector_key == "hang_seng_tech":
-                continue
+        for market_path in load_market_path_registry().supported_market_paths:
+            sector_key = market_path.market_path_key
             existing = set(session.scalars(select(SectorDailyBar.trade_date).where(
-                SectorDailyBar.sector_key == sector.sector_key,
+                SectorDailyBar.sector_key == sector_key,
                 SectorDailyBar.eod_status == "complete_eod",
             )))
             # Backfill only the maintained history window.  An empty database
@@ -75,7 +75,7 @@ class EodBackfillCoordinator:
             first = min(existing) if existing else expected
             missing = [day for day in trading if first <= day <= expected and day not in existing]
             if missing:
-                missing_by_sector[sector.sector_key] = missing
+                missing_by_sector[sector_key] = missing
         return (
             sorted(missing_by_sector),
             sorted({day.isoformat() for values in missing_by_sector.values() for day in values}),

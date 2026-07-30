@@ -1,6 +1,11 @@
 # Multi-provider resilience — Phase 2A-0 cloud readiness
 
-Status: framework complete; live coverage incomplete; **DO NOT MERGE**.
+Status: framework and market-path split complete; live coverage incomplete;
+**DO NOT MERGE**.
+
+> The 47/65 figures below are preserved as the original pre-split validation
+> snapshot. The current registry has 66 supported market paths after replacing
+> the former `hotel_catering` path with `hotel` and `catering`.
 
 ## Why this exists
 
@@ -64,3 +69,22 @@ The circuit and candidate chain apply to intraday snapshots and Provider-native 
 The framework is deterministic and offline-testable, but the selectable capability count is 47/65. Therefore normal scheduler Stage C and the two-cycle Stage D acceptance were not run. Current live acceptance remains below 65/65, and PR #6 must remain Draft with `DO NOT MERGE`.
 
 Next research must resume only after the upstream cooldown, validate the remaining exact THS symbols or a legally usable independent Provider, and then perform two normal five-minute scheduler cycles, 65/65 same-source MA5, Viewer zero-call verification, formal-data regression and CI.
+
+## 2026-07-30 controlled cloud continuation
+
+The isolated Aliyun Docker audit continued after the single `881160` parser
+failure instead of treating it as a Provider-wide stop. Its response was HTTP
+200 HTML with the official name 旅游及酒店 and the same quote/history structure
+used by a known-good `881117` sample. The failure was the obsolete expected
+name 酒店餐饮. The parser contract now uses the Provider's official name and
+the business layer records `881160` only as a hotel proxy.
+
+All 17 previously unreached business paths were evaluated in batches of at
+most five symbols. Their 19 exact THS component symbols each returned current,
+pre-close, and four previous complete closes from the same symbol and Provider.
+The three configured composites kept their original components and weights.
+No Eastmoney or HSTECH request was made. The resulting machine-readable matrix
+is 61 validated direct, one validated proxy, three validated composites, and
+one unverified catering path: operational coverage 65/66. The remaining gate
+is an exact, legitimate catering source followed by two normal cloud Scheduler
+cycles at the dynamic 66-path denominator.

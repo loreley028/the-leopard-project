@@ -13,7 +13,6 @@ from pydantic import BaseModel, ConfigDict
 from .config import CONFIG_DIR, PROJECT_ROOT
 from .eod import EodAssessment, EodStatus
 from .provider_lineage import IndependenceStatus, ProviderLineage, compare_lineages, lineage_by_name
-from .support import build_collection_plan
 
 
 RECONCILIATION_POLICY_PATH = CONFIG_DIR / "reconciliation_policy_v1.json"
@@ -252,8 +251,7 @@ def run_controlled_replay(
     if trade_date != date(2026, 7, 21):
         raise ValueError("checked-in replay evidence is available only for 2026-07-21")
     coverage = json.loads((PROJECT_ROOT / "data/provider-selection/coverage_65.json").read_text(encoding="utf-8"))
-    plan = build_collection_plan(trade_date)
-    rows_by_key = {row["sector_key"]: row for row in coverage["results"]}
+    historical_rows = list(coverage["results"])
     requested_as_of = datetime.fromisoformat("2026-07-22T15:30:00+08:00")
     created_at = datetime.fromisoformat("2026-07-22T16:00:00+08:00")
     policy = load_reconciliation_policy()
@@ -261,8 +259,7 @@ def run_controlled_replay(
     lineage_b = lineage_by_name("akshare_ths_research")
     run_id = deterministic_run_id(policy.reconciliation_version, "replay", trade_date)
     records: list[ReconciliationRecord] = []
-    for task in plan.tasks:
-        evidence = rows_by_key[task.sector_key]
+    for evidence in historical_rows:
         latest = date.fromisoformat(evidence["latest_trade_date"])
         eod_status = EodStatus.INTRADAY_SNAPSHOT if latest > trade_date else EodStatus.COMPLETE_EOD
         assessment = EodAssessment(
@@ -278,13 +275,14 @@ def run_controlled_replay(
             row_count=sum(int(component.get("audit", {}).get("row_count", 0)) for component in evidence["components"]),
         )
         source_a = SourceSnapshot(provider_name="ths_public_validation", eod=assessment, values=None)
-        canonical_symbol = "+".join(task.provider_symbols) if len(task.provider_symbols) > 1 else task.provider_symbols[0]
+        provider_symbols = tuple(evidence["provider_symbols"])
+        canonical_symbol = "+".join(provider_symbols) if len(provider_symbols) > 1 else provider_symbols[0]
         records.append(reconcile_sector(
             reconciliation_run_id=run_id,
             requested_as_of=requested_as_of,
             expected_trade_date=trade_date,
-            sector_key=task.sector_key,
-            sector_name=task.sector_name,
+            sector_key=evidence["sector_key"],
+            sector_name=evidence["sector_name"],
             canonical_symbol=canonical_symbol,
             source_a=source_a,
             source_b=None,
@@ -302,24 +300,24 @@ def run_controlled_replay(
         "mode": "replay",
         "trade_date": trade_date.isoformat(),
         "requested_as_of": requested_as_of.isoformat(),
-        "plan_sector_count": len(plan.tasks),
-        "provider_a_success_count": 65,
+        "plan_sector_count": len(historical_rows),
+        "provider_a_success_count": len(historical_rows),
         "provider_b_success_count": 0,
         "provider_b_live_status": "blocked_by_dependency_network",
         "complete_eod_count": sum(row.source_a_eod_status == EodStatus.COMPLETE_EOD for row in records),
         "intraday_snapshot_count": sum(row.source_a_eod_status == EodStatus.INTRADAY_SNAPSHOT for row in records),
         "stale_snapshot_count": 0,
         "future_snapshot_count": 0,
-        "missing_count": 65,
+        "missing_count": len(historical_rows),
         "reconcilable_count": 0,
         "matched_count": statuses[ReconciliationStatus.MATCHED],
         "acceptable_difference_count": statuses[ReconciliationStatus.ACCEPTABLE_DIFFERENCE],
         "material_difference_count": statuses[ReconciliationStatus.MATERIAL_DIFFERENCE],
         "source_not_independent_count": statuses[ReconciliationStatus.SOURCE_NOT_INDEPENDENT],
         "manual_review_count": sum("manual_review_required" in row.anomaly_codes for row in records),
-        "insufficient_120_day_count": sum(not bool(rows_by_key[task.sector_key]["has_120_days"]) for task in plan.tasks),
-        "proxy_count": sum(task.mapping_type == "proxy" for task in plan.tasks),
-        "short_history_count": sum(task.data_status == "short_history" for task in plan.tasks),
+        "insufficient_120_day_count": sum(not bool(row["has_120_days"]) for row in historical_rows),
+        "proxy_count": sum(row["mapping_type"] == "proxy" for row in historical_rows),
+        "short_history_count": sum(row["data_status"] == "short_history" for row in historical_rows),
         "status_counts": statuses,
         "source_independence_status": compare_lineages(lineage_a, lineage_b).value,
         "independent_secondary_source_available": False,

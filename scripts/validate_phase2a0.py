@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 
 from leopard_project.config import load_seed_bundle
+from leopard_project.market_paths import load_market_path_registry
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -18,6 +19,7 @@ def main() -> int:
     intraday_mappings = json.loads((ROOT / "config/intraday_provider_mappings_v1.json").read_text(encoding="utf-8"))
     visibility = json.loads((ROOT / "config/sector_visibility_policy_v1.json").read_text(encoding="utf-8"))
     holding = json.loads((ROOT / "config/holding_interval_policy_v1.json").read_text(encoding="utf-8"))
+    market_paths = load_market_path_registry()
     package = json.loads((ROOT / "frontend/package.json").read_text(encoding="utf-8"))
     workflow = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
     app = (ROOT / "backend/leopard_project/web/app.py").read_text(encoding="utf-8")
@@ -38,7 +40,10 @@ def main() -> int:
     )
     checks = {
         "catalog_66": len(load_seed_bundle().sectors) == 66,
-        "support_65_1_65": [support["supported_market_sectors"], support["unsupported_sector_count"], support["collection_denominator"]] == [65, 1, 65],
+        "report_topics_and_market_paths_separate": len(load_seed_bundle().sectors) == market_paths.report_topic_count == 66
+        and market_paths.market_path_count == 67
+        and len(market_paths.supported_market_paths) == support["collection_denominator"] == 66
+        and len(market_paths.unsupported_market_paths) == 1,
         "hstech_stays_unsupported": support["unsupported_sectors"][0]["sector_key"] == "hang_seng_tech",
         "pdf_independent": support["pdf_report_independence"]["independent"] is True,
         "schedule_timezone": schedule["timezone"] == "Asia/Shanghai",

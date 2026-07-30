@@ -11,8 +11,10 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from leopard_project.config import load_seed_bundle, normalize_alias
+from leopard_project.market_paths import load_market_path_registry, market_path_mapping
 from leopard_project.models import DailyBar, DataStatus, LiquidityStatus, Market
 from leopard_project.providers import ProviderError, ThsPublicValidationProvider
+from leopard_project.providers.capabilities import load_provider_capabilities
 
 from .enhanced import calculate_market_metrics
 from .models import MarketRefreshItem, MarketRefreshRun, SectorDailyBar, SectorIndicatorSnapshot
@@ -114,11 +116,13 @@ def refresh_real_market(
 ) -> MarketRefreshRun:
     """Fetch outside SQLite transactions, then persist each normalized sector briefly."""
     bundle = load_seed_bundle()
-    mappings = {item.sector_key: item for item in bundle.mappings}
-    sectors = [item for item in bundle.sectors if item.sector_key != "hang_seng_tech"]
+    registry = load_market_path_registry(bundle)
+    capabilities = load_provider_capabilities()
+    sectors = list(registry.supported_market_paths)
+    mappings = {item.market_path_key: market_path_mapping(item, bundle) for item in sectors}
     if sector_keys:
         requested = set(sector_keys)
-        sectors = [item for item in sectors if item.sector_key in requested]
+        sectors = [item for item in sectors if item.market_path_key in requested]
     client = provider or ThsPublicValidationProvider(minimum_interval=0.45)
     # The public endpoint is year-partitioned and some newly introduced boards
     # legitimately have no prior-year resource. The current year already
@@ -126,20 +130,25 @@ def refresh_real_market(
     start = date(as_of.year, 1, 1)
     fetched: list[tuple[object, list[DailyBar] | None, str | None, str | None, str | None, str | None]] = []
     for sector in sectors:
-        mapping = mappings[sector.sector_key]
+        sector_key = sector.market_path_key
+        mapping = mappings[sector_key]
+        capability = capabilities[sector_key]
+        selected = capability.selectable_candidates[0] if capability.selectable_candidates else None
         sector_allowed_dates = (
-            allowed_trade_dates_by_sector.get(sector.sector_key, set())
+            allowed_trade_dates_by_sector.get(sector_key, set())
             if allowed_trade_dates_by_sector is not None
             else allowed_trade_dates
         )
         try:
-            proxy = sector.sector_key == "hotel_catering"
-            symbols = ["881160"] if proxy else list(mapping.backup_symbols) if mapping.primary_symbol.startswith("CUSTOM_") else [mapping.primary_symbol]
+            if selected is None:
+                raise WebDomainError("provider_unverified", f"{sector.display_name}没有已验证运行链", 422)
+            proxy = sector.mapping_type == "proxy"
+            symbols = [str(item["symbol"]) for item in selected.components] if selected.components else [selected.symbol]
             component_rows = [list(client.historical_daily_bars(symbol, start, as_of, Market.CN_A)) for symbol in symbols]
             if not component_rows or any(not rows for rows in component_rows):
-                raise WebDomainError("market_no_data", f"{sector.sector_name}没有可用行情", 422)
-            bars = _composite_bars(mapping.primary_symbol, component_rows) if len(component_rows) > 1 else component_rows[0]
-            source = f"{PROVIDER_KEY}:proxy:881160" if proxy else f"{PROVIDER_KEY}:custom_composite" if len(component_rows) > 1 else PROVIDER_KEY
+                raise WebDomainError("market_no_data", f"{sector.display_name}没有可用行情", 422)
+            bars = _composite_bars(selected.symbol, component_rows) if len(component_rows) > 1 else component_rows[0]
+            source = f"{PROVIDER_KEY}:proxy:{selected.symbol}" if proxy else f"{PROVIDER_KEY}:custom_composite" if len(component_rows) > 1 else PROVIDER_KEY
             eligible = [
                 bar for bar in bars
                 if bar.trade_date <= as_of
@@ -172,7 +181,7 @@ def refresh_real_market(
                     run.failure_count += 1
                     session.add(MarketRefreshItem(
                         run_id=run.id,
-                        sector_key=sector.sector_key,
+                        sector_key=sector.market_path_key,
                         status=status,
                         expected_trade_date=as_of,
                         attempt_number=attempt_number,
@@ -186,7 +195,7 @@ def refresh_real_market(
                     conflicts = 0
                     for bar in eligible:
                         existing = session.scalar(select(SectorDailyBar).where(
-                            SectorDailyBar.sector_key == sector.sector_key,
+                            SectorDailyBar.sector_key == sector.market_path_key,
                             SectorDailyBar.trade_date == bar.trade_date,
                         ))
                         if existing is not None:
@@ -194,25 +203,27 @@ def refresh_real_market(
                     if conflicts:
                         raise WebDomainError("market_data_conflict", f"{conflicts} conflicting rows", 409)
                     for bar in eligible:
-                        _persist_bar(session, sector.sector_key, bar, source or PROVIDER_KEY, PROVIDER_ROLE)
-                    _recalculate(session, sector.sector_key)
+                        _persist_bar(session, sector.market_path_key, bar, source or PROVIDER_KEY, PROVIDER_ROLE)
+                    _recalculate(session, sector.market_path_key)
                     latest = max(bar.trade_date for bar in eligible)
                     run.short_history_count += status == "short_history"
                     run.success_count += 1
-                    mapping = mappings[sector.sector_key]
-                    proxy = sector.sector_key == "hotel_catering"
-                    provider_symbol = "881160" if proxy else mapping.primary_symbol
+                    capability = capabilities[sector.market_path_key]
+                    selected = capability.selectable_candidates[0]
+                    proxy = sector.mapping_type == "proxy"
+                    provider_symbol = selected.symbol
                     lineage = (
-                        f"canonical_sector={sector.sector_name};mapping_type=proxy;proxy_symbol=881160;"
-                        f"provider={PROVIDER_KEY};provider_symbol=881160;provider_name=酒店餐饮代理;"
-                        f"rationale=881160 temporary proxy;as_of={as_of.isoformat()};source_status=available"
+                        f"canonical_market_path={sector.market_path_key};parent_report_topic={sector.parent_report_topic};"
+                        f"mapping_type=proxy;proxy_symbol={provider_symbol};provider={PROVIDER_KEY};"
+                        f"provider_symbol={provider_symbol};provider_name={selected.provider_name};"
+                        f"rationale=explicit tourism-and-hotel proxy;as_of={as_of.isoformat()};source_status=available"
                         if proxy else
                         f"provider={PROVIDER_KEY};provider_symbol={provider_symbol};"
                         f"as_of={as_of.isoformat()};source_status=available"
                     )
                     session.add(MarketRefreshItem(
                         run_id=run.id,
-                        sector_key=sector.sector_key,
+                        sector_key=sector.market_path_key,
                         status=status,
                         trade_date=latest,
                         expected_trade_date=as_of,

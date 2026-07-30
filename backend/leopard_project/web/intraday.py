@@ -15,6 +15,7 @@ from sqlalchemy import desc, select
 from sqlalchemy.orm import Session, sessionmaker
 
 from leopard_project.config import CONFIG_DIR, load_seed_bundle
+from leopard_project.market_paths import load_market_path_registry, market_path_mapping
 from leopard_project.models import DailyBar, Market
 from leopard_project.providers import ProviderError, ResearchIntradayProviderChain
 from leopard_project.trading_calendar import CalendarStatus, evaluate_cn_a_day, load_calendar
@@ -335,7 +336,8 @@ class IntradayRefreshCoordinator:
                 .order_by(desc(MarketRefreshRun.started_at))
             )
             latest_snapshot = session.scalar(select(SectorIntradaySnapshot).order_by(desc(SectorIntradaySnapshot.observed_at)))
-            if not latest_run or latest_run.success_count != 65 or not latest_snapshot:
+            expected = len(load_market_path_registry().supported_market_paths)
+            if not latest_run or latest_run.success_count != expected or not latest_snapshot:
                 return 0.05
             observed = latest_snapshot.observed_at
             observed = observed if observed.tzinfo else observed.replace(tzinfo=timezone.utc)
@@ -408,55 +410,56 @@ class IntradayRefreshCoordinator:
         if self._uses_default_fetcher:
             self._provider.begin_cycle()
         bundle = load_seed_bundle()
-        mappings = {item.sector_key: item for item in bundle.mappings}
-        sectors = [item for item in bundle.sectors if item.sector_key != "hang_seng_tech"]
+        registry = load_market_path_registry(bundle)
+        paths = list(registry.supported_market_paths)
+        mappings = {item.market_path_key: market_path_mapping(item, bundle) for item in paths}
         # Provider I/O must happen before opening a SQLite write transaction.
         # Otherwise a slow public endpoint can block login/Admin writes for the
         # whole network timeout window even though Viewer reads use only cache.
         fetched: list[tuple[object, DailyBar | None, str | None, str | None]] = []
-        for index, sector in enumerate(sectors):
+        for index, path in enumerate(paths):
             try:
-                bar = self._fetcher(sector.sector_key, mappings[sector.sector_key], now)
+                bar = self._fetcher(path.market_path_key, mappings[path.market_path_key], now)
                 if bar.trade_date != now.astimezone(ZoneInfo(self.policy["timezone"])).date():
                     raise ValueError("stale_snapshot")
                 expected_pct = (bar.close / bar.pre_close - Decimal("1")) * Decimal("100")
                 if abs(expected_pct - bar.pct_change) > Decimal("0.06"):
                     raise ValueError("inconsistent_pct_change")
-                fetched.append((sector, bar, None, None))
+                fetched.append((path, bar, None, None))
             except Exception as exc:  # one Provider failure must not abort the cycle
                 error_code, error_message = provider_failure_contract(exc)
-                fetched.append((sector, None, error_code, error_message))
-            if index < len(sectors) - 1 and self.policy["request_spacing_seconds"] > 0:
+                fetched.append((path, None, error_code, error_message))
+            if index < len(paths) - 1 and self.policy["request_spacing_seconds"] > 0:
                 self._sleep(float(self.policy["request_spacing_seconds"]))
 
         with BACKGROUND_WRITE_LOCK, self.sessions() as session:
             run = MarketRefreshRun(
                 mode="intraday_refresh", provider_role=self.policy["provider_role"],
-                requested_count=len(sectors), requested_by="intraday_session", status="running", started_at=now,
+                requested_count=len(paths), requested_by="intraday_session", status="running", started_at=now,
             )
             session.add(run)
             session.flush()
-            for sector, bar, error_code, error_message in fetched:
+            for path, bar, error_code, error_message in fetched:
                 if bar is not None:
                     provider_symbol = bar.provider_symbol or bar.symbol
                     native_status = provider_native_history_status(bar)
                     intraday_ma = calculate_provider_native_intraday_ma5(bar)
                     for native in bar.provider_native_history if native_status == "complete" else ():
                         existing = session.scalar(select(SectorProviderNativeClose).where(
-                            SectorProviderNativeClose.sector_key == sector.sector_key,
+                            SectorProviderNativeClose.sector_key == path.market_path_key,
                             SectorProviderNativeClose.provider == native.provider,
                             SectorProviderNativeClose.provider_symbol == native.provider_symbol,
                             SectorProviderNativeClose.trade_date == native.trade_date,
                         ))
                         if existing is None:
                             session.add(SectorProviderNativeClose(
-                                sector_key=sector.sector_key, provider=native.provider,
+                                sector_key=path.market_path_key, provider=native.provider,
                                 provider_symbol=native.provider_symbol, trade_date=native.trade_date,
                                 close=native.close, source_response_hash=native.source_payload_hash,
                                 lineage=native.lineage, fetched_at=bar.fetched_at,
                             ))
                     session.add(SectorIntradaySnapshot(
-                        sector_key=sector.sector_key,
+                        sector_key=path.market_path_key,
                         trade_date=bar.trade_date,
                         observed_at=now,
                         index_value=bar.close,
@@ -481,7 +484,7 @@ class IntradayRefreshCoordinator:
                     run.success_count += 1
                     run.intraday_count += 1
                     session.add(MarketRefreshItem(
-                        run_id=run.id, sector_key=sector.sector_key, status="intraday_fresh",
+                        run_id=run.id, sector_key=path.market_path_key, status="intraday_fresh",
                         trade_date=bar.trade_date, provider=bar.provider,
                         provider_symbol=provider_symbol,
                         lineage=bar.lineage or bar.provider, detail="server_cache",
@@ -489,12 +492,12 @@ class IntradayRefreshCoordinator:
                 else:
                     run.failure_count += 1
                     session.add(MarketRefreshItem(
-                        run_id=run.id, sector_key=sector.sector_key, status="provider_failed",
+                        run_id=run.id, sector_key=path.market_path_key, status="provider_failed",
                         provider=self.policy["provider"], error_code=error_code or "provider_error",
                         error_message=error_message or "Provider request failed", detail="provider_failed",
                     ))
                 session.flush()
-            run.unsupported_count = 1
+            run.unsupported_count = len(registry.unsupported_market_paths)
             run.status = "completed_with_failures" if run.failure_count else "completed"
             run.finished_at = self._now()
             cutoff = now.date() - timedelta(days=int(self.policy["retain_snapshot_days"]))
@@ -510,7 +513,7 @@ class IntradayRefreshCoordinator:
             session.commit()
             return {
                 "run_id": run.id, "status": run.status,
-                "provider_requests": self._provider.request_count if self._uses_default_fetcher else len(sectors),
+                "provider_requests": self._provider.request_count if self._uses_default_fetcher else len(paths),
                 "success_count": run.success_count, "failure_count": run.failure_count,
                 "stale_count": run.stale_count, "unsupported_count": run.unsupported_count,
                 **self._provider.cycle_stats,
@@ -565,7 +568,8 @@ class IntradayRefreshCoordinator:
                 "success_count": latest_run.success_count if latest_run else 0,
                 "failure_count": latest_run.failure_count if latest_run else 0,
                 "stale_count": latest_run.stale_count if latest_run else 0,
-                "unsupported_count": 1,
+                "supported_market_path_count": len(load_market_path_registry().supported_market_paths),
+                "unsupported_count": len(load_market_path_registry().unsupported_market_paths),
                 "viewer_provider_access": False,
                 "auto_start": bool(self.policy["auto_start"]),
                 "last_runtime_error": self._last_runtime_error,

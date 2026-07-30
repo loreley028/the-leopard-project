@@ -9,7 +9,9 @@ from typing import Iterable
 from pydantic import BaseModel, ConfigDict
 
 from .config import CONFIG_DIR, load_seed_bundle
+from .market_paths import load_market_path_registry
 from .models import DataStatus, Market, SupportStatus
+from .providers.capabilities import load_provider_capabilities
 
 
 SUPPORT_POLICY_PATH = CONFIG_DIR / "system_support_policy_v1.json"
@@ -37,6 +39,7 @@ class CollectionTask(BaseModel):
     mapping_type: str
     provider_symbols: tuple[str, ...]
     data_status: DataStatus
+    parent_report_topic: str
 
 
 class CollectionPlan(BaseModel):
@@ -44,7 +47,11 @@ class CollectionPlan(BaseModel):
     policy_version: str
     trade_date: date
     total_business_sectors: int
+    report_topic_count: int
+    market_path_count: int
     supported_market_sectors: int
+    supported_market_path_count: int
+    unsupported_market_path_count: int
     collection_denominator: int
     tasks: tuple[CollectionTask, ...]
     unsupported_sectors: tuple[UnsupportedSector, ...]
@@ -59,10 +66,15 @@ def validate_support_policy(policy: dict[str, object] | None = None) -> None:
     unsupported = tuple(UnsupportedSector(**row) for row in policy["unsupported_sectors"])  # type: ignore[arg-type]
     allowed = set(policy["allowed_provider_roles"])  # type: ignore[arg-type]
     roles = set(policy["provider_roles"].values())  # type: ignore[union-attr]
-    if policy["total_business_sectors"] != 66:
-        raise ValueError("business catalog must contain 66 sectors")
-    if policy["supported_market_sectors"] != 65 or policy["collection_denominator"] != 65:
-        raise ValueError("automatic market-data support and denominator must both be 65")
+    registry = load_market_path_registry()
+    if int(policy["total_business_sectors"]) != registry.report_topic_count:
+        raise ValueError("business report-topic catalog count conflicts with the active registry")
+    if int(policy["supported_market_sectors"]) != len(registry.supported_market_paths):
+        raise ValueError("supported market-path count conflicts with the active registry")
+    if int(policy["collection_denominator"]) != len(registry.supported_market_paths):
+        raise ValueError("collection denominator conflicts with the active registry")
+    if int(policy["unsupported_sector_count"]) != len(registry.unsupported_market_paths):
+        raise ValueError("unsupported market-path count conflicts with the active registry")
     if len(unsupported) != 1 or unsupported[0].sector_key != "hang_seng_tech":
         raise ValueError("HSTECH must be the sole explicitly unsupported sector")
     if unsupported[0].support_status != SupportStatus.UNSUPPORTED or unsupported[0].data_status != DataStatus.UNSUPPORTED:
@@ -73,56 +85,42 @@ def validate_support_policy(policy: dict[str, object] | None = None) -> None:
         raise ValueError("no production provider role is approved")
 
 
-def _custom_components() -> dict[str, tuple[str, ...]]:
-    document = json.loads((CONFIG_DIR / "custom_compositions_v2_3.json").read_text(encoding="utf-8"))
-    result: dict[str, tuple[str, ...]] = {}
-    for row in document["compositions"]:
-        if row["symbol"] == "CUSTOM_HOTEL_CATERING":
-            result[row["symbol"]] = ("881160",)
-        else:
-            result[row["symbol"]] = tuple(component["symbol"] for component in row["components"])
-    return result
-
-
 def build_collection_plan(trade_date: date, policy: dict[str, object] | None = None) -> CollectionPlan:
     policy = policy or load_support_policy()
     validate_support_policy(policy)
     bundle = load_seed_bundle()
     unsupported_rows = tuple(UnsupportedSector(**row) for row in policy["unsupported_sectors"])  # type: ignore[arg-type]
-    unsupported_keys = {row.sector_key for row in unsupported_rows}
-    mappings = {mapping.sector_key: mapping for mapping in bundle.mappings}
-    custom = _custom_components()
+    registry = load_market_path_registry(bundle)
+    capabilities = load_provider_capabilities()
     tasks: list[CollectionTask] = []
-    for sector in sorted(bundle.sectors, key=lambda item: item.overall_order):
-        if sector.sector_key in unsupported_keys:
-            continue
-        mapping = mappings[sector.sector_key]
-        if mapping.primary_symbol == "CUSTOM_HOTEL_CATERING":
-            mapping_type, status = "proxy", DataStatus.PROXY
-        elif mapping.primary_symbol.startswith("CUSTOM_"):
-            mapping_type, status = "custom_composite", DataStatus.NORMAL
-        elif mapping.sector_key == "glass_substrate":
-            mapping_type, status = "direct", DataStatus.SHORT_HISTORY
-        else:
-            mapping_type, status = "direct", DataStatus.NORMAL
-        symbols = custom.get(mapping.primary_symbol, (mapping.primary_symbol,))
+    for path in registry.supported_market_paths:
+        capability = capabilities[path.market_path_key]
+        selected = capability.selectable_candidates[0] if capability.selectable_candidates else None
+        status = DataStatus.PROXY if path.mapping_type == "proxy" else DataStatus.SHORT_HISTORY if path.market_path_key == "glass_substrate" else DataStatus.NORMAL
+        symbols = tuple(str(component["symbol"]) for component in selected.components) if selected and selected.components else ((selected.symbol,) if selected else (path.provider_symbol or "UNVERIFIED",))
         tasks.append(CollectionTask(
-            sector_key=sector.sector_key,
-            sector_name=sector.sector_name,
-            market=Market.CN_A,
-            mapping_type=mapping_type,
+            sector_key=path.market_path_key,
+            sector_name=path.display_name,
+            market=path.market,
+            mapping_type=path.mapping_type,
             provider_symbols=symbols,
             data_status=status,
+            parent_report_topic=path.parent_report_topic,
         ))
-    expected = int(policy["supported_market_sectors"])
+    expected = len(registry.supported_market_paths)
     if len(tasks) != expected or len({task.sector_key for task in tasks}) != expected:
         raise ValueError(f"collection plan must contain exactly {expected} unique supported sectors")
     if any(task.market != Market.CN_A or "HS2083" in task.provider_symbols or "HSTECH" in task.provider_symbols for task in tasks):
         raise ValueError("unsupported cross-market symbols must not generate provider requests")
     return CollectionPlan(
         policy_version=str(policy["policy_version"]), trade_date=trade_date,
-        total_business_sectors=int(policy["total_business_sectors"]),
-        supported_market_sectors=expected, collection_denominator=int(policy["collection_denominator"]),
+        total_business_sectors=registry.report_topic_count,
+        report_topic_count=registry.report_topic_count,
+        market_path_count=registry.market_path_count,
+        supported_market_sectors=expected,
+        supported_market_path_count=expected,
+        unsupported_market_path_count=len(registry.unsupported_market_paths),
+        collection_denominator=expected,
         tasks=tuple(tasks), unsupported_sectors=unsupported_rows,
     )
 

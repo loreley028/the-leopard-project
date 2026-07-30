@@ -1,2 +1,2 @@
-const labels: Record<string, string> = { supported: "行情支持", proxy: "代理口径", short_history: "历史较短", unsupported: "暂不支持", published: "已发布", needs_review: "待复核", ready_to_publish: "待发布", withdrawn: "已撤回", parse_failed: "解析失败" };
+const labels: Record<string, string> = { supported: "行情支持", proxy: "代理口径", short_history: "历史较短", unsupported: "暂不支持", unverified: "行情待验证", published: "已发布", needs_review: "待复核", ready_to_publish: "待发布", withdrawn: "已撤回", parse_failed: "解析失败" };
 export function IslandStatusBadge({ status }: { status: string }) { return <span className={`status-badge status-${status}`}><span aria-hidden="true">{status === "supported" || status === "published" ? "●" : "◆"}</span>{labels[status] ?? status}</span>; }

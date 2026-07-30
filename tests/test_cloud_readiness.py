@@ -9,6 +9,8 @@ from sqlalchemy import func, select
 from sqlalchemy.exc import OperationalError
 
 from leopard_project.config import load_seed_bundle
+from leopard_project.market_paths import load_market_path_registry
+from leopard_project.providers.capabilities import provider_capability_summary
 from leopard_project.models import DailyBar, DataStatus, LiquidityStatus, Market
 from leopard_project.trading_calendar import CalendarRuleSet, CalendarStatus, evaluate_cn_a_day
 from leopard_project.web.database import create_session_factory
@@ -150,9 +152,10 @@ class PublicationProvider:
 
 def test_eod_pending_publication_then_gap_only_completion(tmp_path: Path) -> None:
     sessions = create_session_factory(f"sqlite:///{tmp_path / 'eod.sqlite3'}")
-    supported = [sector for sector in load_seed_bundle().sectors if sector.sector_key != "hang_seng_tech"]
+    supported = list(load_market_path_registry().supported_market_paths)
     with sessions() as session:
-        session.add_all(stored(sector.sector_key, date(2026, 7, 29)) for sector in supported)
+        session.add_all(stored(sector.market_path_key, date(2026, 7, 29)) for sector in supported)
+        session.add(stored("catering", date(2026, 7, 30)))
         session.commit()
     provider = PublicationProvider()
     coordinator = EodBackfillCoordinator(
@@ -162,16 +165,17 @@ def test_eod_pending_publication_then_gap_only_completion(tmp_path: Path) -> Non
     coordinator._schedule_retry = lambda _delay: None
     first = coordinator.run_if_needed()
     assert first["status"] == "pending_retry"
-    assert first["requested_count"] == first["failure_count"] == 65
+    operational = provider_capability_summary()["operational_coverage"]
+    assert first["requested_count"] == first["failure_count"] == operational
     with sessions() as session:
         items = list(session.scalars(select(MarketRefreshItem).where(MarketRefreshItem.expected_trade_date == date(2026, 7, 30))))
-        assert len(items) == 65 and all(item.status == "pending_publication" and item.attempt_number == 1 for item in items)
+        assert len(items) == operational and all(item.status == "pending_publication" and item.attempt_number == 1 for item in items)
     provider.published = True
     provider.calls.clear()
     second = coordinator.run_if_needed()
     assert second["status"] == "complete"
-    assert second["requested_count"] == second["success_count"] == 65
-    assert len(provider.calls) >= 65 and "HSTECH" not in provider.calls
+    assert second["requested_count"] == second["success_count"] == operational
+    assert len(provider.calls) >= operational and "HSTECH" not in provider.calls
     assert coordinator.status()["missing_sector_count"] == 0
 
 
@@ -196,12 +200,12 @@ def test_eod_retry_budget_is_finite(tmp_path: Path) -> None:
 
 def test_eod_gap_only_never_re_requests_completed_sectors(tmp_path: Path) -> None:
     sessions = create_session_factory(f"sqlite:///{tmp_path / 'eod-gap-only.sqlite3'}")
-    supported = [sector for sector in load_seed_bundle().sectors if sector.sector_key != "hang_seng_tech"]
+    supported = list(load_market_path_registry().supported_market_paths)
     with sessions() as session:
         session.add_all(
-            stored(sector.sector_key, date(2026, 7, 30))
+            stored(sector.market_path_key, date(2026, 7, 30))
             for sector in supported
-            if sector.sector_key != "semiconductor"
+            if sector.market_path_key != "semiconductor"
         )
         session.commit()
     provider = PublicationProvider()

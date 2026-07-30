@@ -38,9 +38,9 @@ class ProviderSelectionTests(unittest.TestCase):
                 output_dir=Path(directory), provider=OfflineSelectionProvider(), end=date(2026, 7, 22)
             )
         summary = coverage["summary"]
-        self.assertEqual(summary["supported_sector_count"], 65)
-        self.assertEqual(summary["real_data_count"], 65)
-        self.assertEqual(summary["full_history_count"], 64)
+        self.assertEqual(summary["supported_sector_count"], 66)
+        self.assertEqual(summary["real_data_count"], 66)
+        self.assertEqual(summary["full_history_count"], 65)
         self.assertEqual(summary["field_counts"]["has_turnover_rate"], 0)
         self.assertEqual(comparison["selection_conclusion"], "D_free_or_public_sources_are_not_yet_sufficient_for_stable_production")
         self.assertFalse(comparison["production_primary_approved"])

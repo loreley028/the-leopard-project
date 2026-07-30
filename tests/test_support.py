@@ -21,12 +21,14 @@ class SupportScopeTests(unittest.TestCase):
         cls.policy = load_support_policy()
         cls.plan = build_collection_plan(date(2026, 7, 22))
 
-    def test_catalog_support_and_denominator_are_66_65_1(self) -> None:
+    def test_report_topics_and_market_path_denominator_are_independent(self) -> None:
         self.assertEqual(self.plan.total_business_sectors, 66)
-        self.assertEqual(len(self.plan.tasks), 65)
+        self.assertEqual(self.plan.report_topic_count, 66)
+        self.assertEqual(self.plan.market_path_count, 67)
+        self.assertEqual(len(self.plan.tasks), 66)
         self.assertEqual(len(self.plan.unsupported_sectors), 1)
-        self.assertEqual(self.plan.collection_denominator, 65)
-        self.assertEqual(collection_success_rate(64, self.plan), Decimal(64) / Decimal(65))
+        self.assertEqual(self.plan.collection_denominator, 66)
+        self.assertEqual(collection_success_rate(65, self.plan), Decimal(65) / Decimal(66))
 
     def test_hstech_is_explicitly_unsupported_not_failed(self) -> None:
         row = self.plan.unsupported_sectors[0]
@@ -51,15 +53,19 @@ class SupportScopeTests(unittest.TestCase):
         self.assertTrue(self.policy["pdf_report_independence"]["unsupported_market_data_must_not_remove_transcript_content"])
 
     def test_special_a_share_policies_are_preserved(self) -> None:
-        hotel = next(task for task in self.plan.tasks if task.sector_key == "hotel_catering")
+        hotel = next(task for task in self.plan.tasks if task.sector_key == "hotel")
+        catering = next(task for task in self.plan.tasks if task.sector_key == "catering")
         glass = next(task for task in self.plan.tasks if task.sector_key == "glass_substrate")
         self.assertEqual(hotel.mapping_type, "proxy")
         self.assertEqual(hotel.provider_symbols, ("881160",))
         self.assertEqual(hotel.data_status, DataStatus.PROXY)
+        self.assertEqual(hotel.parent_report_topic, "hotel_catering")
+        self.assertEqual(catering.parent_report_topic, "hotel_catering")
+        self.assertNotIn("hotel_catering", {task.sector_key for task in self.plan.tasks})
         self.assertEqual(glass.provider_symbols, ("886111",))
         self.assertEqual(glass.data_status, DataStatus.SHORT_HISTORY)
         self.assertNotIn("glass_substrate", ranking_keys(self.plan, require_full_history=True))
-        self.assertEqual(sum(task.mapping_type == "custom_composite" for task in self.plan.tasks), 3)
+        self.assertEqual(sum(task.mapping_type == "composite" for task in self.plan.tasks), 3)
 
     def test_plan_is_deterministic_and_rejects_count_drift(self) -> None:
         self.assertEqual(self.plan, build_collection_plan(date(2026, 7, 22)))

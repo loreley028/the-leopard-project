@@ -78,11 +78,14 @@ def policy(threshold: int = 2, recovery: int = 2) -> dict:
 
 def test_capability_matrix_is_exact_mutually_scoped_and_fail_closed() -> None:
     rows = load_provider_capabilities()
-    assert len(rows) == 65 and "hang_seng_tech" not in rows
-    assert sum(bool(row.selectable_candidates) for row in rows.values()) == 47
-    assert rows["hotel_catering"].mapping_type == "proxy"
+    assert len(rows) == 66 and "hang_seng_tech" not in rows and "hotel_catering" not in rows
+    assert sum(bool(row.selectable_candidates) for row in rows.values()) == 65
+    assert rows["hotel"].mapping_type == "proxy"
+    assert rows["hotel"].parent_report_topic == "hotel_catering"
+    assert rows["catering"].parent_report_topic == "hotel_catering"
     assert rows["food_beverage"].mapping_type == "composite"
-    assert not rows["hotel_catering"].selectable_candidates
+    assert rows["hotel"].selectable_candidates
+    assert not rows["catering"].selectable_candidates
     assert all(item.validation_status == "validated" for row in rows.values() for item in row.selectable_candidates)
 
 

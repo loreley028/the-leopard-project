@@ -163,14 +163,14 @@ def test_intraday_is_one_server_cache_and_never_enters_eod_models(tmp_path: Path
     coordinator.policy["request_spacing_seconds"] = 0
     assert coordinator.status()["session_status"] == "paused"
     result = coordinator.refresh_once()
-    assert result["success_count"] == 65
-    assert len(calls) == 65
+    assert result["success_count"] == 66
+    assert len(calls) == 66
     runtime_status = coordinator.status()
     assert runtime_status["intraday_trade_date"] == "2026-07-27"
     assert runtime_status["production_primary"] is None
     assert runtime_status["production_primary_approved"] is False
     with sessions() as session:
-        assert session.scalar(select(func.count()).select_from(SectorIntradaySnapshot)) == 65
+        assert session.scalar(select(func.count()).select_from(SectorIntradaySnapshot)) == 66
         assert session.scalar(select(func.count()).select_from(SectorDailyBar)) == 0
         assert session.scalar(select(func.count()).select_from(SectorIndicatorSnapshot)) == 0
         assert session.scalar(select(func.count()).select_from(ReportSectorMarketSnapshot)) == 0
@@ -200,7 +200,7 @@ def test_intraday_is_one_server_cache_and_never_enters_eod_models(tmp_path: Path
         run_detail = client.get(f"/api/v1/admin/market/refresh-runs/{latest_run['run_id']}").json()
         assert run_detail["provider"] == "research_intraday_chain"
         assert run_detail["duration_ms"] is not None
-        assert len(run_detail["items"]) == 65
+        assert len(run_detail["items"]) == 66
         assert all(item["provider"] == "synthetic_intraday_provider" for item in run_detail["items"])
     restarted = IntradayRefreshCoordinator(sessions, now=lambda: now, fetcher=lambda key, mapping, observed: daily_bar(key, observed.date()))
     assert restarted.status()["session_status"] == "paused"
@@ -248,13 +248,13 @@ def test_intraday_ma5_uses_provider_native_history_and_never_formal_eod(tmp_path
         fetcher=native_bar,
         sleep=lambda _: None,
     )
-    assert coordinator.refresh_once()["success_count"] == 65
+    assert coordinator.refresh_once()["success_count"] == 66
     with sessions() as session:
         snapshot = session.scalar(select(SectorIntradaySnapshot).where(SectorIntradaySnapshot.sector_key == "semiconductor"))
         assert snapshot and Decimal(str(snapshot.intraday_ma5)) == Decimal("103.2")
         assert Decimal(str(snapshot.intraday_vs_ma5)) == ((Decimal("110") / Decimal("103.2") - 1) * 100).quantize(Decimal("0.000001"))
         assert session.scalar(select(func.count()).select_from(SectorIndicatorSnapshot)) == 0
-        assert session.scalar(select(func.count()).select_from(SectorProviderNativeClose)) == 65 * 4
+        assert session.scalar(select(func.count()).select_from(SectorProviderNativeClose)) == 66 * 4
 
 
 def test_intraday_ma5_rejects_mixed_provider_symbol_and_scale() -> None:
@@ -309,7 +309,7 @@ def test_intraday_provider_io_does_not_hold_sqlite_write_transaction(tmp_path: P
         return daily_bar(key, date(2026, 7, 27))
 
     result = IntradayRefreshCoordinator(sessions, now=lambda: now, fetcher=fetch, sleep=lambda _: None).refresh_once()
-    assert result["success_count"] == 65
+    assert result["success_count"] == 66
     assert wrote_during_fetch is True
 
 
@@ -416,7 +416,7 @@ def test_low_attention_filter_search_and_admin_pin(tmp_path: Path) -> None:
         default_rows = client.get("/api/v1/sectors").json()
         all_rows = client.get("/api/v1/sectors?include_low_attention=true").json()
         search_rows = client.get("/api/v1/sectors?search=PCB").json()
-        assert len(all_rows) == 66
+        assert len(all_rows) == 67
         assert [item["group_order"] for item in all_rows] == sorted(item["group_order"] for item in all_rows)
         assert all(item["attention_level"] in {"high", "normal", "low"} for item in all_rows)
         assert not any(item["sector_key"] == "pcb" for item in default_rows)
@@ -468,7 +468,7 @@ def test_provider_failure_preserves_last_intraday_snapshot_without_zeroing(tmp_p
         sleep=lambda _: None,
     )
     successful.policy["request_spacing_seconds"] = 0
-    assert successful.refresh_once()["success_count"] == 65
+    assert successful.refresh_once()["success_count"] == 66
 
     failed = IntradayRefreshCoordinator(
         sessions,
@@ -478,16 +478,16 @@ def test_provider_failure_preserves_last_intraday_snapshot_without_zeroing(tmp_p
     )
     failed.policy["request_spacing_seconds"] = 0
     result = failed.refresh_once()
-    assert result["failure_count"] == 65
+    assert result["failure_count"] == 66
     with sessions() as session:
         snapshots = list(session.scalars(select(SectorIntradaySnapshot)))
-        assert len(snapshots) == 65
+        assert len(snapshots) == 66
         assert all(item.index_value == Decimal("101") for item in snapshots)
         assert all(item.data_status == "intraday_fresh" for item in snapshots)
         latest_run = session.get(MarketRefreshRun, result["run_id"])
-        assert latest_run and latest_run.failure_count == 65
+        assert latest_run and latest_run.failure_count == 66
         items = list(session.scalars(select(MarketRefreshItem).where(MarketRefreshItem.run_id == latest_run.id)))
-        assert len(items) == 65
+        assert len(items) == 66
         assert all(item.status == "provider_failed" for item in items)
         assert all(item.error_code == "timeout" for item in items)
         assert all(item.error_message == "Provider request timed out" for item in items)

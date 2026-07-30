@@ -6,6 +6,8 @@ from decimal import Decimal
 from sqlalchemy import func, select
 
 from leopard_project.config import load_seed_bundle
+from leopard_project.market_paths import load_market_path_registry
+from leopard_project.providers.capabilities import provider_capability_summary
 from leopard_project.models import DailyBar, DataStatus, LiquidityStatus, Market
 from leopard_project.web.database import create_session_factory
 from leopard_project.web.market_automation import EodBackfillCoordinator, expected_latest_complete_trade_date
@@ -69,9 +71,10 @@ def test_expected_latest_complete_trade_date_uses_shanghai_close_and_calendar() 
 
 def test_gap_only_backfill_recalculates_indicators_and_never_requests_hstech(tmp_path) -> None:
     sessions = create_session_factory(f"sqlite:///{tmp_path / 'eod.sqlite3'}")
-    supported = [sector for sector in load_seed_bundle().sectors if sector.sector_key != "hang_seng_tech"]
+    supported = list(load_market_path_registry().supported_market_paths)
     with sessions() as session:
-        session.add_all(_stored_bar(sector.sector_key, date(2026, 7, 24)) for sector in supported)
+        session.add_all(_stored_bar(sector.market_path_key, date(2026, 7, 24)) for sector in supported)
+        session.add(_stored_bar("catering", date(2026, 7, 27)))
         session.commit()
 
     coordinator = EodBackfillCoordinator(
@@ -81,15 +84,16 @@ def test_gap_only_backfill_recalculates_indicators_and_never_requests_hstech(tmp
     )
     before = coordinator.status()
     assert before["expected_latest_complete_trade_date"] == "2026-07-27"
-    assert before["latest_complete_trade_date"] == "2026-07-24"
+    assert before["latest_complete_trade_date"] == "2026-07-27"
     assert before["missing_dates"] == ["2026-07-27"]
-    assert before["missing_sector_count"] == 65
+    operational = provider_capability_summary()["operational_coverage"]
+    assert before["missing_sector_count"] == operational
 
     result = coordinator.run_if_needed()
     assert result["status"] == "complete"
-    assert result["success_count"] == result["requested_count"] == 65
+    assert result["success_count"] == result["requested_count"] == operational
     with sessions() as session:
-        assert session.scalar(select(func.count()).select_from(SectorDailyBar).where(SectorDailyBar.trade_date == date(2026, 7, 27))) == 65
+        assert session.scalar(select(func.count()).select_from(SectorDailyBar).where(SectorDailyBar.trade_date == date(2026, 7, 27))) == len(supported)
         assert session.scalar(select(func.count()).select_from(SectorIndicatorSnapshot)) == 130
         assert session.scalar(select(func.count()).select_from(SectorDailyBar).where(SectorDailyBar.sector_key == "hang_seng_tech")) == 0
     assert coordinator.status()["missing_dates"] == []
