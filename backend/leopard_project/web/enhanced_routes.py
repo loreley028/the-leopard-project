@@ -546,6 +546,14 @@ def register_enhanced_routes(
             "started_by": row.started_by,
         } for row in rows]
 
+    @app.get("/api/v1/admin/market/providers/health", response_model=list[ApiListItem])
+    def provider_health(current: Principal = Depends(admin)) -> list[dict]:
+        return intraday.provider_health()
+
+    @app.post("/api/v1/admin/market/providers/{provider_key}/probe", response_model=ApiObjectResponse)
+    def provider_probe(provider_key: str, current: Principal = Depends(admin)) -> dict:
+        return intraday.probe_provider(provider_key)
+
     @app.get("/api/v1/market/intraday/sectors", response_model=list[ApiListItem])
     def intraday_sectors(current: Principal = Depends(principal), session: Session = Depends(db_session)) -> list[dict]:
         service = EnhancedReportService(session)

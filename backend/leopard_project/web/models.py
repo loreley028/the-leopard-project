@@ -409,6 +409,25 @@ class MarketRefreshRun(Base):
     finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
+class ProviderHealthRecord(Base):
+    __tablename__ = "provider_health_records"
+    __table_args__ = (UniqueConstraint("provider", "endpoint_family", name="uq_provider_health_family"),)
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=new_id)
+    provider: Mapped[str] = mapped_column(String(100), index=True)
+    endpoint_family: Mapped[str] = mapped_column(String(120), index=True)
+    state: Mapped[str] = mapped_column(String(20), default="closed")
+    consecutive_failures: Mapped[int] = mapped_column(Integer, default=0)
+    last_success_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_failure_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    opened_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    next_probe_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_error_class: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    last_error_summary: Mapped[str | None] = mapped_column(Text, nullable=True)
+    cooldown_seconds: Mapped[int] = mapped_column(Integer, default=1800)
+    recovery_successes: Mapped[int] = mapped_column(Integer, default=0)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, onupdate=utc_now)
+
+
 class MarketRefreshItem(Base):
     __tablename__ = "market_refresh_items"
     __table_args__ = (UniqueConstraint("run_id", "sector_key", name="uq_refresh_run_sector"),)

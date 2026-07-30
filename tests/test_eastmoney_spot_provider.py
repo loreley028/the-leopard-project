@@ -143,6 +143,23 @@ def test_eastmoney_spot_uses_only_explicit_taxonomy_translations() -> None:
     assert EastmoneyBoardSpotProvider.component_candidates["881160"] == (2, ("酒店餐饮",))
 
 
+def test_eastmoney_fallback_symbol_is_resolved_by_exact_code() -> None:
+    documents = iter([
+        payload([
+            {"f2": 10, "f3": 1, "f5": 1, "f6": 1, "f12": "BK0001", "f14": "半导体", "f15": 11, "f16": 9, "f17": 10, "f18": 9.9},
+            {"f2": 20, "f3": 2, "f5": 2, "f6": 2, "f12": "BK1036", "f14": "精确代码", "f15": 21, "f16": 19, "f17": 20, "f18": 19.6},
+        ]),
+        payload([]),
+    ])
+    canonical = next(item for item in load_seed_bundle().mappings if item.sector_key == "semiconductor")
+    mapping = canonical.model_copy(update={"primary_symbol": "BK1036"})
+    provider = EastmoneyBoardSpotProvider(
+        transport=lambda url, _timeout: history_payload("BK1036") if "kline/get" in url else next(documents)
+    )
+    bar = provider.fetch_intraday_snapshot(mapping, datetime(2026, 7, 30, 2, 0, tzinfo=timezone.utc))
+    assert bar.provider_symbol == "BK1036" and bar.symbol_name == "精确代码"
+
+
 def test_eastmoney_transport_classifies_remote_disconnect(monkeypatch: pytest.MonkeyPatch) -> None:
     def disconnect(*_args: object, **_kwargs: object) -> object:
         raise RemoteDisconnected("closed")

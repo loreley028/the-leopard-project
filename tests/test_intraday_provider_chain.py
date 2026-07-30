@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 import pytest
 
 from leopard_project.config import load_seed_bundle
-from leopard_project.providers import ProviderError, ResearchIntradayProviderChain, ThsExactSpotProvider
+from leopard_project.providers import ProviderError, ThsExactSpotProvider
 
 
 def detail_html(name: str, symbol: str) -> bytes:
@@ -48,14 +48,14 @@ def test_ths_exact_provider_uses_exact_code_and_same_symbol_history() -> None:
 
 
 def test_ths_exact_mapping_fails_closed_for_unlisted_or_conflicting_sector() -> None:
-    mapping = next(item for item in load_seed_bundle().mappings if item.sector_key == "cpo")
+    mapping = next(item for item in load_seed_bundle().mappings if item.sector_key == "general_equipment")
     with pytest.raises(ProviderError, match="unavailable"):
         ThsExactSpotProvider(transport=lambda *_: b"").fetch_intraday_snapshot(
             mapping, datetime(2026, 7, 29, 2, 0, tzinfo=timezone.utc),
         )
 
 
-def test_targeted_mappings_are_explicit_and_not_fuzzy_eastmoney_candidates() -> None:
+def test_validated_mappings_are_explicit_and_never_fuzzy() -> None:
     provider = ThsExactSpotProvider(transport=lambda *_: b"")
     expected = {
         "computing_power_rental": ("886050", "算力租赁"),
@@ -66,5 +66,6 @@ def test_targeted_mappings_are_explicit_and_not_fuzzy_eastmoney_candidates() -> 
         item = provider._mappings[sector_key]
         assert item["provider_symbol"] == symbol
         assert item["provider_name"] == name
-        assert item["mapping_confidence"] == "high"
-    assert ResearchIntradayProviderChain.ths_exact_sector_keys == set(expected)
+        assert item["mapping_type"] == "direct"
+    assert len(provider._mappings) == 47
+    assert "general_equipment" not in provider._mappings

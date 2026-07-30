@@ -1,0 +1,20 @@
+{
+  "schema_version": "1.0.0",
+  "failure_threshold": 2,
+  "base_cooldown_seconds": 1800,
+  "max_cooldown_seconds": 7200,
+  "half_open_success_threshold": 2,
+  "request_timeout_seconds": 20,
+  "max_concurrency": 1,
+  "manual_probe_min_interval_seconds": 300,
+  "providers": {
+    "eastmoney_board_spot": {
+      "endpoint_family": "eastmoney_board_quote_and_history",
+      "probe_sector_key": "semiconductor"
+    },
+    "ths_exact_spot": {
+      "endpoint_family": "ths_public_board_detail_and_history",
+      "probe_sector_key": "semiconductor"
+    }
+  }
+}

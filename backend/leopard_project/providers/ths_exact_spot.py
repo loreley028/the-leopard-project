@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import hashlib
-import json
 import re
 from datetime import date, datetime, timedelta
 from decimal import Decimal
@@ -9,14 +8,13 @@ from html.parser import HTMLParser
 from typing import Callable
 from zoneinfo import ZoneInfo
 
-from ..config import CONFIG_DIR
 from ..models import DailyBar, DataStatus, LiquidityStatus, Market, ProviderNativeClose, SectorMapping
 from .base import ProviderError, ProviderErrorCategory
+from .capabilities import load_provider_capabilities
 from .ths_public import ThsPublicValidationProvider, _default_transport
 
 
 Transport = Callable[[str, float], bytes]
-MAPPING_PATH = CONFIG_DIR / "intraday_provider_mappings_v1.json"
 
 
 class _VisibleText(HTMLParser):
@@ -39,12 +37,23 @@ class _VisibleText(HTMLParser):
 
 
 def _exact_mappings() -> dict[str, dict[str, str]]:
-    document = json.loads(MAPPING_PATH.read_text(encoding="utf-8"))
-    return {str(item["sector_key"]): item for item in document["mappings"]}
+    output: dict[str, dict[str, str]] = {}
+    for sector_key, capability in load_provider_capabilities().items():
+        for candidate in capability.selectable_candidates:
+            if candidate.provider == "ths_exact_spot" and candidate.mapping_type in {"direct", "proxy"}:
+                output[sector_key] = {
+                    "sector_key": sector_key,
+                    "canonical_sector": capability.display_name,
+                    "provider_symbol": candidate.symbol,
+                    "provider_name": candidate.provider_name,
+                    "mapping_type": candidate.mapping_type,
+                }
+                break
+    return output
 
 
 class ThsExactSpotProvider:
-    """Targeted public-page adapter for two exact THS board codes only."""
+    """Exact, capability-gated THS public board adapter; never fuzzy-searches."""
 
     provider_key = "ths_exact_spot"
     provider_role = "diagnostic_provider"
@@ -152,7 +161,10 @@ class ThsExactSpotProvider:
             volume=Decimal(values["volume"]), amount=Decimal(values["amount"]), turnover_rate=None,
             liquidity_status=LiquidityStatus.COMPLETE, provider=self.provider_key, fetched_at=as_of,
             source_payload_hash=digest, data_status=DataStatus.NORMAL, provider_symbol=symbol,
-            lineage=f"THS public q detail:{symbol}:{name}; exact mapping; no login or Cookie",
+            lineage=(
+                f"THS public q detail:{symbol}:{name}; exact mapping; no login or Cookie;"
+                f"mapping_type={item['mapping_type']}"
+            ),
             provider_native_history=native_history,
             provider_native_history_status=native_status,
             provider_native_history_error=native_error,

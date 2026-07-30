@@ -36,6 +36,7 @@ where = ["backend"]
 
 [tool.pytest.ini_options]
 pythonpath = ["backend", "tests"]
+norecursedirs = ["var", "node_modules", "dist"]
 markers = [
   "live: explicit network tests excluded from the default CI suite",
 ]

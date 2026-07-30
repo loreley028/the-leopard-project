@@ -238,6 +238,20 @@ class EastmoneyBoardSpotProvider:
     def _resolve(self, mapping: SectorMapping) -> dict:
         self._load()
         assert self._records is not None
+        if mapping.primary_symbol.upper().startswith("BK"):
+            exact = {
+                str(row.get("f12")): row
+                for rows in self._records_by_kind.values()
+                for row in rows.values()
+                if isinstance(row, dict) and row.get("f12")
+            }.get(mapping.primary_symbol)
+            if exact is None:
+                raise ProviderError(
+                    ProviderErrorCategory.INVALID_SYMBOL,
+                    f"explicit Eastmoney board symbol unavailable: {mapping.primary_symbol}",
+                    retryable=False,
+                )
+            return exact
         bundle = load_seed_bundle()
         kind = 2 if mapping.ths_sector_type == "行业" else 3 if mapping.ths_sector_type == "概念" else None
         records = self._records_by_kind.get(kind, self._records) if kind is not None else self._records

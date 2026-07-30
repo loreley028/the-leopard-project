@@ -230,7 +230,7 @@ class IntradayRefreshCoordinator:
         self._now = now or (lambda: datetime.now(timezone.utc))
         self._uses_default_fetcher = fetcher is None
         self._fetcher = fetcher or self._provider_fetch
-        self._provider = ResearchIntradayProviderChain()
+        self._provider = ResearchIntradayProviderChain(sessions=sessions)
         self._sleep = sleep
         self._enabled = False
         self._running_cycle = False
@@ -513,6 +513,7 @@ class IntradayRefreshCoordinator:
                 "provider_requests": self._provider.request_count if self._uses_default_fetcher else len(sectors),
                 "success_count": run.success_count, "failure_count": run.failure_count,
                 "stale_count": run.stale_count, "unsupported_count": run.unsupported_count,
+                **self._provider.cycle_stats,
             }
 
     def status(self) -> dict:
@@ -570,5 +571,15 @@ class IntradayRefreshCoordinator:
                 "last_runtime_error": self._last_runtime_error,
                 "recovered_stale_sessions": self._recovered_sessions,
                 "owner_instance_id": self._instance_id,
+                "provider_health": self._provider.health,
+                "provider_cycle_stats": self._provider.cycle_stats,
                 **calendar_meta,
             }
+
+    def provider_health(self) -> list[dict]:
+        return self._provider.health
+
+    def probe_provider(self, provider_key: str) -> dict:
+        bundle = load_seed_bundle()
+        mappings = {item.sector_key: item for item in bundle.mappings}
+        return self._provider.probe_provider(provider_key, mappings, self._now())

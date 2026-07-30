@@ -284,6 +284,13 @@ export interface IntradayStatus {
   calendar_source?: string | null;
   calendar_status?: "trading_day" | "confirmed_non_trading_day" | "calendar_out_of_range" | "calendar_unavailable";
   calendar_warning?: string | null;
+  provider_health?: Array<Record<string, unknown>>;
+  provider_cycle_stats?: {
+    health_probe_count: number;
+    primary_skipped_count: number;
+    fallback_success_count: number;
+    no_fallback_count: number;
+  };
 }
 
 export interface SectorAssessment {
