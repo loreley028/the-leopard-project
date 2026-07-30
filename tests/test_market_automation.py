@@ -86,7 +86,7 @@ def test_gap_only_backfill_recalculates_indicators_and_never_requests_hstech(tmp
     assert before["missing_sector_count"] == 65
 
     result = coordinator.run_if_needed()
-    assert result["status"] == "completed"
+    assert result["status"] == "complete"
     assert result["success_count"] == result["requested_count"] == 65
     with sessions() as session:
         assert session.scalar(select(func.count()).select_from(SectorDailyBar).where(SectorDailyBar.trade_date == date(2026, 7, 27))) == 65

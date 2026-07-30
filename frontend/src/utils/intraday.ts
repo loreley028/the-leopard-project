@@ -13,6 +13,7 @@ export const timeOnly = (value: string | null | undefined) => value?.match(/(\d{
 export function realtimePresentation(item: Sector, system?: IntradayStatus): RealtimePresentation {
   const snapshot = item.intraday_snapshot;
   const sameTradeDate = Boolean(snapshot && system?.intraday_trade_date && snapshot.trade_date === system.intraday_trade_date);
+  if (system?.market_session === "calendar_error") return { value: "日历待更新", detail: system.calendar_coverage_end ? `覆盖至${system.calendar_coverage_end}` : "日历不可用", tone: "flat" };
   if (system?.market_phase === "market_closed" && system.market_phase_detail === "non_trading_day") return { value: "休市", tone: "flat" };
   if (system?.market_phase === "market_closed" && system.market_phase_detail === "after_close") {
     const complete = item.latest_market && item.latest_market.trade_date === system.intraday_trade_date;
@@ -27,6 +28,7 @@ export function realtimePresentation(item: Sector, system?: IntradayStatus): Rea
 
 export function intradaySystemLabel(status?: IntradayStatus): string {
   if (!status) return "状态读取中";
+  if (status.market_session === "calendar_error") return status.calendar_status === "calendar_unavailable" ? "交易日历异常" : "交易日历待更新";
   if (status.market_session === "pre_open") return "盘前";
   if (status.market_session === "non_trading_day") return "休市";
   if (status.market_phase === "market_break") return "午间休市";
@@ -37,6 +39,7 @@ export function intradaySystemLabel(status?: IntradayStatus): string {
 }
 
 export function intradayDataLabel(dataStatus: string | undefined, system?: IntradayStatus): string {
+  if (system?.market_session === "calendar_error") return "交易日历待更新";
   if (dataStatus === "provider_failed") return "获取失败";
   if (dataStatus === "market_break") return "午间休市";
   if (dataStatus === "market_closed") return system?.market_phase_detail === "after_close" ? "已收盘" : "休市";

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { useNavigate, useSearchParams } from "../../routes/router";
 import { api, ApiError } from "../../api/client";
 import { IslandCard } from "../../components/island/IslandCard";
 import { IslandUploadZone } from "../../components/island/IslandUploadZone";

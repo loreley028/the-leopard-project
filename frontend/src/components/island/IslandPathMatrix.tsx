@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link } from "../../routes/router";
 import { api } from "../../api/client";
 import type { PathMatrix, SectorResearch } from "../../types";
 import { formatPct } from "../../utils/format";

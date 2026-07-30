@@ -422,6 +422,11 @@ class MarketRefreshItem(Base):
     lineage: Mapped[str | None] = mapped_column(Text, nullable=True)
     error_code: Mapped[str | None] = mapped_column(String(80), nullable=True)
     error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
+    expected_trade_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    attempt_number: Mapped[int] = mapped_column(Integer, default=1)
+    attempted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    next_retry_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     detail: Mapped[str] = mapped_column(Text, default="")
 
 
@@ -476,7 +481,7 @@ class SectorIntradaySnapshot(Base):
 class IntradayRefreshSession(Base):
     __tablename__ = "intraday_refresh_sessions"
     id: Mapped[str] = mapped_column(String(32), primary_key=True, default=new_id)
-    status: Mapped[str] = mapped_column(String(30), default="paused")
+    status: Mapped[str] = mapped_column(String(30), default="pending")
     refresh_interval_minutes: Mapped[int] = mapped_column(Integer, default=5)
     provider_role: Mapped[str] = mapped_column(String(60), default="diagnostic_provider")
     started_by: Mapped[str] = mapped_column(String(120))
@@ -484,6 +489,11 @@ class IntradayRefreshSession(Base):
     paused_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     last_refresh_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     next_refresh_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    heartbeat_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    lease_expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    owner_instance_id: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    terminal_reason: Mapped[str | None] = mapped_column(String(80), nullable=True)
 
 
 class MarketAutomationControl(Base):

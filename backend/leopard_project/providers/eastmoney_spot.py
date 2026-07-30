@@ -78,7 +78,7 @@ class EastmoneyBoardSpotProvider:
 
     def __init__(
         self, *, transport: Transport | None = None, timeout: float = 15.0,
-        minimum_history_interval: float = 0.08,
+        minimum_history_interval: float | None = None,
         clock: Callable[[], float] = time.monotonic,
         sleeper: Callable[[float], None] = time.sleep,
     ) -> None:
@@ -90,7 +90,14 @@ class EastmoneyBoardSpotProvider:
         self.request_count = 0
         self._load_error: ProviderError | None = None
         self._history_cache: dict[tuple[str, date], tuple[ProviderNativeClose, ...]] = {}
-        self._minimum_history_interval = minimum_history_interval
+        # The public history endpoint starts dropping requests under a short
+        # burst. Production transport is deliberately slower; deterministic
+        # injected transports remain delay-free unless a test asks otherwise.
+        self._minimum_history_interval = (
+            0.45 if minimum_history_interval is None and transport is None
+            else 0.0 if minimum_history_interval is None
+            else minimum_history_interval
+        )
         self._clock = clock
         self._sleeper = sleeper
         self._last_history_request_at: float | None = None
@@ -166,12 +173,16 @@ class EastmoneyBoardSpotProvider:
         return self._history_cache[key]
 
     def _safe_native_history(self, symbol: str, as_of: date) -> tuple[tuple[ProviderNativeClose, ...], str, str | None]:
-        try:
-            return self._native_history(symbol, as_of), "complete", None
-        except ProviderError as exc:
-            return (), "provider_failed", exc.category.value
-        except Exception:
-            return (), "provider_failed", "provider_error"
+        for attempt in range(3):
+            try:
+                return self._native_history(symbol, as_of), "complete", None
+            except ProviderError as exc:
+                if not exc.retryable or attempt == 2:
+                    return (), "provider_failed", exc.category.value
+                self._sleeper(0.75 * (2 ** attempt))
+            except Exception:
+                return (), "provider_failed", "provider_error"
+        return (), "provider_failed", "provider_error"
 
     def _load(self) -> None:
         if self._records is not None:
@@ -276,6 +287,13 @@ class EastmoneyBoardSpotProvider:
         local_day = as_of.astimezone(ZoneInfo("Asia/Shanghai")).date() if as_of.tzinfo else date.today()
         provider_symbols = "+".join(str(row.get("f12", "")) for row in rows)
         lineage = "Eastmoney public push2 composite:" + "+".join(f"{symbol}->{row.get('f12')}" for symbol, row in zip(symbols, rows))
+        if mapping.sector_key == "hotel_catering":
+            lineage = (
+                f"canonical_sector={mapping.sector_name};mapping_type=proxy;proxy_symbol=881160;"
+                f"provider={self.provider_key};provider_symbol={rows[0].get('f12')};"
+                f"provider_name={rows[0].get('f14')};rationale=881160 temporary proxy;"
+                f"as_of={as_of.isoformat()};source_status=available"
+            )
         history_results = [
             self._safe_native_history(str(row.get("f12", "")), local_day - timedelta(days=1))
             for row in rows

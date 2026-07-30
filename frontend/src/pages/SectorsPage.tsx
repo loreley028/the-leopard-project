@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link } from "../routes/router";
 import { api } from "../api/client";
 import { IslandStatusBadge } from "../components/island/IslandStatusBadge";
 import type { IntradayStatus, Principal, RecentTradingDay, Sector } from "../types";

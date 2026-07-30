@@ -17,6 +17,7 @@ from leopard_project.providers import ProviderError, ThsPublicValidationProvider
 from .enhanced import calculate_market_metrics
 from .models import MarketRefreshItem, MarketRefreshRun, SectorDailyBar, SectorIndicatorSnapshot
 from .services import WebDomainError
+from .write_coordination import BACKGROUND_WRITE_LOCK
 
 
 PROVIDER_KEY = "ths_public_validation"
@@ -107,23 +108,30 @@ def refresh_real_market(
     provider: ThsPublicValidationProvider | None = None,
     mode: str = "manual_real_refresh",
     allowed_trade_dates: set[date] | None = None,
+    allowed_trade_dates_by_sector: dict[str, set[date]] | None = None,
+    attempt_number: int = 1,
+    next_retry_at: datetime | None = None,
 ) -> MarketRefreshRun:
+    """Fetch outside SQLite transactions, then persist each normalized sector briefly."""
     bundle = load_seed_bundle()
     mappings = {item.sector_key: item for item in bundle.mappings}
     sectors = [item for item in bundle.sectors if item.sector_key != "hang_seng_tech"]
     if sector_keys:
         requested = set(sector_keys)
         sectors = [item for item in sectors if item.sector_key in requested]
-    run = MarketRefreshRun(mode=mode, provider_role=PROVIDER_ROLE,
-                           requested_count=len(sectors), requested_by=actor, status="running")
-    session.add(run); session.flush()
     client = provider or ThsPublicValidationProvider(minimum_interval=0.45)
     # The public endpoint is year-partitioned and some newly introduced boards
     # legitimately have no prior-year resource. The current year already
     # covers the Phase 2A-0 120-session contract at the accepted July cutoff.
     start = date(as_of.year, 1, 1)
+    fetched: list[tuple[object, list[DailyBar] | None, str | None, str | None, str | None, str | None]] = []
     for sector in sectors:
         mapping = mappings[sector.sector_key]
+        sector_allowed_dates = (
+            allowed_trade_dates_by_sector.get(sector.sector_key, set())
+            if allowed_trade_dates_by_sector is not None
+            else allowed_trade_dates
+        )
         try:
             proxy = sector.sector_key == "hotel_catering"
             symbols = ["881160"] if proxy else list(mapping.backup_symbols) if mapping.primary_symbol.startswith("CUSTOM_") else [mapping.primary_symbol]
@@ -136,39 +144,95 @@ def refresh_real_market(
                 bar for bar in bars
                 if bar.trade_date <= as_of
                 and bar.data_status == DataStatus.NORMAL
-                and (allowed_trade_dates is None or bar.trade_date in allowed_trade_dates)
+                and (sector_allowed_dates is None or bar.trade_date in sector_allowed_dates)
             ]
-            if allowed_trade_dates is not None and not eligible:
+            if sector_allowed_dates is not None and not eligible:
                 raise WebDomainError("market_missing_dates_not_returned", "Provider未返回请求的缺失交易日", 422)
-            conflicts = 0
-            for bar in eligible:
-                existing = session.scalar(select(SectorDailyBar).where(
-                    SectorDailyBar.sector_key == sector.sector_key,
-                    SectorDailyBar.trade_date == bar.trade_date,
-                ))
-                if existing is None:
-                    continue
-                comparable = _bar_signature(existing.close, existing.pre_close, existing.daily_pct_change)
-                incoming = _bar_signature(bar.close, bar.pre_close, bar.pct_change)
-                conflicts += comparable != incoming
-            if conflicts:
-                raise WebDomainError("market_data_conflict", f"{conflicts}条同日行情冲突，旧数据未覆盖", 409)
-            for bar in eligible:
-                _persist_bar(session, sector.sector_key, bar, source, PROVIDER_ROLE)
-            _recalculate(session, sector.sector_key)
-            latest = max((bar.trade_date for bar in eligible), default=max(bar.trade_date for bar in bars))
-            status = "short_history" if len(bars) < 21 else "complete_eod"
-            run.short_history_count += status == "short_history"
-            run.success_count += 1
-            session.add(MarketRefreshItem(run_id=run.id, sector_key=sector.sector_key, status=status,
-                                          trade_date=latest, detail=f"{source}; {len(bars)} rows"))
+            fetched.append((sector, eligible, source, "short_history" if len(bars) < 21 else "complete_eod", None, None))
         except (ProviderError, WebDomainError, ValueError) as exc:
-            run.failure_count += 1
-            session.add(MarketRefreshItem(run_id=run.id, sector_key=sector.sector_key, status="failed", detail=type(exc).__name__))
-        session.flush()
-    run.status = "completed_with_failures" if run.failure_count else "completed"
-    run.finished_at = datetime.now(timezone.utc)
-    session.commit()
+            code = exc.code if isinstance(exc, WebDomainError) else exc.category.value if isinstance(exc, ProviderError) else "validation_error"
+            pending = sector_allowed_dates is not None and code in {"market_no_data", "market_missing_dates_not_returned", "no_data"}
+            fetched.append((sector, None, None, "pending_publication" if pending else "provider_failed", code, "Provider daily data is not published yet" if pending else "Provider request failed"))
+
+    attempted_at = datetime.now(timezone.utc)
+    run = MarketRefreshRun(
+        mode=mode,
+        provider_role=PROVIDER_ROLE,
+        requested_count=len(sectors),
+        requested_by=actor,
+        status="running",
+    )
+    with BACKGROUND_WRITE_LOCK:
+        session.add(run)
+        session.commit()
+    for sector, eligible, source, status, error_code, error_message in fetched:
+        try:
+            with BACKGROUND_WRITE_LOCK:
+                if eligible is None:
+                    run.failure_count += 1
+                    session.add(MarketRefreshItem(
+                        run_id=run.id,
+                        sector_key=sector.sector_key,
+                        status=status,
+                        expected_trade_date=as_of,
+                        attempt_number=attempt_number,
+                        attempted_at=attempted_at,
+                        next_retry_at=next_retry_at if status == "pending_publication" else None,
+                        error_code=error_code,
+                        error_message=error_message,
+                        detail=status,
+                    ))
+                else:
+                    conflicts = 0
+                    for bar in eligible:
+                        existing = session.scalar(select(SectorDailyBar).where(
+                            SectorDailyBar.sector_key == sector.sector_key,
+                            SectorDailyBar.trade_date == bar.trade_date,
+                        ))
+                        if existing is not None:
+                            conflicts += _bar_signature(existing.close, existing.pre_close, existing.daily_pct_change) != _bar_signature(bar.close, bar.pre_close, bar.pct_change)
+                    if conflicts:
+                        raise WebDomainError("market_data_conflict", f"{conflicts} conflicting rows", 409)
+                    for bar in eligible:
+                        _persist_bar(session, sector.sector_key, bar, source or PROVIDER_KEY, PROVIDER_ROLE)
+                    _recalculate(session, sector.sector_key)
+                    latest = max(bar.trade_date for bar in eligible)
+                    run.short_history_count += status == "short_history"
+                    run.success_count += 1
+                    mapping = mappings[sector.sector_key]
+                    proxy = sector.sector_key == "hotel_catering"
+                    provider_symbol = "881160" if proxy else mapping.primary_symbol
+                    lineage = (
+                        f"canonical_sector={sector.sector_name};mapping_type=proxy;proxy_symbol=881160;"
+                        f"provider={PROVIDER_KEY};provider_symbol=881160;provider_name=酒店餐饮代理;"
+                        f"rationale=881160 temporary proxy;as_of={as_of.isoformat()};source_status=available"
+                        if proxy else
+                        f"provider={PROVIDER_KEY};provider_symbol={provider_symbol};"
+                        f"as_of={as_of.isoformat()};source_status=available"
+                    )
+                    session.add(MarketRefreshItem(
+                        run_id=run.id,
+                        sector_key=sector.sector_key,
+                        status=status,
+                        trade_date=latest,
+                        expected_trade_date=as_of,
+                        attempt_number=attempt_number,
+                        attempted_at=attempted_at,
+                        completed_at=datetime.now(timezone.utc),
+                        provider=PROVIDER_KEY,
+                        provider_symbol=provider_symbol,
+                        lineage=lineage,
+                        detail=f"{source}; {len(eligible)} eligible rows",
+                    ))
+                session.commit()
+        except Exception:
+            session.rollback()
+            raise
+    pending_count = sum(1 for item in fetched if item[3] == "pending_publication")
+    with BACKGROUND_WRITE_LOCK:
+        run.status = "pending_retry" if pending_count else "partial_failure" if run.failure_count else "complete"
+        run.finished_at = datetime.now(timezone.utc)
+        session.commit()
     return run
 
 

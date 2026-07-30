@@ -27,6 +27,8 @@ describe("central intraday labels", () => {
     expect(intradaySystemLabel(status({ market_phase: "market_break", market_phase_detail: "market_break" }))).toBe("午间休市");
     expect(intradaySystemLabel(status({ market_phase: "market_closed", market_phase_detail: "after_close" }))).toBe("已收盘");
     expect(intradaySystemLabel(status({ market_phase: "market_closed", market_phase_detail: "non_trading_day" }))).toBe("休市");
+    expect(intradaySystemLabel(status({ market_phase: "calendar_error", market_phase_detail: "calendar_out_of_range", market_session: "calendar_error", calendar_status: "calendar_out_of_range" }))).toBe("交易日历待更新");
+    expect(intradayDataLabel("calendar_error", status({ market_phase: "calendar_error", market_session: "calendar_error" }))).toBe("交易日历待更新");
   });
   it("marks delayed cached data without inventing a value", () => {
     expect(intradaySystemLabel(status({ stale_count: 2, latest_snapshot_at: "2026-07-27T02:00:00Z" }))).toBe("盘中数据延迟");

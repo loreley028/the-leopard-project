@@ -257,9 +257,9 @@ export interface IntradaySnapshot {
 
 export interface IntradayStatus {
   session_status: "running" | "paused";
-  market_phase: "intraday_open" | "market_break" | "market_closed";
-  market_phase_detail?: "non_trading_day" | "before_open" | "after_close" | "intraday_open" | "market_break";
-  market_session?: "pre_open" | "open" | "market_break" | "closed" | "non_trading_day";
+  market_phase: "intraday_open" | "market_break" | "market_closed" | "calendar_error";
+  market_phase_detail?: "non_trading_day" | "before_open" | "after_close" | "intraday_open" | "market_break" | "calendar_out_of_range" | "calendar_source_unavailable" | "calendar_rule_invalid";
+  market_session?: "pre_open" | "open" | "market_break" | "closed" | "non_trading_day" | "calendar_error";
   intraday_trade_date?: string;
   refresh_interval_minutes: number;
   provider: string;
@@ -279,6 +279,11 @@ export interface IntradayStatus {
   auto_start: boolean;
   admin_paused?: boolean;
   scheduler_registered?: boolean;
+  calendar_coverage_start?: string | null;
+  calendar_coverage_end?: string | null;
+  calendar_source?: string | null;
+  calendar_status?: "trading_day" | "confirmed_non_trading_day" | "calendar_out_of_range" | "calendar_unavailable";
+  calendar_warning?: string | null;
 }
 
 export interface SectorAssessment {

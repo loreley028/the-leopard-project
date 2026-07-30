@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { FormEvent } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams } from "../../routes/router";
 import { api, ApiError } from "../../api/client";
 import { IslandButton } from "../../components/island/IslandButton";
 import { IslandCard } from "../../components/island/IslandCard";

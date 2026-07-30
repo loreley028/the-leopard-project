@@ -116,6 +116,12 @@ def create_app(settings: WebSettings | None = None, session_factory: sessionmake
     eod_backfill = EodBackfillCoordinator(sessions)
     app.state.intraday_coordinator = intraday
     app.state.eod_backfill_coordinator = eod_backfill
+
+    def stop_market_automation() -> None:
+        intraday.shutdown()
+        eod_backfill.shutdown()
+    app.router.add_event_handler("shutdown", stop_market_automation)
+
     if settings.data_mode == "real_local":
         safety_session = sessions()
         try:
@@ -128,10 +134,11 @@ def create_app(settings: WebSettings | None = None, session_factory: sessionmake
             safety_session.close()
         if settings.market_automation_enabled:
             def start_market_automation() -> None:
-                # SQLite has one writer: finish the EOD gap check before the
-                # first intraday refresh session creates its run record.
-                eod_backfill.run_if_needed()
+                # Both coordinators fetch outside SQLite transactions and use
+                # short coordinated write phases.  Do not delay intraday
+                # registration while a public EOD endpoint is responding.
                 intraday.start("system_auto_resume")
+                eod_backfill.run_async_if_needed()
 
             startup_thread = threading.Thread(
                 target=start_market_automation,

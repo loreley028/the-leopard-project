@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useParams } from "../routes/router";
 import { api } from "../api/client";
 import { IslandCard } from "../components/island/IslandCard";
 import { IslandMetricGrid } from "../components/island/IslandMetricGrid";

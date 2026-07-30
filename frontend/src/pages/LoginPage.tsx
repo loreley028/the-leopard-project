@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate } from "../routes/router";
 import { IslandButton } from "../components/island/IslandButton";
 import { IslandCard } from "../components/island/IslandCard";
 import { IslandField } from "../components/island/IslandField";

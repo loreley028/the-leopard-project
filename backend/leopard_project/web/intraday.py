@@ -8,6 +8,7 @@ from datetime import date, datetime, time as clock_time, timedelta, timezone
 from decimal import Decimal
 from pathlib import Path
 from typing import Callable
+from uuid import uuid4
 from zoneinfo import ZoneInfo
 
 from sqlalchemy import desc, select
@@ -16,6 +17,7 @@ from sqlalchemy.orm import Session, sessionmaker
 from leopard_project.config import CONFIG_DIR, load_seed_bundle
 from leopard_project.models import DailyBar, Market
 from leopard_project.providers import ProviderError, ResearchIntradayProviderChain
+from leopard_project.trading_calendar import CalendarStatus, evaluate_cn_a_day, load_calendar
 
 from .models import (
     IntradayRefreshSession,
@@ -25,10 +27,10 @@ from .models import (
     SectorIntradaySnapshot,
     SectorProviderNativeClose,
 )
+from .write_coordination import BACKGROUND_WRITE_LOCK, coordinated_write
 
 
 POLICY_PATH = CONFIG_DIR / "intraday_market_policy_v1.json"
-CALENDAR_PATH = CONFIG_DIR / "enhanced_demo_calendar_v1.json"
 
 
 def intraday_policy() -> dict:
@@ -36,8 +38,16 @@ def intraday_policy() -> dict:
 
 
 def controlled_trading_dates() -> set[date]:
-    document = json.loads(CALENDAR_PATH.read_text(encoding="utf-8"))
-    return {date.fromisoformat(value) for value in document["trading_dates"]}
+    calendar = load_calendar()
+    if calendar is None:
+        raise ValueError("calendar_source_unavailable")
+    return calendar.trading_dates()
+
+
+def calendar_status(day: date, trading_dates: set[date] | None = None) -> CalendarStatus:
+    if trading_dates is not None:
+        return CalendarStatus.TRADING_DAY if day in trading_dates else CalendarStatus.CONFIRMED_NON_TRADING_DAY
+    return evaluate_cn_a_day(day).status
 
 
 def _parse_time(value: str) -> clock_time:
@@ -49,8 +59,10 @@ def market_phase(now: datetime, policy: dict | None = None, trading_dates: set[d
     policy = policy or intraday_policy()
     timezone_name = policy["timezone"]
     local = now.astimezone(ZoneInfo(timezone_name))
-    controlled = trading_dates if trading_dates is not None else controlled_trading_dates()
-    if local.date() not in controlled:
+    status = calendar_status(local.date(), trading_dates)
+    if status in {CalendarStatus.OUT_OF_RANGE, CalendarStatus.UNAVAILABLE}:
+        return "calendar_error"
+    if status == CalendarStatus.CONFIRMED_NON_TRADING_DAY:
         return "market_closed"
     current = local.time().replace(tzinfo=None)
     morning = policy["morning_session"]
@@ -68,21 +80,28 @@ def market_phase(now: datetime, policy: dict | None = None, trading_dates: set[d
 def market_phase_detail(now: datetime, policy: dict | None = None, trading_dates: set[date] | None = None) -> str:
     policy = policy or intraday_policy()
     local = now.astimezone(ZoneInfo(policy["timezone"]))
-    controlled = trading_dates if trading_dates is not None else controlled_trading_dates()
-    if local.date() not in controlled:
+    evaluation = evaluate_cn_a_day(local.date()) if trading_dates is None else None
+    status = evaluation.status if evaluation is not None else calendar_status(local.date(), trading_dates)
+    if status == CalendarStatus.OUT_OF_RANGE:
+        return "calendar_out_of_range"
+    if status == CalendarStatus.UNAVAILABLE:
+        return evaluation.reason or "calendar_source_unavailable"
+    if status == CalendarStatus.CONFIRMED_NON_TRADING_DAY:
         return "non_trading_day"
     current = local.time().replace(tzinfo=None)
     if current < _parse_time(policy["morning_session"]["start"]):
         return "before_open"
     if current >= _parse_time(policy["afternoon_session"]["end"]):
         return "after_close"
-    return market_phase(now, policy, controlled)
+    return market_phase(now, policy, trading_dates)
 
 
 def market_session(now: datetime, policy: dict | None = None, trading_dates: set[date] | None = None) -> str:
     """Expose the user-facing five-state session contract without weakening fail-closed checks."""
     phase = market_phase(now, policy, trading_dates)
     detail = market_phase_detail(now, policy, trading_dates)
+    if detail in {"calendar_out_of_range", "calendar_source_unavailable", "calendar_rule_invalid"}:
+        return "calendar_error"
     if detail == "non_trading_day":
         return "non_trading_day"
     if detail == "before_open":
@@ -101,6 +120,8 @@ def resolve_intraday_data_status(
     """Single status contract shared by all Viewer/Admin payloads."""
     if unsupported:
         return "unsupported"
+    if phase == "calendar_error":
+        return "calendar_error"
     if phase == "market_break":
         return "market_break"
     if phase == "market_closed":
@@ -115,6 +136,30 @@ def resolve_intraday_data_status(
 
 
 IntradayFetcher = Callable[[str, object, datetime], DailyBar]
+
+
+def _aware(value: datetime) -> datetime:
+    return value if value.tzinfo else value.replace(tzinfo=timezone.utc)
+
+
+def recover_stale_refresh_sessions(sessions: sessionmaker[Session], now: datetime) -> int:
+    """Keep audit history while terminating leases that cannot belong to a live process."""
+    def recover() -> int:
+        recovered = 0
+        with sessions() as session:
+            rows = list(session.scalars(select(IntradayRefreshSession).where(IntradayRefreshSession.status == "running")))
+            for row in rows:
+                if row.lease_expires_at is None or _aware(row.lease_expires_at) <= now.astimezone(timezone.utc):
+                    row.status = "interrupted"
+                    row.finished_at = now
+                    row.terminal_reason = "stale_lease_recovery" if row.lease_expires_at else "process_restart"
+                    row.next_refresh_at = None
+                    recovered += 1
+            if recovered:
+                session.commit()
+        return recovered
+
+    return coordinated_write(recover)
 
 
 def calculate_intraday_ma5(current_value: Decimal, previous_complete_closes: list[Decimal]) -> tuple[Decimal, Decimal] | None:
@@ -193,6 +238,9 @@ class IntradayRefreshCoordinator:
         self._timer: threading.Timer | None = None
         self._lock = threading.Lock()
         self._last_runtime_error: str | None = None
+        self._instance_id = uuid4().hex
+        self._lease_seconds = max(600, int(self.policy["refresh_interval_minutes"]) * 120)
+        self._recovered_sessions = 0
 
     @property
     def enabled(self) -> bool:
@@ -205,10 +253,19 @@ class IntradayRefreshCoordinator:
         with self._lock:
             if self._enabled:
                 return self.status()
-            with self.sessions() as session:
+            now = self._now()
+            self._recovered_sessions += recover_stale_refresh_sessions(self.sessions, now)
+            with BACKGROUND_WRITE_LOCK, self.sessions() as session:
                 control = session.get(MarketAutomationControl, "intraday")
                 if control and control.admin_paused and actor == "system_auto_resume":
                     return self.status()
+                active = session.scalar(select(IntradayRefreshSession).where(
+                    IntradayRefreshSession.status == "running",
+                    IntradayRefreshSession.lease_expires_at > now,
+                ))
+                if active and active.owner_instance_id != self._instance_id:
+                    self._last_runtime_error = "duplicate_scheduler_prevented"
+                    return {**self.status(), "start_result": "duplicate_scheduler_prevented"}
                 if actor != "system_auto_resume":
                     if control is None:
                         control = MarketAutomationControl(control_key="intraday")
@@ -218,8 +275,7 @@ class IntradayRefreshCoordinator:
                     control.changed_at = self._now()
                     session.commit()
             self._enabled = True
-            now = self._now()
-            with self.sessions() as session:
+            with BACKGROUND_WRITE_LOCK, self.sessions() as session:
                 record = IntradayRefreshSession(
                     status="running",
                     refresh_interval_minutes=self.policy["refresh_interval_minutes"],
@@ -227,6 +283,9 @@ class IntradayRefreshCoordinator:
                     started_by=actor,
                     started_at=now,
                     next_refresh_at=now,
+                    heartbeat_at=now,
+                    lease_expires_at=now + timedelta(seconds=self._lease_seconds),
+                    owner_instance_id=self._instance_id,
                 )
                 session.add(record)
                 session.commit()
@@ -241,15 +300,17 @@ class IntradayRefreshCoordinator:
                 self._timer.cancel()
                 self._timer = None
             if self._session_id:
-                with self.sessions() as session:
+                with BACKGROUND_WRITE_LOCK, self.sessions() as session:
                     record = session.get(IntradayRefreshSession, self._session_id)
                     if record:
-                        record.status = "paused"
+                        record.status = "cancelled"
                         record.paused_at = self._now()
+                        record.finished_at = self._now()
+                        record.terminal_reason = "admin_pause" if persistent else "process_shutdown"
                         record.next_refresh_at = None
                         session.commit()
             if persistent:
-                with self.sessions() as session:
+                with BACKGROUND_WRITE_LOCK, self.sessions() as session:
                     control = session.get(MarketAutomationControl, "intraday")
                     if control is None:
                         control = MarketAutomationControl(control_key="intraday")
@@ -289,10 +350,12 @@ class IntradayRefreshCoordinator:
         if not self._enabled:
             return
         if self._session_id:
-            with self.sessions() as session:
+            with BACKGROUND_WRITE_LOCK, self.sessions() as session:
                 record = session.get(IntradayRefreshSession, self._session_id)
                 if record:
                     record.next_refresh_at = self._now() + timedelta(seconds=seconds)
+                    record.heartbeat_at = self._now()
+                    record.lease_expires_at = self._now() + timedelta(seconds=self._lease_seconds)
                     session.commit()
         self._timer = threading.Timer(seconds, self._timer_cycle)
         self._timer.daemon = True
@@ -326,6 +389,14 @@ class IntradayRefreshCoordinator:
             phase = market_phase(now, self.policy)
             if phase != "intraday_open":
                 detail = market_phase_detail(now, self.policy)
+                if detail in {"calendar_out_of_range", "calendar_source_unavailable", "calendar_rule_invalid"}:
+                    self._last_runtime_error = detail
+                    return {
+                        "status": detail,
+                        "error_code": detail,
+                        "provider_requests": 0,
+                        "trade_date": now.astimezone(ZoneInfo(self.policy["timezone"])).date().isoformat(),
+                    }
                 status = "pre_open" if detail == "before_open" else "non_trading_day" if detail == "non_trading_day" else phase
                 return {"status": status, "provider_requests": 0, "trade_date": now.astimezone(ZoneInfo(self.policy["timezone"])).date().isoformat()}
             return self._execute_cycle(now)
@@ -358,7 +429,7 @@ class IntradayRefreshCoordinator:
             if index < len(sectors) - 1 and self.policy["request_spacing_seconds"] > 0:
                 self._sleep(float(self.policy["request_spacing_seconds"]))
 
-        with self.sessions() as session:
+        with BACKGROUND_WRITE_LOCK, self.sessions() as session:
             run = MarketRefreshRun(
                 mode="intraday_refresh", provider_role=self.policy["provider_role"],
                 requested_count=len(sectors), requested_by="intraday_session", status="running", started_at=now,
@@ -434,6 +505,8 @@ class IntradayRefreshCoordinator:
                 if record:
                     record.last_refresh_at = run.finished_at
                     record.next_refresh_at = now + timedelta(minutes=self.policy["refresh_interval_minutes"])
+                    record.heartbeat_at = run.finished_at
+                    record.lease_expires_at = run.finished_at + timedelta(seconds=self._lease_seconds)
             session.commit()
             return {
                 "run_id": run.id, "status": run.status,
@@ -445,6 +518,16 @@ class IntradayRefreshCoordinator:
     def status(self) -> dict:
         now = self._now()
         local_trade_date = now.astimezone(ZoneInfo(self.policy["timezone"])).date().isoformat()
+        rules = load_calendar()
+        calendar_meta = rules.metadata(date.fromisoformat(local_trade_date)) if rules else {
+            "calendar_coverage_start": None,
+            "calendar_coverage_end": None,
+            "calendar_source": None,
+            "calendar_source_version": None,
+            "calendar_status": "calendar_unavailable",
+            "calendar_warning": "calendar_source_unavailable",
+            "calendar_days_remaining": None,
+        }
         with self.sessions() as session:
             control = session.get(MarketAutomationControl, "intraday")
             record = session.get(IntradayRefreshSession, self._session_id) if self._session_id else None
@@ -485,4 +568,7 @@ class IntradayRefreshCoordinator:
                 "viewer_provider_access": False,
                 "auto_start": bool(self.policy["auto_start"]),
                 "last_runtime_error": self._last_runtime_error,
+                "recovered_stale_sessions": self._recovered_sessions,
+                "owner_instance_id": self._instance_id,
+                **calendar_meta,
             }

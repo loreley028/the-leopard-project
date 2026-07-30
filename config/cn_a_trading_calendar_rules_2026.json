@@ -1,0 +1,29 @@
+{
+  "schema_version": "1.0.0",
+  "market": "CN_A",
+  "year": 2026,
+  "timezone": "Asia/Shanghai",
+  "source": "Shanghai Stock Exchange 2026 annual closure schedule",
+  "source_url": "https://www.sse.com.cn/disclosure/dealinstruc/closed/",
+  "source_version": "sse-2026-closure-schedule",
+  "effective_at": "2025-12-22",
+  "coverage_start": "2026-01-01",
+  "coverage_end": "2026-12-31",
+  "holiday_ranges": [
+    {"name": "New Year", "start": "2026-01-01", "end": "2026-01-03"},
+    {"name": "Spring Festival", "start": "2026-02-15", "end": "2026-02-23"},
+    {"name": "Qingming Festival", "start": "2026-04-04", "end": "2026-04-06"},
+    {"name": "Labour Day", "start": "2026-05-01", "end": "2026-05-05"},
+    {"name": "Dragon Boat Festival", "start": "2026-06-19", "end": "2026-06-21"},
+    {"name": "Mid-Autumn Festival", "start": "2026-09-25", "end": "2026-09-27"},
+    {"name": "National Day", "start": "2026-10-01", "end": "2026-10-07"}
+  ],
+  "closed_overrides": [],
+  "open_overrides": [],
+  "maintenance_notice_days": 30,
+  "production_approved": false,
+  "limitations": [
+    "Controlled annual rules require a new version when the exchange announces temporary closures or resumptions.",
+    "Dates outside coverage fail closed as calendar_out_of_range and are never labelled non-trading days."
+  ]
+}

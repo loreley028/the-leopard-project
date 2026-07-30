@@ -55,6 +55,7 @@ export const api = {
   marketSummary: () => request<Record<string, unknown>>("/admin/market/summary"),
   marketStatus: () => request<Record<string, unknown>>("/market/status"),
   intradayStatus: () => request<IntradayStatus>("/market/intraday/status"),
+  intradaySessions: () => request<Array<Record<string, unknown>>>("/admin/market/intraday/sessions"),
   intradaySectors: () => request<Array<{ sector_key: string; sector_name: string; data_status: string; snapshot: unknown }>>("/market/intraday/sectors"),
   startIntraday: () => request<IntradayStatus>("/admin/market/intraday/start", { method: "POST" }),
   pauseIntraday: () => request<IntradayStatus>("/admin/market/intraday/pause", { method: "POST" }),

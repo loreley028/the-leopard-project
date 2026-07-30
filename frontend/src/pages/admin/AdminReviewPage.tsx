@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useParams } from "react-router-dom";
+import { useParams } from "../../routes/router";
 import { api } from "../../api/client";
 import { IslandButton } from "../../components/island/IslandButton";
 import { IslandCard } from "../../components/island/IslandCard";

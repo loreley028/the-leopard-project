@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link } from "../routes/router";
 import { api } from "../api/client";
 import { IslandEmptyState } from "../components/island/IslandEmptyState";
 import { IslandTable } from "../components/island/IslandTable";

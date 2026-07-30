@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { Link } from "react-router-dom";
+import { Link } from "../../routes/router";
 import { IslandHeader } from "./IslandHeader";
 import { IslandNav } from "./IslandNav";
 import "./island.css";

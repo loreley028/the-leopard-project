@@ -1,0 +1,10 @@
+{
+  "schema_version": "1.0.0",
+  "timezone": "Asia/Shanghai",
+  "safe_accept_after": "15:30",
+  "retry_delays_minutes": [25, 90, 240],
+  "maximum_attempts": 4,
+  "gap_only": true,
+  "pending_publication_codes": ["market_no_data", "market_missing_dates_not_returned", "no_data"],
+  "unsupported_sector_keys": ["hang_seng_tech"]
+}

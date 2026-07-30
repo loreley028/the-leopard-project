@@ -1,4 +1,4 @@
-import { Link, useLocation } from "react-router-dom";
+import { Link, useLocation } from "../../routes/router";
 import { useAuth } from "../../features/auth/AuthContext";
 const items = [["/", "最新报告"], ["/sectors", "板块研究"], ["/reports", "报告库"], ["/admin", "管理区"]] as const;
 export function IslandNav() {

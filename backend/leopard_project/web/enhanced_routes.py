@@ -23,6 +23,7 @@ from .enhanced import (
     path_statuses,
 )
 from .models import (
+    IntradayRefreshSession,
     MarketRefreshItem,
     MarketRefreshRun,
     Report,
@@ -524,6 +525,27 @@ def register_enhanced_routes(
     def intraday_status(current: Principal = Depends(principal)) -> dict:
         return intraday.status()
 
+    @app.get("/api/v1/admin/market/intraday/sessions", response_model=list[ApiListItem])
+    def intraday_sessions(
+        current: Principal = Depends(admin),
+        session: Session = Depends(db_session),
+    ) -> list[dict]:
+        rows = session.scalars(
+            select(IntradayRefreshSession)
+            .order_by(desc(IntradayRefreshSession.started_at))
+            .limit(20)
+        )
+        return [{
+            "session_id": row.id,
+            "status": row.status,
+            "started_at": row.started_at.isoformat(),
+            "heartbeat_at": row.heartbeat_at.isoformat() if row.heartbeat_at else None,
+            "lease_expires_at": row.lease_expires_at.isoformat() if row.lease_expires_at else None,
+            "finished_at": row.finished_at.isoformat() if row.finished_at else None,
+            "terminal_reason": row.terminal_reason,
+            "started_by": row.started_by,
+        } for row in rows]
+
     @app.get("/api/v1/market/intraday/sectors", response_model=list[ApiListItem])
     def intraday_sectors(current: Principal = Depends(principal), session: Session = Depends(db_session)) -> list[dict]:
         service = EnhancedReportService(session)
@@ -627,6 +649,11 @@ def register_enhanced_routes(
                 "lineage": item.lineage,
                 "error_code": item.error_code,
                 "error_message": item.error_message,
+                "expected_trade_date": item.expected_trade_date.isoformat() if item.expected_trade_date else None,
+                "attempt_number": item.attempt_number,
+                "attempted_at": item.attempted_at.isoformat() if item.attempted_at else None,
+                "next_retry_at": item.next_retry_at.isoformat() if item.next_retry_at else None,
+                "completed_at": item.completed_at.isoformat() if item.completed_at else None,
                 "detail": item.detail,
             } for item in items],
         }

@@ -9,6 +9,7 @@ import pytest
 from leopard_project.config import load_seed_bundle
 from leopard_project.providers import EastmoneyBoardSpotProvider, ProviderError
 from leopard_project.providers import eastmoney_spot
+from leopard_project.providers.base import ProviderErrorCategory
 
 
 def payload(rows: list[dict]) -> bytes:
@@ -96,6 +97,26 @@ def test_eastmoney_spot_builds_custom_composite_from_real_components() -> None:
     assert bar.lineage and "881134->BK1001" in bar.lineage
 
 
+def test_hotel_catering_intraday_lineage_is_explicit_proxy() -> None:
+    documents = iter([
+        payload([{"f2": 102, "f3": 2, "f5": 1000, "f6": 2000, "f12": "BK1271", "f14": "酒店餐饮", "f15": 103, "f16": 99, "f17": 100, "f18": 100}]),
+        payload([]),
+    ])
+    mapping = next(item for item in load_seed_bundle().mappings if item.sector_key == "hotel_catering")
+    provider = EastmoneyBoardSpotProvider(
+        transport=lambda url, _timeout: history_payload("BK1271") if "kline/get" in url else next(documents)
+    )
+    bar = provider.fetch_intraday_snapshot(mapping, datetime(2026, 7, 30, 2, 0, tzinfo=timezone.utc))
+    assert bar.data_status.value == "proxy"
+    assert bar.lineage
+    for value in (
+        "canonical_sector=酒店餐饮", "mapping_type=proxy", "proxy_symbol=881160",
+        "provider=eastmoney_board_spot", "provider_symbol=BK1271",
+        "provider_name=酒店餐饮", "rationale=", "as_of=", "source_status=available",
+    ):
+        assert value in bar.lineage
+
+
 def test_eastmoney_spot_paginates_beyond_first_hundred_rows() -> None:
     first_page = [{
         "f2": 101, "f3": 1, "f5": 1, "f6": 1, "f12": f"BK{i:04d}", "f14": f"占位板块{i}",
@@ -130,3 +151,20 @@ def test_eastmoney_transport_classifies_remote_disconnect(monkeypatch: pytest.Mo
     with pytest.raises(ProviderError, match="spot request failed") as caught:
         eastmoney_spot._transport("https://example.invalid", 1)
     assert caught.value.retryable is True
+
+
+def test_eastmoney_native_history_uses_bounded_backoff_for_retryable_failures() -> None:
+    attempts = 0
+    delays: list[float] = []
+
+    def transport(_url: str, _timeout: float) -> bytes:
+        nonlocal attempts
+        attempts += 1
+        if attempts < 3:
+            raise ProviderError(ProviderErrorCategory.RATE_LIMIT, "limited", retryable=True)
+        return history_payload("BK1036")
+
+    provider = EastmoneyBoardSpotProvider(transport=transport, sleeper=delays.append)
+    history, status, error = provider._safe_native_history("BK1036", datetime(2026, 7, 28).date())
+    assert status == "complete" and error is None and len(history) == 4
+    assert attempts == 3 and delays == [0.75, 1.5]

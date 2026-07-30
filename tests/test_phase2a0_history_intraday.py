@@ -55,6 +55,7 @@ def test_existing_sqlite_receives_only_additive_intraday_columns(tmp_path: Path)
     connection = sqlite3.connect(database)
     connection.execute("CREATE TABLE sector_intraday_snapshots (id VARCHAR(32) PRIMARY KEY)")
     connection.execute("CREATE TABLE market_refresh_items (id VARCHAR(32) PRIMARY KEY)")
+    connection.execute("CREATE TABLE market_refresh_runs (id VARCHAR(32) PRIMARY KEY)")
     connection.execute("INSERT INTO market_refresh_items (id) VALUES ('preserved')")
     connection.commit()
     connection.close()
@@ -64,8 +65,10 @@ def test_existing_sqlite_receives_only_additive_intraday_columns(tmp_path: Path)
     connection = sqlite3.connect(database)
     snapshot_columns = {row[1] for row in connection.execute("PRAGMA table_info(sector_intraday_snapshots)")}
     item_columns = {row[1] for row in connection.execute("PRAGMA table_info(market_refresh_items)")}
+    run_columns = {row[1] for row in connection.execute("PRAGMA table_info(market_refresh_runs)")}
     assert {"provider_symbol", "lineage", "source_status", "freshness_status", "intraday_ma5", "intraday_vs_ma5", "native_history_status"} <= snapshot_columns
     assert {"provider", "provider_symbol", "lineage", "error_code", "error_message"} <= item_columns
+    assert {"short_history_count", "unsupported_count"} <= run_columns
     assert connection.execute("SELECT id FROM market_refresh_items").fetchall() == [("preserved",)]
     connection.close()
 
@@ -185,8 +188,14 @@ def test_intraday_is_one_server_cache_and_never_enters_eod_models(tmp_path: Path
         for _ in range(10):
             assert client.get("/api/v1/market/intraday/sectors").status_code == 200
         assert len(calls) == before
+        calendar = client.get("/api/v1/market/intraday/status").json()
+        assert calendar["calendar_coverage_start"] == "2026-01-01"
+        assert calendar["calendar_coverage_end"] == "2026-12-31"
+        assert calendar["calendar_source"]
         assert client.post("/api/v1/admin/market/intraday/start").status_code == 403
         assert client.post("/api/v1/auth/login", json={"username": "admin", "password": "admin-test-password"}).status_code == 200
+        sessions_payload = client.get("/api/v1/admin/market/intraday/sessions")
+        assert sessions_payload.status_code == 200 and isinstance(sessions_payload.json(), list)
         latest_run = next(item for item in client.get("/api/v1/admin/market/refresh-runs").json() if item["mode"] == "intraday_refresh")
         run_detail = client.get(f"/api/v1/admin/market/refresh-runs/{latest_run['run_id']}").json()
         assert run_detail["provider"] == "research_intraday_chain"
