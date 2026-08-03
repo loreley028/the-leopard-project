@@ -1,0 +1,95 @@
+{
+  "schema_version": "1.0.0",
+  "research_only": true,
+  "production_approved": false,
+  "provider_integration_started": false,
+  "purpose": "Audit official Tonghuashun board semantics separately from anonymous public-page accessibility.",
+  "registry_source": "config/market_path_registry_v1.json",
+  "capability_source": "config/provider_capability_matrix_v2.json",
+  "canonical_board_prefixes": {
+    "881": "industry",
+    "884": "theme",
+    "885": "concept",
+    "886": "concept"
+  },
+  "classification_rules": {
+    "direct_with_exact_ths_candidate": "ths_exact_board_exists",
+    "proxy_with_exact_ths_candidate": "ths_acceptable_proxy_exists",
+    "composite": "ths_composite_required",
+    "no_exact_ths_candidate": "no_suitable_ths_board",
+    "code_correction": "ths_board_code_needs_correction"
+  },
+  "known_semantic_rules": {
+    "catering": {
+      "allowed_board_semantics": ["餐饮服务", "连锁餐饮", "餐饮企业"],
+      "prohibited_substitutes": ["酒店", "旅游", "食品", "预制菜", "零售"],
+      "expected_status": "no_suitable_ths_board"
+    },
+    "hotel": {
+      "expected_symbol": "881160",
+      "expected_name": "旅游及酒店",
+      "expected_status": "ths_acceptable_proxy_exists"
+    },
+    "cpo": {
+      "expected_symbol": "886033",
+      "expected_name": "共封装光学(CPO)",
+      "expected_status": "ths_exact_board_exists",
+      "prohibited_substitutes": ["通信设备", "通信服务"]
+    },
+    "commercial_space": {
+      "expected_symbol": "886078",
+      "expected_name": "商业航天",
+      "expected_status": "ths_exact_board_exists",
+      "prohibited_substitutes": ["国防军工", "军工", "航天装备"]
+    }
+  },
+  "public_access_paths": [
+    {
+      "access_path_id": "ths_detail_html",
+      "url_template": "https://q.10jqka.com.cn/thshy/detail/code/{symbol}/",
+      "endpoint_family": "q_10jqka_thshy_detail",
+      "requires_login": false,
+      "requires_cookie": false,
+      "requires_token": false,
+      "public_get": true,
+      "board_name_candidate": true,
+      "current_candidate": true,
+      "pre_close_candidate": true,
+      "as_of_candidate": false,
+      "constituents_candidate": true,
+      "history_candidate": false,
+      "local_structure_evidence": "Commercial-space public page showed the official title, current value, pre_close label and component ranking. A single CPO anonymous structure read returned a short fieldless body; no HTTP status was captured and this is not a semantic failure.",
+      "cloud_live_status": "pending_next_market_session",
+      "recommendation": "candidate_for_cloud_probe"
+    },
+    {
+      "access_path_id": "ths_board_daily_chart",
+      "url_template": "https://d.10jqka.com.cn/v4/line/bk_{symbol}/01/{year}.js",
+      "endpoint_family": "d_10jqka_board_daily_chart",
+      "requires_login": false,
+      "requires_cookie": false,
+      "requires_token": false,
+      "public_get": true,
+      "board_name_candidate": false,
+      "current_candidate": false,
+      "pre_close_candidate": false,
+      "as_of_candidate": false,
+      "constituents_candidate": false,
+      "history_candidate": true,
+      "local_structure_evidence": "Existing validation-only adapter parses callback daily bars from this path; it is not a current-session snapshot contract.",
+      "cloud_live_status": "not_applicable_for_spot",
+      "recommendation": "insufficient_fields"
+    }
+  ],
+  "cloud_probe_policy": {
+    "research_only": true,
+    "production_approved": false,
+    "required_environment_label": "aliyun_isolated",
+    "concurrency": 1,
+    "retries": 0,
+    "maximum_requests_per_path_symbol": 1,
+    "representative_success_gate": "4_of_5",
+    "forbidden": ["cookie", "token", "login", "browser_automation", "user_agent_rotation", "full_response_persistence"]
+  },
+  "representative_path_preferences": ["cpo", "commercial_space", "hotel", "semiconductor", "computing_power_rental"]
+}

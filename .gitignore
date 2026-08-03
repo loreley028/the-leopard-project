@@ -26,6 +26,7 @@ var/demo-interpretation/
 var/demo-fidelity/
 var/demo-real-fidelity/
 var/real-local/
+var/provider-research/
 var/test/
 var/*.db
 var/*.sqlite
