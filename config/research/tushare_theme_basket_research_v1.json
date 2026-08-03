@@ -1,0 +1,254 @@
+{
+  "schema_version": "1.0.0",
+  "research_only": true,
+  "production_approved": false,
+  "production_enabled": false,
+  "provider_integration_started": false,
+  "evaluated_at": "2026-08-03",
+  "official_baseline_config": "tushare_sw_mapping_research_v1.json",
+  "coverage_target": 60,
+  "requires_user_approval": true,
+  "canonical_key_corrections": {
+    "fiber_optic_theme": "optical_fiber_theme",
+    "computing_power_leasing": "computing_power_rental",
+    "ai_application": "ai_applications"
+  },
+  "basket_policy": {
+    "mapping_type": "custom_basket",
+    "display_suffix": "（自定义篮子）",
+    "membership_as_of_policy": "Use an explicit source snapshot date; unavailable dates fail closed.",
+    "constituent_inclusion_rule": "Include only active CN-A common stocks present in the selected official concept-membership snapshot.",
+    "constituent_exclusion_rule": "Exclude ST-designated stocks and stocks with fewer than 20 completed trading days at rebalance.",
+    "weighting_candidates": ["equal_weight", "free_float_market_cap", "capped_free_float_market_cap"],
+    "recommended_mvp_weighting": "equal_weight",
+    "rebalance_frequency": "monthly_first_trading_day",
+    "missing_quote_policy": "fail_closed_if_any_required_current_or_pre_close_quote_is_missing",
+    "suspended_stock_policy": "retain membership and use zero return only when an authenticated quote explicitly reports suspension and a valid pre-close",
+    "st_stock_policy": "exclude_at_rebalance; never silently remove intraperiod",
+    "newly_listed_stock_policy": "exclude_until_20_completed_trading_days",
+    "minimum_valid_constituent_count": 5,
+    "maximum_single_stock_weight": 0.2,
+    "current_calculation": "1000-based prior basket level multiplied by one plus the weighted sum of constituent current/pre-close returns",
+    "pre_close_calculation": "previous completed basket level calculated from the same membership snapshot and weighting rules",
+    "history_calculation": "point-in-time membership snapshots and authenticated daily stock closes only; no present-membership backfill",
+    "ma5_calculation": "current basket level plus four prior complete basket closes divided by five",
+    "lineage": ["canonical_market_path", "membership_source", "source_concept_code", "membership_as_of", "constituents", "weights", "quote_as_of", "exclusions"],
+    "display_disclosure": "自定义篮子，非官方指数；展示成分来源、日期、数量、权重方法及不可用原因。"
+  },
+  "composites": {
+    "food_beverage": {
+      "requires_user_approval": true,
+      "production_approved": false,
+      "components": [
+        {"code": "801124.SI", "name": "食品加工", "provider": "tushare_sw", "weight": 0.5},
+        {"code": "801127.SI", "name": "饮料乳品", "provider": "tushare_sw", "weight": 0.5}
+      ],
+      "algorithms": [
+        {"name": "equal_weight_index_return", "weights": [0.5, 0.5], "reason": "Transparent equal treatment of the two canonical business legs."},
+        {"name": "fixed_explicit_business_weight", "weights": [0.5, 0.5], "reason": "Preserves the existing formal project weights; it is numerically identical to equal weight until the user approves a different rationale."}
+      ],
+      "same_provider": true,
+      "realtime_current_pre_close_candidate": true,
+      "same_source_history_candidate": true,
+      "ma5_candidate": true,
+      "component_overlap": "unverified_without_constituent_snapshot",
+      "semantic_difference": "Excludes liquor and several other SW Food & Beverage subindustries; follows the project's narrower food-processing plus beverage intent.",
+      "recommendation": "pending_user_approval_semantically_close"
+    },
+    "photovoltaic_energy_storage": {
+      "requires_user_approval": true,
+      "production_approved": false,
+      "components": [
+        {"code": "801735.SI", "name": "光伏设备", "provider": "tushare_sw", "weight": 0.5},
+        {"code": "801737.SI", "name": "电池", "provider": "tushare_sw", "weight": 0.5}
+      ],
+      "algorithms": [
+        {"name": "equal_weight_index_return", "weights": [0.5, 0.5], "reason": "Transparent equal treatment of photovoltaic and storage-related legs."},
+        {"name": "fixed_explicit_business_weight", "weights": [0.5, 0.5], "reason": "Preserves the existing formal project weights; no evidence supports a different fixed ratio."}
+      ],
+      "same_provider": true,
+      "realtime_current_pre_close_candidate": true,
+      "same_source_history_candidate": true,
+      "ma5_candidate": true,
+      "component_overlap": "unverified_without_constituent_snapshot",
+      "semantic_difference": "SW Battery is broader than energy storage and may include unrelated battery segments.",
+      "recommendation": "pending_user_approval_with_storage_proxy_risk"
+    },
+    "oil_petrochemical": {
+      "requires_user_approval": true,
+      "production_approved": false,
+      "components": [
+        {"code": "801963.SI", "name": "炼化及贸易", "provider": "tushare_sw", "weight": 0.5},
+        {"code": "801962.SI", "name": "油服工程", "provider": "tushare_sw", "weight": 0.5}
+      ],
+      "algorithms": [
+        {"name": "equal_weight_index_return", "weights": [0.5, 0.5], "reason": "Transparent equal treatment of downstream refining/trade and oil-service engineering."},
+        {"name": "fixed_explicit_business_weight", "weights": [0.5, 0.5], "reason": "Preserves the existing formal project weights; no evidence supports a different fixed ratio."}
+      ],
+      "same_provider": true,
+      "realtime_current_pre_close_candidate": true,
+      "same_source_history_candidate": true,
+      "ma5_candidate": true,
+      "component_overlap": "unverified_without_constituent_snapshot",
+      "semantic_difference": "The exact SW oil-and-gas extraction index is unpublished; oil-service engineering is not equivalent to extraction and services combined.",
+      "recommendation": "pending_user_approval_with_material_semantic_gap"
+    }
+  },
+  "theme_paths": {
+    "optical_fiber_theme": {
+      "display_name": "光纤题材（自定义篮子）",
+      "mapping_type": "custom_basket",
+      "ths_candidates": [{"code": "886084.TI", "name": "光纤概念", "constituent_count": null, "membership_as_of": null, "membership_verified": false, "maintained": "unverified_offline", "eligible": true}],
+      "dc_candidates": [{"code": "BK1660.DC", "name": "光纤题材", "constituent_count": null, "membership_as_of": null, "membership_verified": false, "maintained": "unverified_offline", "eligible": true}],
+      "tdx_candidates": [],
+      "name_match": "high", "semantic_match": "unverified_without_constituents", "concentration": "unknown", "stability": "unknown", "unrelated_stock_risk": "unknown",
+      "recommended_membership_source": "dc_member", "recommended_weighting": "equal_weight", "minimum_valid_constituent_count": 5, "semantic_confidence": "medium",
+      "final_research_status": "custom_basket_possible_with_caveats", "unresolved_risk": "Constituent snapshot, count, concentration and historical stability have not been authenticated."
+    },
+    "innovative_drug_medicine": {
+      "display_name": "创新药/医药（自定义篮子）",
+      "mapping_type": "custom_basket",
+      "ths_candidates": [{"code": "886015.TI", "name": "创新药", "constituent_count": null, "membership_as_of": null, "membership_verified": false, "maintained": "unverified_offline", "eligible": true}],
+      "dc_candidates": [{"code": "BK1106.DC", "name": "创新药/医药", "constituent_count": null, "membership_as_of": null, "membership_verified": false, "maintained": "unverified_offline", "eligible": true}],
+      "tdx_candidates": [],
+      "name_match": "medium", "semantic_match": "requires_scope_choice", "concentration": "unknown", "stability": "unknown", "unrelated_stock_risk": "unknown",
+      "recommended_membership_source": "dc_member", "recommended_weighting": "equal_weight", "minimum_valid_constituent_count": 5, "semantic_confidence": "medium",
+      "final_research_status": "requires_user_decision", "unresolved_risk": "The canonical label combines innovative drugs and broader medicine; the user must approve the narrower theme scope."
+    },
+    "cpo": {
+      "display_name": "CPO（自定义篮子）",
+      "mapping_type": "custom_basket",
+      "ths_candidates": [{"code": "886033.TI", "name": "共封装光学(CPO)", "constituent_count": null, "membership_as_of": null, "membership_verified": false, "maintained": "unverified_offline", "eligible": true}],
+      "dc_candidates": [{"code": "BK1128.DC", "name": "CPO", "constituent_count": null, "membership_as_of": null, "membership_verified": false, "maintained": "unverified_offline", "eligible": true}],
+      "tdx_candidates": [],
+      "name_match": "high", "semantic_match": "unverified_without_constituents", "concentration": "unknown", "stability": "unknown", "unrelated_stock_risk": "unknown",
+      "recommended_membership_source": "dc_member", "recommended_weighting": "equal_weight", "minimum_valid_constituent_count": 5, "semantic_confidence": "high",
+      "final_research_status": "custom_basket_possible_with_caveats", "unresolved_risk": "No dated authenticated membership snapshot was fetched in this offline spike."
+    },
+    "computing_power_rental": {
+      "display_name": "算力租赁（自定义篮子）",
+      "mapping_type": "custom_basket",
+      "ths_candidates": [{"code": "886050.TI", "name": "算力租赁", "constituent_count": null, "membership_as_of": null, "membership_verified": false, "maintained": "unverified_offline", "eligible": true}],
+      "dc_candidates": [],
+      "tdx_candidates": [],
+      "name_match": "high", "semantic_match": "unverified_without_constituents", "concentration": "unknown", "stability": "unknown", "unrelated_stock_risk": "unknown",
+      "recommended_membership_source": "ths_member", "recommended_weighting": "equal_weight", "minimum_valid_constituent_count": 5, "semantic_confidence": "medium",
+      "final_research_status": "custom_basket_possible_with_caveats", "unresolved_risk": "THS membership lacks usable dated in/out fields in the published contract, preventing point-in-time history."
+    },
+    "liquid_cooling": {
+      "display_name": "液冷（自定义篮子）",
+      "mapping_type": "custom_basket",
+      "ths_candidates": [{"code": "886044.TI", "name": "液冷服务器", "constituent_count": null, "membership_as_of": null, "membership_verified": false, "maintained": "unverified_offline", "eligible": true}],
+      "dc_candidates": [{"code": "BK1138.DC", "name": "液冷", "constituent_count": null, "membership_as_of": null, "membership_verified": false, "maintained": "unverified_offline", "eligible": true}],
+      "tdx_candidates": [],
+      "name_match": "high", "semantic_match": "unverified_without_constituents", "concentration": "unknown", "stability": "unknown", "unrelated_stock_risk": "unknown",
+      "recommended_membership_source": "dc_member", "recommended_weighting": "equal_weight", "minimum_valid_constituent_count": 5, "semantic_confidence": "high",
+      "final_research_status": "custom_basket_possible_with_caveats", "unresolved_risk": "Membership breadth and inclusion of non-server cooling businesses are unverified."
+    },
+    "glass_substrate": {
+      "display_name": "玻璃基板（自定义篮子）",
+      "mapping_type": "custom_basket",
+      "ths_candidates": [{"code": "886111.TI", "name": "玻璃基板", "constituent_count": null, "membership_as_of": null, "membership_verified": false, "maintained": "unverified_offline", "eligible": true}],
+      "dc_candidates": [{"code": "BK1175.DC", "name": "玻璃基板", "constituent_count": null, "membership_as_of": null, "membership_verified": false, "maintained": "unverified_offline", "eligible": true}],
+      "tdx_candidates": [],
+      "name_match": "high", "semantic_match": "unverified_without_constituents", "concentration": "unknown", "stability": "short_history_risk", "unrelated_stock_risk": "unknown",
+      "recommended_membership_source": "dc_member", "recommended_weighting": "equal_weight", "minimum_valid_constituent_count": 5, "semantic_confidence": "high",
+      "final_research_status": "custom_basket_possible_with_caveats", "unresolved_risk": "The theme is recent; membership history length and stability must be measured."
+    },
+    "ai_applications": {
+      "display_name": "AI 应用（自定义篮子）",
+      "mapping_type": "custom_basket",
+      "ths_candidates": [{"code": "886108.TI", "name": "AI应用", "constituent_count": null, "membership_as_of": null, "membership_verified": false, "maintained": "unverified_offline", "eligible": true}],
+      "dc_candidates": [{"code": "BK1629.DC", "name": "AI 应用", "constituent_count": null, "membership_as_of": null, "membership_verified": false, "maintained": "unverified_offline", "eligible": true}],
+      "tdx_candidates": [],
+      "name_match": "high", "semantic_match": "unverified_without_constituents", "concentration": "unknown", "stability": "unknown", "unrelated_stock_risk": "high_due_to_broad_theme",
+      "recommended_membership_source": "dc_member", "recommended_weighting": "equal_weight", "minimum_valid_constituent_count": 5, "semantic_confidence": "medium",
+      "final_research_status": "custom_basket_possible_with_caveats", "unresolved_risk": "The theme may contain many loosely related software and hardware names."
+    },
+    "catering": {
+      "display_name": "餐饮（自定义篮子）",
+      "mapping_type": "custom_basket",
+      "ths_candidates": [],
+      "dc_candidates": [],
+      "tdx_candidates": [{"code": "880423.TDX", "name": "酒店餐饮", "constituent_count": 9, "membership_as_of": "2025-05-13", "membership_verified": false, "maintained": "official_document_sample_only", "eligible": false}],
+      "name_match": "low", "semantic_match": "rejected_mixed_hotel_and_catering", "concentration": "high_risk", "stability": "unknown", "unrelated_stock_risk": "hotel_substitution_prohibited",
+      "recommended_membership_source": null, "recommended_weighting": null, "minimum_valid_constituent_count": 5, "semantic_confidence": "low",
+      "final_research_status": "unsuitable_for_custom_basket", "unresolved_risk": "No independent dated catering membership is verified; hotel, tourism and food stocks cannot be substituted."
+    },
+    "internet_finance": {
+      "display_name": "互联网金融（自定义篮子）",
+      "mapping_type": "custom_basket",
+      "ths_candidates": [{"code": "885456.TI", "name": "互联网金融", "constituent_count": null, "membership_as_of": null, "membership_verified": false, "maintained": "unverified_offline", "eligible": true}],
+      "dc_candidates": [{"code": "BK0637.DC", "name": "互联网金融", "constituent_count": null, "membership_as_of": null, "membership_verified": false, "maintained": "unverified_offline", "eligible": true}],
+      "tdx_candidates": [],
+      "name_match": "high", "semantic_match": "unverified_without_constituents", "concentration": "unknown", "stability": "unknown", "unrelated_stock_risk": "cross_industry_theme",
+      "recommended_membership_source": "dc_member", "recommended_weighting": "equal_weight", "minimum_valid_constituent_count": 5, "semantic_confidence": "medium",
+      "final_research_status": "custom_basket_possible_with_caveats", "unresolved_risk": "Bank, broker, software and platform exposures may make the basket heterogeneous."
+    },
+    "rare_earth": {
+      "display_name": "稀土（自定义篮子）",
+      "mapping_type": "custom_basket",
+      "ths_candidates": [{"code": "885343.TI", "name": "稀土永磁", "constituent_count": null, "membership_as_of": null, "membership_verified": false, "maintained": "unverified_offline", "eligible": true}],
+      "dc_candidates": [{"code": "BK0578.DC", "name": "稀土", "constituent_count": null, "membership_as_of": null, "membership_verified": false, "maintained": "unverified_offline", "eligible": true}],
+      "tdx_candidates": [],
+      "name_match": "medium", "semantic_match": "unverified_without_constituents", "concentration": "unknown", "stability": "unknown", "unrelated_stock_risk": "magnet_downstream_may_exceed_rare_earth_scope",
+      "recommended_membership_source": "dc_member", "recommended_weighting": "equal_weight", "minimum_valid_constituent_count": 5, "semantic_confidence": "medium",
+      "final_research_status": "custom_basket_possible_with_caveats", "unresolved_risk": "THS expands to permanent magnets; DC membership must be audited for mining versus downstream exposure."
+    },
+    "commercial_space": {
+      "display_name": "商业航天（自定义篮子）",
+      "mapping_type": "custom_basket",
+      "ths_candidates": [{"code": "886078.TI", "name": "商业航天", "constituent_count": null, "membership_as_of": null, "membership_verified": false, "maintained": "unverified_offline", "eligible": true}],
+      "dc_candidates": [{"code": "BK0963.DC", "name": "商业航天", "constituent_count": null, "membership_as_of": null, "membership_verified": false, "maintained": "unverified_offline", "eligible": true}],
+      "tdx_candidates": [],
+      "name_match": "high", "semantic_match": "unverified_without_constituents", "concentration": "unknown", "stability": "unknown", "unrelated_stock_risk": "military_substitution_prohibited",
+      "recommended_membership_source": "dc_member", "recommended_weighting": "equal_weight", "minimum_valid_constituent_count": 5, "semantic_confidence": "high",
+      "final_research_status": "custom_basket_possible_with_caveats", "unresolved_risk": "Constituents must be audited to exclude broad military names without commercial-space exposure."
+    }
+  },
+  "priority_validation_paths": ["cpo", "liquid_cooling", "glass_substrate", "ai_applications", "commercial_space"],
+  "permissions": {
+    "as_of_date": "2026-08-03",
+    "official_source": "https://tushare.pro/document/1?doc_id=290",
+    "subject_to_provider_confirmation": true,
+    "minimum_permission_set": [
+      "6000-point tier for SW daily plus DC board list/member/daily and historical A-share daily",
+      "SW realtime index permission (rt_sw_k)",
+      "A-share realtime daily permission (rt_k)"
+    ],
+    "optional_permission_set": [
+      "THS board list/member/daily 6000-point interfaces",
+      "TDX board list/member/daily 6000-point interfaces",
+      "A-share realtime minute permission only if minute bars are later required"
+    ],
+    "estimated_monthly_direct_permission_cost_cny": 400,
+    "estimated_monthly_direct_permission_cost_basis": "Official list shows 200 CNY/month for SW realtime and 200 CNY/month for A-share realtime daily; excludes points and any display license.",
+    "one_time_or_points_requirements": "At least 6000 points. The public price table lists 5000 points at 500 CNY/year and 10000 points at 1000 CNY/year, but does not list an exact 6000-point package price.",
+    "interfaces": [
+      {"capability": "SW realtime index", "api": "rt_sw_k", "requirement": "independent permission", "official_price": "200 CNY/month", "frequency": "50/minute; full market per request", "display_permission": "unknown_provider_confirmation_required"},
+      {"capability": "A-share realtime daily", "api": "rt_k", "requirement": "independent permission", "official_price": "200 CNY/month", "frequency": "50/minute; up to full market per request", "display_permission": "unknown_provider_confirmation_required"},
+      {"capability": "THS board list", "api": "ths_index", "requirement": "6000 points", "official_price": "exact 6000-point package not publicly itemized", "frequency": "all rows in one request; do not loop", "display_permission": "unknown_provider_confirmation_required"},
+      {"capability": "THS board members", "api": "ths_member", "requirement": "6000 points", "official_price": "exact 6000-point package not publicly itemized", "frequency": "200/minute", "display_permission": "unknown_provider_confirmation_required"},
+      {"capability": "DC board list", "api": "dc_index", "requirement": "6000 points", "official_price": "exact 6000-point package not publicly itemized", "frequency": "up to 5000 rows/request", "display_permission": "unknown_provider_confirmation_required"},
+      {"capability": "DC board members", "api": "dc_member", "requirement": "6000 points", "official_price": "exact 6000-point package not publicly itemized", "frequency": "up to 5000 rows/request", "display_permission": "unknown_provider_confirmation_required"},
+      {"capability": "TDX board list", "api": "tdx_index", "requirement": "6000 points", "official_price": "exact 6000-point package not publicly itemized", "frequency": "up to 1000 rows/request", "display_permission": "unknown_provider_confirmation_required"},
+      {"capability": "TDX board members", "api": "tdx_member", "requirement": "6000 points", "official_price": "exact 6000-point package not publicly itemized", "frequency": "up to 3000 rows/request", "display_permission": "unknown_provider_confirmation_required"},
+      {"capability": "historical stock daily", "api": "daily", "requirement": "covered by 6000-point tier", "official_price": "included in points entitlement", "frequency": "points-dependent", "display_permission": "unknown_provider_confirmation_required"},
+      {"capability": "historical board daily", "api": "ths_daily/dc_daily/tdx_daily/sw_daily", "requirement": "5000 to 6000 points depending interface", "official_price": "included in points entitlement", "frequency": "interface-specific", "display_permission": "unknown_provider_confirmation_required"}
+    ]
+  },
+  "licensing_questions": [
+    "Does a private noncommercial website for approximately ten users qualify as permitted research use?",
+    "May the website display current SW index points and percentage changes?",
+    "May authenticated market data be cached at five-minute intervals?",
+    "May the website display derived custom-basket percentage returns calculated from constituents?",
+    "May the website disclose the membership source and constituent count?",
+    "Must raw stock-level quote details remain undisplayed?",
+    "May the APIs be called from an Alibaba Cloud server?",
+    "Which independent permissions are required for rt_sw_k and rt_k together?",
+    "What are the current prices, tax treatment and validity periods for every required entitlement?",
+    "What request frequency and daily volume limits apply to this use?",
+    "May the Token be stored and used only on the server?",
+    "Is an additional display or redistribution license required?"
+  ]
+}
