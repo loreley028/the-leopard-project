@@ -17,6 +17,15 @@ It is a one-pass capability inventory, not a Scheduler or deployment procedure.
 7. Stop and remove the one-shot container and its staging directory after results have
    been preserved outside the repository.
 
+The JSON keeps separate `candidate_results`, business `paths`, and a sanitized
+`attempt_audit`. Network counters are derived only from that audit: spot, spot retry,
+and history attempts are reported separately and their sum is the total network count.
+Circuit-breaker and semantic-verification skips are counters, never fabricated network
+requests. A direct/proxy path selects a successful legal candidate; a composite selects
+only when every configured component succeeds. `probe_result_invalid` is a distinct
+non-zero exit because JSON, CSV, and Markdown must agree before any product conclusion
+is drawn.
+
 The probe is core feasible at 60 or more spot-operational paths, partial at 55–59,
 and insufficient below 55. History and MA5 are separate metrics. The result determines
 the next MVP coverage decision; it does not authorize production promotion or deployment.
