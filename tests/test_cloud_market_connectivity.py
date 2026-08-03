@@ -17,7 +17,7 @@ def ok(_candidate, history):
     attempts = [{"endpoint_family": "spot", "purpose": "spot", "outcome": "success"}]
     if history:
         attempts.append({"endpoint_family": "history", "purpose": "history", "outcome": "success"})
-    return {"spot_status": "success", "history_status": "success", "previous_close_count": 4, "attempts": attempts}
+    return {"spot_status": "success", "current_available": True, "pre_close_available": True, "as_of_available": True, "history_status": "success", "previous_close_count": 4, "attempts": attempts}
 
 
 def failed(_candidate, _history):
@@ -76,7 +76,7 @@ def test_semantic_unverified_is_not_success():
 
 
 def test_history_not_required_for_spot_but_ma5_requires_four_closes():
-    result = run_probe((path("one", "direct", chain("one", ("p", "A"))),), lambda *_: {"spot_status": "success", "history_status": "insufficient_history", "previous_close_count": 2, "attempts": [{"purpose": "spot", "outcome": "success"}]})
+    result = run_probe((path("one", "direct", chain("one", ("p", "A"))),), lambda *_: {"spot_status": "success", "current_available": True, "pre_close_available": True, "as_of_available": True, "history_status": "insufficient_history", "previous_close_count": 2, "attempts": [{"purpose": "spot", "outcome": "success"}]})
     assert result["summary"]["spot_operational_count"] == 1
     assert result["summary"]["ma5_capable_count"] == 0
 
@@ -117,9 +117,20 @@ def test_unsupported_hstech_never_enters_live_paths():
 
 
 def test_request_count_formula_separates_history_and_retry():
-    result = run_probe((path("one", "direct", chain("one", ("p", "A"))),), lambda *_: {"spot_status": "success", "history_status": "success", "previous_close_count": 4, "attempts": [{"purpose": "spot", "outcome": "success"}, {"purpose": "spot_retry", "outcome": "success"}, {"purpose": "history", "outcome": "success"}]})
+    result = run_probe((path("one", "direct", chain("one", ("p", "A"))),), lambda *_: {"spot_status": "success", "current_available": True, "pre_close_available": True, "as_of_available": True, "history_status": "success", "previous_close_count": 4, "attempts": [{"purpose": "spot", "outcome": "success"}, {"purpose": "spot_retry", "outcome": "success"}, {"purpose": "history", "outcome": "success"}]})
     summary = result["summary"]
-    assert summary["total_network_attempt_count"] == summary["spot_network_attempt_count"] + summary["spot_retry_attempt_count"] + summary["history_network_attempt_count"] == 3
+    assert summary["total_network_attempt_count"] == summary["provider_probe_attempt_count"] + summary["spot_network_attempt_count"] + summary["spot_retry_attempt_count"] + summary["history_network_attempt_count"] == 3
+
+
+def test_provider_probe_and_spot_are_counted_once_when_not_reused():
+    result = run_probe((path("one", "direct", chain("one", ("p", "A"))),), lambda *_: {"spot_status": "success", "current_available": True, "pre_close_available": True, "as_of_available": True, "history_status": "not_attempted", "attempts": [{"purpose": "provider_probe", "outcome": "success"}, {"purpose": "spot", "outcome": "success"}]}, include_history=False)
+    assert result["summary"]["total_network_attempt_count"] == 2
+
+
+def test_reused_provider_preflight_is_not_a_second_network_attempt():
+    result = run_probe((path("one", "direct", chain("one", ("p", "A"))),), lambda *_: {"spot_status": "success", "current_available": True, "pre_close_available": True, "as_of_available": True, "history_status": "not_attempted", "attempts": [{"purpose": "spot", "outcome": "success", "reused_as_candidate_result": True}]}, include_history=False)
+    assert result["summary"]["provider_probe_attempt_count"] == 0
+    assert result["summary"]["total_network_attempt_count"] == 1
 
 
 def test_feasibility_bands():

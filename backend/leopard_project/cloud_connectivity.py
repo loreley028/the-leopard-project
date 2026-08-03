@@ -27,6 +27,7 @@ class Candidate:
     provider: str
     symbol: str
     provider_name: str
+    mapping_type: str = "direct"
 
 
 @dataclass(frozen=True)
@@ -52,7 +53,7 @@ class MarketPathProbe:
 def _candidate_chain(capability_candidate: object, index: int) -> CandidateChain:
     components = getattr(capability_candidate, "components") or ({"symbol": getattr(capability_candidate, "symbol"), "provider_name": getattr(capability_candidate, "provider_name")},)
     provider = str(getattr(capability_candidate, "provider"))
-    candidate = tuple(Candidate(provider, str(item["symbol"]), str(item["provider_name"])) for item in components)
+    candidate = tuple(Candidate(provider, str(item["symbol"]), str(item["provider_name"]), str(getattr(capability_candidate, "mapping_type"))) for item in components)
     return CandidateChain(f"{provider}:{getattr(capability_candidate, 'symbol')}:{index}", candidate)
 
 
@@ -91,15 +92,18 @@ def _audit_attempts(candidate: Candidate, raw: dict, counter: list[int]) -> list
 
 def _candidate_result(candidate: Candidate, raw: dict, attempts: list[dict]) -> dict:
     return {"candidate_key": f"{candidate.provider}:{candidate.symbol}", "provider": candidate.provider, "symbol": candidate.symbol,
-            "provider_name": candidate.provider_name, "spot_status": raw.get("spot_status", "failed"),
+            "provider_name": candidate.provider_name, "mapping_type": candidate.mapping_type, "spot_status": raw.get("spot_status", "failed"),
             "history_status": raw.get("history_status", "not_attempted"), "previous_close_count": int(raw.get("previous_close_count", 0)),
+            "current_available": bool(raw.get("current_available", False)), "pre_close_available": bool(raw.get("pre_close_available", False)),
+            "as_of_available": bool(raw.get("as_of_available", False)), "parser_status": raw.get("parser_status", "not_attempted"),
+            "freshness": raw.get("freshness", "unknown"), "circuit_skip_reason": raw.get("circuit_skip_reason"),
             "error_class": raw.get("error_class"), "error_summary": raw.get("error_summary"),
             "request_ids": [item["request_id"] for item in attempts], "attempts": attempts}
 
 
 def _chain_result(chain: CandidateChain, symbol_results: dict[tuple[str, str], dict]) -> dict:
     components = [symbol_results[(item.provider, item.symbol)] for item in chain.components]
-    spot_ok = bool(components) and all(item["spot_status"] == "success" for item in components)
+    spot_ok = bool(components) and all(item["spot_status"] == "success" and item["current_available"] and item["pre_close_available"] and item["as_of_available"] for item in components)
     history_ok = spot_ok and all(item["history_status"] == "success" and item["previous_close_count"] >= 4 for item in components)
     first_failure = next((item for item in components if item["spot_status"] != "success"), None)
     return {"candidate_id": chain.candidate_id, "components": components, "spot_ok": spot_ok, "history_ok": history_ok,
@@ -112,7 +116,8 @@ def _path_result(path: MarketPathProbe, symbol_results: dict[tuple[str, str], di
         return {"market_path_key": path.market_path_key, "display_name": path.display_name, "mapping_type": path.mapping_type,
                 "candidate_results": [], "selected_candidate_id": None, "spot_status": "semantic_unverified", "history_status": "not_attempted",
                 "previous_close_count": 0, "same_provider_same_symbol": False, "ma5_capable": False,
-                "final_operational_status": "failed", "error_class": "semantic_unverified", "error_summary": "no legal candidate"}
+                "current_available": False, "pre_close_available": False, "as_of_available": False,
+                "final_operational_status": "failed", "final_reason": "semantic_unverified", "error_class": "semantic_unverified", "error_summary": "no legal candidate"}
     alternatives = [_chain_result(chain, symbol_results) for chain in path.candidate_chains]
     selected = next((item for item in alternatives if item["spot_ok"]), None)
     if selected:
@@ -122,12 +127,14 @@ def _path_result(path: MarketPathProbe, symbol_results: dict[tuple[str, str], di
                 "candidate_results": alternatives, "selected_candidate_id": selected["candidate_id"], "components": components,
                 "component_count": len(components), "spot_status": "success", "history_status": "success" if history_ok else "insufficient_history",
                 "previous_close_count": min(item["previous_close_count"] for item in components), "same_provider_same_symbol": history_ok,
-                "ma5_capable": history_ok, "final_operational_status": "spot_operational", "error_class": None, "error_summary": None}
+                "ma5_capable": history_ok, "current_available": True, "pre_close_available": True, "as_of_available": True,
+                "final_operational_status": "spot_operational", "final_reason": "selected_legal_candidate", "error_class": None, "error_summary": None}
     failed = alternatives[0]
     return {"market_path_key": path.market_path_key, "display_name": path.display_name, "mapping_type": path.mapping_type,
             "candidate_results": alternatives, "selected_candidate_id": None, "components": failed["components"], "component_count": len(failed["components"]),
             "spot_status": "failed", "history_status": "not_attempted", "previous_close_count": 0, "same_provider_same_symbol": False,
-            "ma5_capable": False, "final_operational_status": "failed", "error_class": failed["error_class"], "error_summary": failed["error_summary"]}
+            "ma5_capable": False, "current_available": False, "pre_close_available": False, "as_of_available": False,
+            "final_operational_status": "failed", "final_reason": failed["error_class"] or "candidate_failed", "error_class": failed["error_class"], "error_summary": failed["error_summary"]}
 
 
 def validate_summary_consistency(result: dict) -> list[str]:
@@ -144,7 +151,8 @@ def validate_summary_consistency(result: dict) -> list[str]:
     valid_ids = set(ids)
     for row in paths:
         candidate_ids = {candidate["candidate_id"] for candidate in row.get("candidate_results", [])}
-        if row["final_operational_status"] == "spot_operational" and (not row.get("selected_candidate_id") or row["selected_candidate_id"] not in candidate_ids or row["spot_status"] != "success"): errors.append(f"invalid_success:{row['market_path_key']}")
+        if row["final_operational_status"] == "spot_operational" and (not row.get("selected_candidate_id") or row["selected_candidate_id"] not in candidate_ids or row["spot_status"] != "success" or not row.get("current_available") or not row.get("pre_close_available") or not row.get("as_of_available")):
+            errors.append(f"invalid_success:{row['market_path_key']}")
         for candidate in row.get("candidate_results", []):
             for component in candidate.get("components", []):
                 if not set(component.get("request_ids", [])).issubset(valid_ids): errors.append(f"invalid_candidate_request:{row['market_path_key']}")
@@ -170,9 +178,9 @@ def run_probe(paths: tuple[MarketPathProbe, ...], probe: Callable[[Candidate, bo
             if provider_failures[candidate.provider] >= 2: systemic.add(candidate.provider)
     rows = [_path_result(path, symbol_results) for path in paths]
     operational = sum(row["final_operational_status"] == "spot_operational" for row in rows)
-    counts = {"provider_probe_attempt_count": len(audit), "spot_network_attempt_count": sum(item["purpose"] == "spot" for item in audit),
+    counts = {"provider_probe_attempt_count": sum(item["purpose"] == "provider_probe" for item in audit), "spot_network_attempt_count": sum(item["purpose"] == "spot" for item in audit),
               "spot_retry_attempt_count": sum(item["purpose"] == "spot_retry" for item in audit), "history_network_attempt_count": sum(item["purpose"] == "history" for item in audit)}
-    counts["total_network_attempt_count"] = counts["spot_network_attempt_count"] + counts["spot_retry_attempt_count"] + counts["history_network_attempt_count"]
+    counts["total_network_attempt_count"] = counts["provider_probe_attempt_count"] + counts["spot_network_attempt_count"] + counts["spot_retry_attempt_count"] + counts["history_network_attempt_count"]
     summary = {"active_market_paths": len(paths), "supported_denominator": len(paths), "unsupported_count": len(load_market_path_registry().unsupported_market_paths),
                "evaluated_market_path_count": len(rows), "operational_market_path_count": operational, "failed_market_path_count": len(rows) - operational,
                "spot_operational_count": operational, "spot_failed_count": len(rows) - operational, "spot_operational_rate": operational / len(rows) if rows else 0,
