@@ -1,0 +1,348 @@
+{
+  "schema_version": "1.0.0",
+  "research_only": true,
+  "production_approved": false,
+  "methodology": {
+    "preferred_rule": "Use the exact official board whenever it is available.",
+    "fallback_rule": "A security proxy is an explicitly labelled observation aid, never a board-index replacement.",
+    "candidate_limit": "Normally one ETF and one leader; a priority theme may show up to three leaders separately.",
+    "aggregation_rule": "Do not calculate an equal-weight or other synthetic index by default.",
+    "admission_rule": "Every candidate requires user review before any product integration. The formal registry does not read this file."
+  },
+  "proxy_disclaimer": "代理证券用于观察主题相关标的表现，不代表官方板块指数或完整行业表现。",
+  "paths": [
+    {
+      "market_path_key": "cpo",
+      "display_name": "CPO",
+      "preferred_source_mode": "official_board",
+      "fallback_source_mode": "etf_plus_leaders_candidate",
+      "proxy_display_label": "代理观察",
+      "etf_candidates": [
+        {
+          "symbol": "515880",
+          "name": "国泰中证全指通信设备交易型开放式指数证券投资基金",
+          "coverage": "partial",
+          "rationale": "Tracks the broader communication-equipment theme; CPO is only one part of that universe.",
+          "source": "https://e.gtfund.com/etrade/Jijin/view/id/515880"
+        }
+      ],
+      "leader_candidates": [
+        {
+          "symbol": "300308",
+          "name": "中际旭创股份有限公司",
+          "market_shorthand": "易中天-中际旭创",
+          "business_relation": "The annual report describes high-speed optical modules used in cloud data centers.",
+          "concept_only": false,
+          "source": "https://static.cninfo.com.cn/finalpage/2025-04-21/1223155483.PDF"
+        },
+        {
+          "symbol": "300502",
+          "name": "成都新易盛通信技术股份有限公司",
+          "market_shorthand": "易中天-新易盛",
+          "business_relation": "The annual report documents high-speed optical-module products including 800G and 1.6T development.",
+          "concept_only": false,
+          "source": "https://static.cninfo.com.cn/finalpage/2025-04-23/1223219348.PDF"
+        },
+        {
+          "symbol": "300394",
+          "name": "苏州天孚光通信股份有限公司",
+          "market_shorthand": "易中天-天孚通信",
+          "business_relation": "The annual report identifies optical-communication components as the company's operating product category.",
+          "concept_only": false,
+          "source": "https://static.cninfo.com.cn/finalpage/2025-04-21/1223152632.PDF"
+        }
+      ],
+      "recommended_display_mode": "etf_plus_three_leaders_separate_returns",
+      "semantic_risks": ["communication ETF is broader than CPO", "three companies do not represent every CPO constituent", "no combined return should be shown"],
+      "requires_user_review": true,
+      "production_approved": false
+    },
+    {
+      "market_path_key": "commercial_space",
+      "display_name": "商业航天",
+      "preferred_source_mode": "official_board",
+      "fallback_source_mode": "leader_proxy_candidate",
+      "proxy_display_label": "代理观察",
+      "etf_candidates": [],
+      "leader_candidates": [
+        {
+          "symbol": "600118",
+          "name": "中国东方红卫星股份有限公司",
+          "business_relation": "Public filings identify the listed company with small-satellite development and satellite applications; exposure is not identical to the complete commercial-space chain.",
+          "concept_only": false,
+          "source": "https://static.cninfo.com.cn/finalpage/2002-11-19/10074405.html"
+        }
+      ],
+      "recommended_display_mode": "single_leader_separate_return",
+      "semantic_risks": ["no exact broad commercial-space ETF verified", "state aerospace and commercial-space exposure overlap", "single-company idiosyncratic risk"],
+      "requires_user_review": true,
+      "production_approved": false
+    },
+    {
+      "market_path_key": "computing_power_rental",
+      "display_name": "算力租赁",
+      "preferred_source_mode": "official_board",
+      "fallback_source_mode": "etf_plus_leaders_candidate",
+      "proxy_display_label": "代理观察",
+      "etf_candidates": [
+        {
+          "symbol": "516510",
+          "name": "易方达中证云计算与大数据主题交易型开放式指数证券投资基金",
+          "coverage": "partial",
+          "rationale": "Cloud-computing and big-data exposure is wider than capacity leasing and may include software names.",
+          "source": "https://cdn.efunds.com.cn/owch/data/bulletin/20260212/%E6%98%93%E6%96%B9%E8%BE%BE%E4%B8%AD%E8%AF%81%E4%BA%91%E8%AE%A1%E7%AE%97%E4%B8%8E%E5%A4%A7%E6%95%B0%E6%8D%AE%E4%B8%BB%E9%A2%98%E4%BA%A4%E6%98%93%E5%9E%8B%E5%BC%80%E6%94%BE%E5%BC%8F%E6%8C%87%E6%95%B0%E8%AF%81%E5%88%B8%E6%8A%95%E8%B5%84%E5%9F%BA%E9%87%91%E5%9F%BA%E9%87%91%E4%BA%A7%E5%93%81%E8%B5%84%E6%96%99%E6%A6%82%E8%A6%81%E6%9B%B4%E6%96%B0.pdf"
+        }
+      ],
+      "leader_candidates": [
+        {
+          "symbol": "300442",
+          "name": "润泽智算科技集团股份有限公司",
+          "business_relation": "Company disclosures describe large-scale intelligent-computing-center capacity; this is infrastructure exposure rather than a pure rental price index.",
+          "concept_only": false,
+          "source": "https://irm.cninfo.com.cn/interview/interview/activityInfo?activityId=902035413947650048"
+        }
+      ],
+      "recommended_display_mode": "etf_plus_single_leader_separate_returns",
+      "semantic_risks": ["cloud ETF is substantially broader", "operator returns include utilization, financing and customer concentration"],
+      "requires_user_review": true,
+      "production_approved": false
+    },
+    {
+      "market_path_key": "liquid_cooling",
+      "display_name": "液冷服务器",
+      "preferred_source_mode": "official_board",
+      "fallback_source_mode": "leader_proxy_candidate",
+      "proxy_display_label": "代理观察",
+      "etf_candidates": [],
+      "leader_candidates": [
+        {
+          "symbol": "002837",
+          "name": "深圳市英维克科技股份有限公司",
+          "business_relation": "The annual report documents liquid-cooling systems and components for data centers and servers.",
+          "concept_only": false,
+          "source": "https://static.cninfo.com.cn/finalpage/2025-04-22/1223190847.PDF"
+        }
+      ],
+      "recommended_display_mode": "single_leader_separate_return",
+      "semantic_risks": ["company also serves energy storage and other thermal-management markets", "single-company idiosyncratic risk", "no exact liquid-cooling ETF verified"],
+      "requires_user_review": true,
+      "production_approved": false
+    },
+    {
+      "market_path_key": "glass_substrate",
+      "display_name": "玻璃基板",
+      "preferred_source_mode": "official_board",
+      "fallback_source_mode": "unavailable",
+      "proxy_display_label": "代理观察",
+      "etf_candidates": [],
+      "leader_candidates": [],
+      "recommended_display_mode": "no_reliable_proxy",
+      "semantic_risks": ["the theme is narrow and fast-changing", "candidate companies often have only project-stage or concept-level exposure", "broad electronic-material ETFs would create material semantic drift"],
+      "requires_user_review": true,
+      "production_approved": false
+    },
+    {
+      "market_path_key": "ai_applications",
+      "display_name": "AI应用",
+      "preferred_source_mode": "official_board",
+      "fallback_source_mode": "etf_plus_leaders_candidate",
+      "proxy_display_label": "代理观察",
+      "etf_candidates": [
+        {
+          "symbol": "159819",
+          "name": "易方达中证人工智能主题交易型开放式指数证券投资基金",
+          "coverage": "partial",
+          "rationale": "Tracks the wider AI theme, including infrastructure and components beyond applications.",
+          "source": "https://cdn.efunds.com.cn/owch/data/bulletin/20241115/%E6%98%93%E6%96%B9%E8%BE%BE%E4%B8%AD%E8%AF%81%E4%BA%BA%E5%B7%A5%E6%99%BA%E8%83%BD%E4%B8%BB%E9%A2%98%E4%BA%A4%E6%98%93%E5%9E%8B%E5%BC%80%E6%94%BE%E5%BC%8F%E6%8C%87%E6%95%B0%E8%AF%81%E5%88%B8%E6%8A%95%E8%B5%84%E5%9F%BA%E9%87%91%E5%9F%BA%E9%87%91%E4%BA%A7%E5%93%81%E8%B5%84%E6%96%99%E6%A6%82%E8%A6%81%E6%9B%B4%E6%96%B0.pdf"
+        }
+      ],
+      "leader_candidates": [
+        {
+          "symbol": "002230",
+          "name": "科大讯飞股份有限公司",
+          "business_relation": "The annual report describes AI applications in education, healthcare and enterprise digitalization built on the Spark model.",
+          "concept_only": false,
+          "source": "https://static.cninfo.com.cn/finalpage/2025-04-22/1223191180.PDF"
+        }
+      ],
+      "recommended_display_mode": "etf_plus_single_leader_separate_returns",
+      "semantic_risks": ["AI ETF includes non-application layers", "one application vendor does not span all application categories"],
+      "requires_user_review": true,
+      "production_approved": false
+    },
+    {
+      "market_path_key": "internet_finance",
+      "display_name": "互联网金融",
+      "preferred_source_mode": "official_board",
+      "fallback_source_mode": "etf_plus_leaders_candidate",
+      "proxy_display_label": "代理观察",
+      "etf_candidates": [
+        {
+          "symbol": "159851",
+          "name": "华宝中证金融科技主题交易型开放式指数证券投资基金",
+          "coverage": "partial",
+          "rationale": "Financial technology overlaps with, but is not identical to, the Internet-finance concept.",
+          "source": "https://www.fsfund.com/fund/159851/fundDetail.shtml"
+        }
+      ],
+      "leader_candidates": [
+        {
+          "symbol": "300033",
+          "name": "浙江核新同花顺网络信息股份有限公司",
+          "business_relation": "Company disclosures identify financial-information-service demand and its website and app as operating drivers.",
+          "concept_only": false,
+          "source": "https://static.cninfo.com.cn/finalpage/2026-01-20/1224942044.PDF"
+        }
+      ],
+      "recommended_display_mode": "etf_plus_single_leader_separate_returns",
+      "semantic_risks": ["financial technology includes software and IT services beyond Internet finance", "single platform company has company-specific traffic and advertising exposure"],
+      "requires_user_review": true,
+      "production_approved": false
+    },
+    {
+      "market_path_key": "optical_fiber_theme",
+      "display_name": "光纤概念",
+      "preferred_source_mode": "official_board",
+      "fallback_source_mode": "etf_plus_leaders_candidate",
+      "proxy_display_label": "代理观察",
+      "etf_candidates": [
+        {
+          "symbol": "515880",
+          "name": "国泰中证全指通信设备交易型开放式指数证券投资基金",
+          "coverage": "partial",
+          "rationale": "Communication equipment includes optical fiber but also wireless, modules and other equipment.",
+          "source": "https://e.gtfund.com/etrade/Jijin/view/id/515880"
+        }
+      ],
+      "leader_candidates": [
+        {
+          "symbol": "600487",
+          "name": "江苏亨通光电股份有限公司",
+          "business_relation": "The annual report lists optical-fiber and optical-communication subsidiaries and operations.",
+          "concept_only": false,
+          "source": "https://static.cninfo.com.cn/finalpage/2025-04-25/1223276243.PDF"
+        }
+      ],
+      "recommended_display_mode": "etf_plus_single_leader_separate_returns",
+      "semantic_risks": ["communication ETF is broader than optical fiber", "company also has power cable and marine businesses"],
+      "requires_user_review": true,
+      "production_approved": false
+    },
+    {
+      "market_path_key": "rare_earth",
+      "display_name": "稀土",
+      "preferred_source_mode": "official_board",
+      "fallback_source_mode": "etf_plus_leaders_candidate",
+      "proxy_display_label": "代理观察",
+      "etf_candidates": [
+        {
+          "symbol": "516780",
+          "name": "华泰柏瑞中证稀土产业交易型开放式指数证券投资基金",
+          "coverage": "broad_theme",
+          "rationale": "Tracks the rare-earth industry rather than the exact THS concept membership.",
+          "source": "https://www.sse.com.cn/disclosure/announcement/general/jjzssgg/c/c_20260407_10814429.shtml"
+        }
+      ],
+      "leader_candidates": [
+        {
+          "symbol": "600111",
+          "name": "中国北方稀土（集团）高科技股份有限公司",
+          "business_relation": "The annual report identifies rare-earth raw materials and functional materials as principal product groups.",
+          "concept_only": false,
+          "source": "https://dataclouds.cninfo.com.cn/shgonggao/2024/2024-04-19/eb98e94cfd6a11eeb26efa163e26e5de.pdf"
+        }
+      ],
+      "recommended_display_mode": "etf_plus_single_leader_separate_returns",
+      "semantic_risks": ["ETF index methodology differs from THS concept membership", "leader has commodity-price and quota exposure"],
+      "requires_user_review": true,
+      "production_approved": false
+    },
+    {
+      "market_path_key": "innovative_drug_medicine",
+      "display_name": "创新药/医药",
+      "preferred_source_mode": "official_board",
+      "fallback_source_mode": "etf_plus_leaders_candidate",
+      "proxy_display_label": "代理观察",
+      "etf_candidates": [
+        {
+          "symbol": "159992",
+          "name": "银华中证创新药产业交易型开放式指数证券投资基金",
+          "coverage": "broad_theme",
+          "rationale": "Tracks an innovation-drug industry index but does not reproduce the THS board's membership or weighting.",
+          "source": "https://www.sse.com.cn/disclosure/fund/announcement/c/new/2023-09-21/562320_20230921_SYE5.pdf"
+        }
+      ],
+      "leader_candidates": [
+        {
+          "symbol": "600276",
+          "name": "江苏恒瑞医药股份有限公司",
+          "business_relation": "The listed pharmaceutical company is a direct innovative-drug operator; company-specific pipeline and trial risks remain material.",
+          "concept_only": false,
+          "source": "https://static.cninfo.com.cn/finalpage/2025-03-31/1222961969.PDF"
+        }
+      ],
+      "recommended_display_mode": "etf_plus_single_leader_separate_returns",
+      "semantic_risks": ["ETF and THS board constituents and weights differ", "one company's clinical pipeline is idiosyncratic"],
+      "requires_user_review": true,
+      "production_approved": false
+    },
+    {
+      "market_path_key": "semiconductor",
+      "display_name": "半导体",
+      "preferred_source_mode": "official_board",
+      "fallback_source_mode": "etf_plus_leaders_candidate",
+      "proxy_display_label": "代理观察",
+      "etf_candidates": [
+        {
+          "symbol": "159995",
+          "name": "华夏国证半导体芯片交易型开放式指数证券投资基金",
+          "coverage": "partial",
+          "rationale": "Tracks semiconductor chips; the broader semiconductor board also includes materials, equipment and other subsegments.",
+          "source": "https://www.chinaamc.com/fund/159995/index.shtml"
+        }
+      ],
+      "leader_candidates": [
+        {
+          "symbol": "688981",
+          "name": "中芯国际集成电路制造有限公司",
+          "business_relation": "The company is a semiconductor foundry, representing manufacturing rather than the entire semiconductor value chain.",
+          "concept_only": false,
+          "source": "https://static.cninfo.com.cn/finalpage/2025-03-28/1222924319.PDF"
+        }
+      ],
+      "recommended_display_mode": "etf_plus_single_leader_separate_returns",
+      "semantic_risks": ["chip ETF omits or underweights some equipment and material segments", "foundry performance is not a complete sector index"],
+      "requires_user_review": true,
+      "production_approved": false
+    },
+    {
+      "market_path_key": "hotel",
+      "display_name": "酒店",
+      "preferred_source_mode": "official_board",
+      "fallback_source_mode": "etf_plus_leaders_candidate",
+      "proxy_display_label": "代理观察",
+      "etf_candidates": [
+        {
+          "symbol": "159766",
+          "name": "富国中证旅游主题交易型开放式指数证券投资基金",
+          "coverage": "partial",
+          "rationale": "Tourism includes hotels but also attractions, travel services and other tourism activities.",
+          "source": "https://www.fullgoal.com.cn/fundDetail/159766/index.html"
+        }
+      ],
+      "leader_candidates": [
+        {
+          "symbol": "600754",
+          "name": "上海锦江国际酒店股份有限公司",
+          "business_relation": "The annual report provides a dedicated hotel-business segment and operating-hotel statistics.",
+          "concept_only": false,
+          "source": "https://static.cninfo.com.cn/finalpage/2025-04-02/1222985192.PDF"
+        }
+      ],
+      "recommended_display_mode": "etf_plus_single_leader_separate_returns",
+      "semantic_risks": ["tourism ETF is broader than hotels", "single operator has brand, geography and franchise-specific exposure", "does not alter the approved 881160 hotel proxy"],
+      "requires_user_review": true,
+      "production_approved": false
+    }
+  ]
+}

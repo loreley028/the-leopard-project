@@ -1,0 +1,50 @@
+{
+  "schema_version": "1.0.0",
+  "research_only": true,
+  "production_approved": false,
+  "endpoint": "http://qt.gtimg.cn/q={params}",
+  "encoding": "gbk",
+  "batch_separator": ",",
+  "full_symbol_formats": {
+    "SH": "sh{code}",
+    "SZ": "sz{code}"
+  },
+  "compact_symbol_formats": {
+    "SH": "s_sh{code}",
+    "SZ": "s_sz{code}"
+  },
+  "name_index": 1,
+  "symbol_index": 2,
+  "current_index": null,
+  "pre_close_index": null,
+  "pct_change_index": null,
+  "quote_datetime_index": 30,
+  "expected_minimum_field_count": 88,
+  "validation_method": "One compact and one full five-security batch were requested in an isolated Alibaba Cloud container during the same A-share session. Candidate indices had to satisfy positive prices, percentage formula agreement, compact/full percentage agreement and one common index tuple across all five securities.",
+  "validation_symbols": [
+    "510050",
+    "510300",
+    "588000",
+    "159901",
+    "159915"
+  ],
+  "percentage_tolerance": 0.05,
+  "evidence_summary": {
+    "observed_at": "2026-08-04T13:51:00+08:00",
+    "compact_calls": 1,
+    "full_calls": 1,
+    "compact_http_status": 200,
+    "full_http_status": 200,
+    "compact_field_count_per_record": 12,
+    "full_field_count_per_record": 88,
+    "compact_pct_change_index": 5,
+    "unique_common_quote_datetime_indices": [30],
+    "common_price_candidate_tuples": [
+      [3, 4, 32],
+      [78, 4, 32]
+    ],
+    "field_contract_status": "ambiguous",
+    "reason": "Two common current/pre_close/pct_change tuples satisfy the numerical gates across all five securities; numeric coincidence cannot establish price-field semantics. No complete upstream response is stored in Git."
+  },
+  "requires_user_approval": true
+}
