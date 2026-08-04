@@ -121,6 +121,78 @@ def compact_and_full_agree(compact: WireRecord, parsed_full: dict, tolerance: De
     return abs(compact_pct_change(compact) - Decimal(parsed_full["pct_change"])) <= tolerance
 
 
+def composite_price(value: str) -> Decimal:
+    """Parse the first `price/volume/amount` component without retaining its tail."""
+    return _decimal(value.split("/", 1)[0], "composite_price")
+
+
+def p78_observation(current: str, p78: str) -> str:
+    """Observe the redundant field without making it a fallback or canonical value."""
+    if not p78:
+        return "unavailable_not_adopted"
+    if _decimal(current, "current") == _decimal(p78, "p78"):
+        return "duplicate_or_extension_price_field"
+    return "different_not_adopted"
+
+
+def validate_semantic_anchors(
+    full: WireRecord,
+    compact: WireRecord,
+    *,
+    minute_last_price: str,
+    minute_last_datetime: str,
+    expected_trade_date: str,
+    price_tolerance: Decimal = Decimal("0.02"),
+    percentage_tolerance: Decimal = Decimal("0.05"),
+) -> dict:
+    """Validate the proposed p3/p4/p31/p32 contract independently of p78.
+
+    The result is evidence only. A caller must require every `checks` value
+    before writing indices into a usable contract.
+    """
+    if len(full.fields) < 88:
+        raise QuoteContractError("full_record_too_short")
+    if len(compact.fields) < 6:
+        raise QuoteContractError("compact_record_too_short")
+    current = _decimal(full.fields[3], "current")
+    pre_close = _decimal(full.fields[4], "pre_close")
+    change = _decimal(full.fields[31], "change")
+    pct_change = _decimal(full.fields[32], "pct_change")
+    if current <= 0 or pre_close <= 0:
+        raise QuoteContractError("nonpositive_price")
+    try:
+        quote_datetime = datetime.strptime(full.fields[30], "%Y%m%d%H%M%S")
+    except ValueError as exc:
+        raise QuoteContractError("invalid_quote_datetime") from exc
+    try:
+        minute_datetime = datetime.fromisoformat(minute_last_datetime)
+    except ValueError as exc:
+        raise QuoteContractError("invalid_minute_datetime") from exc
+    calculated_change = current - pre_close
+    calculated_pct = (current / pre_close - Decimal("1")) * Decimal("100")
+    checks = {
+        "full_p3_equals_compact_p3": abs(current - _decimal(compact.fields[3], "compact_current")) <= price_tolerance,
+        "full_p31_equals_compact_p4": abs(change - _decimal(compact.fields[4], "compact_change")) <= price_tolerance,
+        "full_p32_equals_compact_p5": abs(pct_change - _decimal(compact.fields[5], "compact_pct_change")) <= percentage_tolerance,
+        "change_formula": abs(calculated_change - change) <= price_tolerance,
+        "pct_formula": abs(calculated_pct - pct_change) <= percentage_tolerance,
+        "composite_p35_price": abs(current - composite_price(full.fields[35])) <= price_tolerance,
+        "minute_last_price": abs(current - _decimal(minute_last_price, "minute_last_price")) <= price_tolerance,
+        "quote_datetime_current_day": quote_datetime.date().isoformat() == expected_trade_date,
+        "minute_datetime_current_day": minute_datetime.date().isoformat() == expected_trade_date,
+    }
+    return {
+        "current": str(current),
+        "pre_close": str(pre_close),
+        "change": str(change),
+        "pct_change": str(pct_change),
+        "quote_datetime": quote_datetime.isoformat(),
+        "p78_observation": p78_observation(full.fields[3], full.fields[78]),
+        "checks": checks,
+        "confirmed": all(checks.values()),
+    }
+
+
 def infer_common_price_tuples(
     full_records: Iterable[WireRecord],
     compact_records: Iterable[WireRecord],
@@ -176,7 +248,7 @@ def main() -> int:
     print(json.dumps({
         "research_only": contract["research_only"],
         "production_approved": contract["production_approved"],
-        "field_contract_status": contract["evidence_summary"]["field_contract_status"],
+        "field_contract_status": contract["contract_status"],
         "price_indices_resolved": all(isinstance(contract[key], int) for key in (
             "current_index", "pre_close_index", "pct_change_index"
         )),

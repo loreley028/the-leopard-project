@@ -52,6 +52,29 @@ tencent_standard_quote_transport_promising
 tencent_quote_field_contract_ambiguous
 ```
 
+## Follow-up semantic-anchor run (2026-08-04 14:17 CST)
+
+This follow-up used one full batch, one compact batch and one same-day minute
+request for each of `510300`, `300308` and `600111` (five requests total, no
+retry). Every endpoint returned HTTP 200. The planned anchors deliberately do
+not require an explanation for every field or a unique interpretation of p78.
+
+| Security | p3/formula/p35/minute | p3 vs compact p3 | p31 vs compact p4 | Result |
+|---|---|---|---|---|
+| 510300 | pass | pass | pass | pass |
+| 300308 | pass | fail: 0.12 difference | fail: 0.12 difference | fail closed |
+| 600111 | pass | pass within tolerance | pass within tolerance | pass |
+
+For `300308`, full p3 and p35 were both `1022.00`, and the Tencent minute last
+price was also `1022.00`; the compact response, requested separately, showed
+`1021.88`. The difference is larger than the configured display-precision
+tolerance. It may reflect a real intra-request update, but this bounded run
+cannot prove that, and no retry is permitted. Therefore p3 is not promoted.
+
+p78 was distinct for the ETF and empty for both stocks; it is explicitly
+observational and is neither a canonical current field nor a fallback. The
+current status is `unresolved`, not a transport rejection.
+
 The machine-readable contract is
 `config/research/tencent_standard_quote_contract_v1.json`. Its price indices are
 `null`, `production_approved` is false, and the research parser fails closed with

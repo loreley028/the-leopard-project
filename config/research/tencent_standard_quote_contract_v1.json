@@ -17,8 +17,10 @@
   "symbol_index": 2,
   "current_index": null,
   "pre_close_index": null,
+  "change_index": null,
   "pct_change_index": null,
   "quote_datetime_index": 30,
+  "contract_status": "unresolved",
   "expected_minimum_field_count": 88,
   "validation_method": "One compact and one full five-security batch were requested in an isolated Alibaba Cloud container during the same A-share session. Candidate indices had to satisfy positive prices, percentage formula agreement, compact/full percentage agreement and one common index tuple across all five securities.",
   "validation_symbols": [
@@ -44,7 +46,22 @@
       [78, 4, 32]
     ],
     "field_contract_status": "ambiguous",
-    "reason": "Two common current/pre_close/pct_change tuples satisfy the numerical gates across all five securities; numeric coincidence cannot establish price-field semantics. No complete upstream response is stored in Git."
+    "reason": "The initial numerical-only scan found two current candidates. That result is retained as historical evidence and is superseded as a decision rule by the semantic-anchor run below. No complete upstream response is stored in Git."
   },
+  "semantic_anchor_methods": [
+    "full_p3_to_compact_p3",
+    "full_p31_to_compact_p4",
+    "full_p32_to_compact_p5",
+    "change_and_percentage_formula",
+    "p35_price_volume_amount_first_price",
+    "same_day_tencent_minute_last_price"
+  ],
+  "compact_cross_validation": "2026-08-04 isolated-cloud run: 510300 and 600111 passed all anchors; 300308 failed p3/p31 compact comparisons because the two sequential snapshots differed by 0.12. The mismatch exceeded the research display-precision tolerance, so no current-field contract was promoted.",
+  "composite_field_validation": "p3 equalled the first p35 price component for 510300, 300308 and 600111.",
+  "minute_endpoint_validation": "The last same-day Tencent minute price was within the configured price tolerance of p3 for all three instruments.",
+  "redundant_field_observations": "p78 was non-empty and distinct for 510300, empty for 300308 and 600111. It is observational only and never a fallback.",
+  "p78_policy": "ignored_duplicate_or_extension",
+  "validated_instrument_types": ["SH ETF", "SZ stock", "SH stock"],
+  "validated_at": "2026-08-04T14:17:35+08:00",
   "requires_user_approval": true
 }

@@ -122,6 +122,88 @@ def test_parser_has_no_raw_response_persistence_api() -> None:
     assert not hasattr(MODULE, "save_raw_response")
 
 
+def anchored_full_record(*, current: str = "1022.00", pre_close: str = "902.50", change: str = "119.50", pct: str = "13.24", p78: str = ""):
+    fields = [""] * 88
+    fields[1] = "示例证券"
+    fields[2] = "300308"
+    fields[3] = current
+    fields[4] = pre_close
+    fields[30] = "20260804141733"
+    fields[31] = change
+    fields[32] = pct
+    fields[35] = f"{current}/1000/100000"
+    fields[78] = p78
+    return MODULE.WireRecord("sz300308", tuple(fields))
+
+
+def anchored_compact_record(*, current: str = "1022.00", change: str = "119.50", pct: str = "13.24"):
+    return MODULE.WireRecord("s_sz300308", ("", "示例证券", "300308", current, change, pct, "", "", "", "", "", ""))
+
+
+def test_semantic_anchors_confirm_p3_p31_p32_and_p35() -> None:
+    result = MODULE.validate_semantic_anchors(
+        anchored_full_record(), anchored_compact_record(), minute_last_price="1022.00",
+        minute_last_datetime="2026-08-04T14:18:00+08:00", expected_trade_date="2026-08-04",
+    )
+    assert result["confirmed"] is True
+    assert all(result["checks"].values())
+
+
+def test_semantic_anchor_rejects_compact_current_mismatch() -> None:
+    result = MODULE.validate_semantic_anchors(
+        anchored_full_record(), anchored_compact_record(current="1021.88", change="119.38", pct="13.23"),
+        minute_last_price="1022.00", minute_last_datetime="2026-08-04T14:18:00+08:00",
+        expected_trade_date="2026-08-04",
+    )
+    assert result["confirmed"] is False
+    assert result["checks"]["full_p3_equals_compact_p3"] is False
+    assert result["checks"]["full_p31_equals_compact_p4"] is False
+
+
+def test_semantic_anchor_rejects_failed_formula_or_composite() -> None:
+    with pytest.raises(MODULE.QuoteContractError, match="percentage_formula_mismatch"):
+        MODULE.parse_full_record(full_record(pct="9.99"), contract())
+    broken = list(anchored_full_record().fields)
+    broken[35] = "999.99/1000/100000"
+    result = MODULE.validate_semantic_anchors(
+        MODULE.WireRecord("sz300308", tuple(broken)), anchored_compact_record(), minute_last_price="1022.00",
+        minute_last_datetime="2026-08-04T14:18:00+08:00", expected_trade_date="2026-08-04",
+    )
+    assert result["confirmed"] is False
+    assert result["checks"]["composite_p35_price"] is False
+
+
+def test_p78_duplicate_does_not_create_ambiguity() -> None:
+    assert MODULE.p78_observation("10.00", "10.00") == "duplicate_or_extension_price_field"
+
+
+def test_p78_difference_never_overwrites_p3() -> None:
+    result = MODULE.validate_semantic_anchors(
+        anchored_full_record(p78="1022.10"), anchored_compact_record(), minute_last_price="1022.00",
+        minute_last_datetime="2026-08-04T14:18:00+08:00", expected_trade_date="2026-08-04",
+    )
+    assert result["current"] == "1022.00"
+    assert result["p78_observation"] == "different_not_adopted"
+
+
+def test_semantic_anchor_rejects_stale_minute_date() -> None:
+    result = MODULE.validate_semantic_anchors(
+        anchored_full_record(), anchored_compact_record(), minute_last_price="1022.00",
+        minute_last_datetime="2026-08-03T14:18:00+08:00", expected_trade_date="2026-08-04",
+    )
+    assert result["confirmed"] is False
+    assert result["checks"]["minute_datetime_current_day"] is False
+
+
+def test_unconfirmed_config_stays_nonproduction() -> None:
+    value = MODULE.load_contract()
+    assert value["contract_status"] == "unresolved"
+    assert value["production_approved"] is False
+    assert value["research_only"] is True
+    assert value["current_index"] is None
+    assert value["change_index"] is None
+
+
 def test_proxy_research_scope_and_safety_flags() -> None:
     proxy = json.loads((ROOT / "config/research/market_path_security_proxies_v1.json").read_text(encoding="utf-8"))
     expected = {
