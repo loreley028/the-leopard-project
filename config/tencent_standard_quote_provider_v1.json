@@ -1,0 +1,49 @@
+{
+  "schema_version": "1.0.0",
+  "provider_key": "tencent_standard_security_quote",
+  "provider_role": "diagnostic_provider",
+  "enabled": false,
+  "production_approved": false,
+  "scheduler_integrated": false,
+  "market_path_registry_integrated": false,
+  "endpoint_template": "http://qt.gtimg.cn/q={symbols}",
+  "response_encoding": "gbk",
+  "supported_symbol_pattern": "^(?:sh|sz)[0-9]{6}$",
+  "unsupported_scope": [
+    "tonghuashun_88xxxx_boards",
+    "tencent_industry_or_concept_boards",
+    "hong_kong",
+    "united_states",
+    "custom_baskets",
+    "minute_or_historical_quotes"
+  ],
+  "field_contract": {
+    "name_index": 1,
+    "symbol_index": 2,
+    "current_index": 3,
+    "pre_close_index": 4,
+    "quote_datetime_index": 30,
+    "change_index": 31,
+    "pct_change_index": 32,
+    "p35_validation": "first_price_component_must_match_current_when_present",
+    "p78_policy": "permanently_ignored"
+  },
+  "request": {
+    "max_batch_size": 20,
+    "timeout_seconds": 10,
+    "automatic_retries": 0
+  },
+  "validation": {
+    "price_tolerance": "0.02",
+    "pct_change_tolerance": "0.05",
+    "max_quote_age_seconds": 900,
+    "minimum_field_count": 33
+  },
+  "diagnostic_default_symbols": [
+    "sh510300",
+    "sz300308",
+    "sh600111",
+    "sz300502",
+    "sz300394"
+  ]
+}

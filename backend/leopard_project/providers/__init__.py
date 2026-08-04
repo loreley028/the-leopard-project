@@ -8,6 +8,7 @@ from .akshare_research import AkshareResearchProvider, build_live_akshare_fetche
 from .policy import ProviderRole, SnapshotAnomaly, detect_snapshot_anomaly, production_admission_met, provider_role, provider_symbol
 from .capabilities import ProviderCandidate, SectorCapability, load_provider_capabilities
 from .health import ProviderCircuitBreaker, classify_provider_failure, resilience_policy
+from .tencent_standard_quote import TencentQuoteBatch, TencentQuoteError, TencentQuoteErrorCode, TencentStandardSecurityQuoteProvider, StandardSecurityQuote
 
 __all__ = [
     "FakeProvider", "MarketDataProvider", "ProviderError", "ProviderErrorCategory", "SymbolValidation",
@@ -17,4 +18,5 @@ __all__ = [
     "production_admission_met", "provider_role", "provider_symbol",
     "ProviderCandidate", "SectorCapability", "load_provider_capabilities",
     "ProviderCircuitBreaker", "classify_provider_failure", "resilience_policy",
+    "TencentQuoteBatch", "TencentQuoteError", "TencentQuoteErrorCode", "TencentStandardSecurityQuoteProvider", "StandardSecurityQuote",
 ]
