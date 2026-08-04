@@ -1,4 +1,4 @@
-import type { EnhancedReport, Interpretation, IntradayStatus, PathMatrix, Principal, Report, Sector, SectorAssessment, SectorResearch } from "../types";
+import type { EnhancedReport, Interpretation, IntradayStatus, PathMatrix, Principal, Report, Sector, SectorAssessment, SectorResearch, ViewerObservation } from "../types";
 
 export class ApiError extends Error {
   constructor(public code: string, message: string, public status: number) { super(message); }
@@ -27,6 +27,7 @@ export const api = {
   sectors: (includeLowAttention = false, lowAttentionOnly = false) => request<Sector[]>(`/sectors?include_low_attention=${includeLowAttention}&low_attention_only=${lowAttentionOnly}`),
   sector: (key: string) => request<Sector>(`/sectors/${key}`),
   sectorResearch: (key: string, pathPeriods = 20, marketDays = 20) => request<SectorResearch>(`/sectors/${key}/research?path_periods=${pathPeriods}&market_days=${marketDays}`),
+  viewerObservation: (key: string) => request<ViewerObservation>(`/market-paths/${encodeURIComponent(key)}/viewer-observation`),
   adminSummary: () => request<Record<string, number>>("/admin/summary"),
   reportDays: (start: string, end: string) => request<Array<{ report_date: string; weekday: string; expected_status: string; state: string; skip_reason: string; reports: Report[] }>>(`/admin/report-days?start=${start}&end=${end}`),
   skipReportDay: (day: string, reason = "") => request(`/admin/report-days/${day}/skip`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ reason }) }),

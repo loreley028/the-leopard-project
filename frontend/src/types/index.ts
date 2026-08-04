@@ -258,6 +258,19 @@ export interface IntradaySnapshot {
   fetched_at: string;
 }
 
+export interface ViewerSecurityProxyInstrument {
+  symbol: string; security_name: string; proxy_role: "etf" | "leader"; coverage_type: string;
+  current: number | null; pre_close: number | null; change: number | null; pct_change: number | null;
+  quote_datetime: string | null; quote_status: "available" | "unavailable"; error_class: string | null;
+}
+export interface ViewerObservation {
+  market_path_key: string;
+  viewer_source_mode: "official_board" | "security_proxy" | "unavailable";
+  fallback_reason: string | null;
+  disclosure: string | null;
+  security_proxy: { display_label: string; status: string; recommended_display_mode: string; instruments: ViewerSecurityProxyInstrument[]; cache_hit: boolean; quote_datetime: string | null } | null;
+}
+
 export interface IntradayStatus {
   session_status: "running" | "paused";
   market_phase: "intraday_open" | "market_break" | "market_closed" | "calendar_error";

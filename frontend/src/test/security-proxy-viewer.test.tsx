@@ -1,0 +1,33 @@
+import { render, screen } from "@testing-library/react";
+import { describe, expect, it } from "vitest";
+import { SecurityProxyCard } from "../pages/SectorDetailPage";
+import type { ViewerObservation } from "../types";
+
+const cpo: ViewerObservation = {
+  market_path_key: "cpo", viewer_source_mode: "security_proxy", fallback_reason: "provider_failed",
+  disclosure: "代理证券用于观察主题相关标的表现，不代表官方板块指数或完整行业表现。",
+  security_proxy: { display_label: "代理观察", status: "available", recommended_display_mode: "etf_plus_three_leaders", cache_hit: false, quote_datetime: "2026-08-04T14:30:00+08:00", instruments: [
+    { symbol: "sh515880", security_name: "通信ETF", proxy_role: "etf", coverage_type: "partial", current: .636, pre_close: .582, change: .054, pct_change: 9.28, quote_datetime: "2026-08-04T14:30:00+08:00", quote_status: "available", error_class: null },
+    ...["中际旭创", "新易盛", "天孚通信"].map((security_name, index) => ({ symbol: `sz300${308 + index}`, security_name, proxy_role: "leader" as const, coverage_type: "leader_representative", current: 1, pre_close: 1, change: 0, pct_change: 1, quote_datetime: "2026-08-04T14:30:00+08:00", quote_status: "available" as const, error_class: null })),
+  ] },
+};
+
+describe("SecurityProxyCard", () => {
+  it("shows CPO as ETF plus three independent leaders without aggregate board return", () => {
+    render(<SecurityProxyCard observation={cpo} />);
+    expect(screen.getAllByText("代理观察")).toHaveLength(2);
+    expect(screen.getByText("部分覆盖")).toBeInTheDocument();
+    expect(screen.getAllByText(/核心公司/)).toHaveLength(3);
+    expect(screen.getByText(/不代表官方板块指数/)).toBeInTheDocument();
+    expect(screen.queryByText("板块涨跌")).not.toBeInTheDocument();
+  });
+
+  it("shows unavailable security without zero substitution and explicit no-proxy state", () => {
+    const unavailable: ViewerObservation = { ...cpo, security_proxy: { ...cpo.security_proxy!, instruments: [{ ...cpo.security_proxy!.instruments[0], current: null, pct_change: null, quote_status: "unavailable" }] } };
+    render(<SecurityProxyCard observation={unavailable} />);
+    expect(screen.getByText("行情暂不可用")).toBeInTheDocument();
+    expect(screen.queryByText("0.00%")).not.toBeInTheDocument();
+    render(<SecurityProxyCard observation={{ ...cpo, viewer_source_mode: "unavailable", security_proxy: null, fallback_reason: "no_reliable_security_proxy" }} />);
+    expect(screen.getByText("暂无可靠的代理证券行情")).toBeInTheDocument();
+  });
+});

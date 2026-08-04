@@ -338,6 +338,10 @@ button, a, input, textarea, [tabindex] { outline-offset: 4px; }
 .intraday-detail-list > div { display: grid; grid-template-columns: minmax(7rem, .8fr) minmax(0, 1.2fr); gap: .65rem; }
 .intraday-detail-list dt { color: var(--text-muted); font-size: .75rem; }
 .intraday-detail-list dd { margin: 0; overflow-wrap: anywhere; font-size: .82rem; font-weight: 600; }
+.proxy-observation-badge { display: inline-block; padding: .15rem .45rem; border-radius: .5rem; background: #7c3aed; color: white; font-size: .76rem; }
+.proxy-observation-list { display: grid; gap: .5rem; margin: .65rem 0; }
+.proxy-observation-list > div { display: grid; gap: .15rem; padding: .55rem; border-left: 3px solid #8b5cf6; background: #faf5ff; }
+.proxy-observation-list small { color: var(--text-muted); }
 @media (max-width: 760px) {
   .sectors-research, .sector-research-detail { min-width: 0; max-width: 100%; overflow-x: clip; }
   .sector-table-wrap { width: 100%; overflow-x: auto; }

@@ -7,7 +7,7 @@ import struct
 import threading
 import zlib
 from dataclasses import dataclass
-from datetime import date, timedelta
+from datetime import date, timedelta, datetime, timezone
 from pathlib import Path
 from uuid import uuid4
 from fastapi import Cookie, Depends, FastAPI, File, Form, Query, Request, Response, UploadFile
@@ -32,6 +32,11 @@ from .intraday import IntradayRefreshCoordinator
 from .market_automation import EodBackfillCoordinator
 from .path_history import ensure_latest_path_history
 from .review_workflow import ReviewWorkflowService
+from .enhanced import EnhancedReportService
+from .intraday import intraday_policy, resolve_intraday_data_status
+from .security_proxy_viewer import OfficialBoardAvailability, SecurityProxyViewerCache, SecurityProxyViewerService
+from leopard_project.providers.tencent_standard_quote import TencentStandardSecurityQuoteProvider
+from leopard_project.security_proxy_observation import SecurityProxyObservationService
 
 
 COOKIE_NAME = "leopard_session"
@@ -78,6 +83,9 @@ class WebSettings:
     cookie_secure: bool = False
     data_mode: str = "test"
     market_automation_enabled: bool = False
+    security_proxy_viewer_enabled: bool = False
+    security_proxy_cache_ttl_seconds: int = 300
+    security_proxy_error_cache_ttl_seconds: int = 30
 
     @classmethod
     def from_env(cls) -> "WebSettings":
@@ -101,6 +109,9 @@ class WebSettings:
             cookie_secure=os.getenv("LEOPARD_COOKIE_SECURE", "false").lower() == "true",
             data_mode=data_mode,
             market_automation_enabled=os.getenv("LEOPARD_MARKET_AUTOMATION_ENABLED", "true" if data_mode == "real_local" else "false").lower() == "true",
+            security_proxy_viewer_enabled=os.getenv("SECURITY_PROXY_VIEWER_ENABLED", "false").lower() == "true",
+            security_proxy_cache_ttl_seconds=int(os.getenv("SECURITY_PROXY_CACHE_TTL_SECONDS", "300")),
+            security_proxy_error_cache_ttl_seconds=int(os.getenv("SECURITY_PROXY_ERROR_CACHE_TTL_SECONDS", "30")),
         )
 
 
@@ -117,6 +128,11 @@ def create_app(settings: WebSettings | None = None, session_factory: sessionmake
     eod_backfill = EodBackfillCoordinator(sessions)
     app.state.intraday_coordinator = intraday
     app.state.eod_backfill_coordinator = eod_backfill
+    app.state.security_proxy_viewer = SecurityProxyViewerService(
+        observation_service=SecurityProxyObservationService(provider=TencentStandardSecurityQuoteProvider()),
+        enabled=settings.security_proxy_viewer_enabled,
+        cache=SecurityProxyViewerCache(ttl_seconds=settings.security_proxy_cache_ttl_seconds, error_ttl_seconds=settings.security_proxy_error_cache_ttl_seconds),
+    )
 
     def stop_market_automation() -> None:
         intraday.shutdown()
@@ -175,7 +191,34 @@ def create_app(settings: WebSettings | None = None, session_factory: sessionmake
 
     @app.get("/api/v1/runtime")
     def runtime(current: Principal = Depends(principal)) -> dict:
-        return {"data_mode": settings.data_mode, "production_primary": None, "fixture_seeded": False}
+        return {"data_mode": settings.data_mode, "production_primary": None, "fixture_seeded": False, "security_proxy_viewer_enabled": settings.security_proxy_viewer_enabled}
+
+    def official_board_availability(session: Session, market_path_key: str) -> OfficialBoardAvailability:
+        if not any(item.market_path_key == market_path_key for item in load_market_path_registry().market_paths):
+            raise WebDomainError("market_path_not_found", "Market path not found", 404)
+        snapshot = EnhancedReportService(session).latest_intraday(market_path_key)
+        status = resolve_intraday_data_status(
+            phase=intraday.status()["market_phase"], snapshot=snapshot, latest_result=None,
+            now=datetime.now(timezone.utc), stale_after_minutes=intraday_policy()["stale_after_minutes"], unsupported=False,
+        )
+        fresh = status == "intraday_fresh"
+        return OfficialBoardAvailability(market_path_key, fresh, fresh, status, None if fresh else status, snapshot.get("observed_at") if snapshot else None)
+
+    @app.get("/api/v1/market-paths/{market_path_key}/viewer-observation")
+    def viewer_observation(market_path_key: str, current: Principal = Depends(principal), session: Session = Depends(db_session)) -> dict:
+        return app.state.security_proxy_viewer.observe(official_board_availability(session, market_path_key))
+
+    @app.post("/api/v1/market-paths/viewer-observations/query")
+    def viewer_observations_query(payload: dict, current: Principal = Depends(principal), session: Session = Depends(db_session)) -> dict:
+        keys = payload.get("market_path_keys")
+        if not isinstance(keys, list) or not all(isinstance(item, str) for item in keys) or not keys or len(keys) > 20:
+            raise WebDomainError("invalid_market_path_keys", "market_path_keys must contain 1..20 path keys", 422)
+        ordered = list(dict.fromkeys(keys))
+        results = []
+        for key in ordered:
+            try: results.append(app.state.security_proxy_viewer.observe(official_board_availability(session, key)))
+            except WebDomainError as exc: results.append({"market_path_key": key, "viewer_source_mode": "unavailable", "fallback_reason": exc.code, "official_board": None, "security_proxy": None, "disclosure": None, "generated_at": datetime.now(timezone.utc).isoformat()})
+        return {"items": results}
 
     @app.post("/api/v1/auth/login", response_model=PrincipalResponse)
     def login(payload: LoginRequest, response: Response) -> PrincipalResponse:

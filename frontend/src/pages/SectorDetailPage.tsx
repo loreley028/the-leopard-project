@@ -5,7 +5,7 @@ import { IslandCard } from "../components/island/IslandCard";
 import { IslandMetricGrid } from "../components/island/IslandMetricGrid";
 import { IslandMarketSparkline } from "../components/island/IslandMarketSparkline";
 import { IslandStatusBadge } from "../components/island/IslandStatusBadge";
-import type { SectorResearch } from "../types";
+import type { SectorResearch, ViewerObservation } from "../types";
 import { formatPct } from "../utils/format";
 import { intradayDataLabel } from "../utils/intraday";
 
@@ -14,9 +14,11 @@ const PATH_LABELS: Record<string, string> = { avoid: "不碰", strong_watch: "�
 export function SectorDetailPage() {
   const { sectorKey = "" } = useParams();
   const [research, setResearch] = useState<SectorResearch | null>();
+  const [viewerObservation, setViewerObservation] = useState<ViewerObservation | null>(null);
   const [pathPeriods, setPathPeriods] = useState(20);
   const [marketDays, setMarketDays] = useState(20);
   useEffect(() => { api.sectorResearch(sectorKey, pathPeriods, marketDays).then(setResearch).catch(() => setResearch(null)); }, [sectorKey, pathPeriods, marketDays]);
+  useEffect(() => { api.viewerObservation(sectorKey).then(setViewerObservation).catch(() => setViewerObservation(null)); }, [sectorKey]);
   const monthGroups = useMemo(() => {
     const groups: Array<{ month: string; items: NonNullable<SectorResearch["recent_path"]> }> = [];
     for (const item of [...(research?.recent_path ?? [])].reverse()) {
@@ -34,6 +36,7 @@ export function SectorDetailPage() {
       <IslandCard title="最新明确直播观点">{research.latest_explicit_view ? <><strong>{research.latest_explicit_view.path.path_status_label} · {research.latest_explicit_view.report_date}</strong><p>{research.latest_explicit_view.assessment.current_judgement}</p><p><Link to={`/reports/${research.latest_explicit_view.report_id}`}>查看来源报告</Link></p></> : <p>暂无明确直播观点；“未提”不代表观点失效。</p>}</IslandCard>
       <IslandCard title="盘中行情"><p>状态：<strong>{intradayLabel}</strong></p>{research.intraday_snapshot ? <dl className="intraday-detail-list"><div><dt>Provider当前值</dt><dd>{research.intraday_snapshot.index_value}</dd></div><div><dt>Provider昨收</dt><dd>{research.intraday_snapshot.pre_close}</dd></div><div><dt>实时涨跌</dt><dd>{formatPct(research.intraday_snapshot.pct_change)}</dd></div><div><dt>实时MA5</dt><dd>{research.intraday_snapshot.intraday_ma5 ?? "同源历史不足"}</dd></div><div><dt>相对实时MA5</dt><dd>{formatPct(research.intraday_snapshot.intraday_vs_ma5)}</dd></div><div><dt>正式MA5</dt><dd>{research.current_latest_market?.ma5 ?? "—"}</dd></div><div><dt>正式MA20</dt><dd>{research.current_latest_market?.ma20 ?? "—"}</dd></div><div><dt>数据来源</dt><dd>{research.intraday_snapshot.provider}</dd></div><div><dt>更新时间</dt><dd>{research.intraday_snapshot.observed_at}</dd></div><div><dt>freshness</dt><dd>{research.intraday_snapshot.freshness_status ?? research.intraday_status}</dd></div><div><dt>Provider symbol</dt><dd>{research.intraday_snapshot.provider_symbol ?? "—"}</dd></div></dl> : <p>保留服务器最近有效缓存；Viewer不会请求Provider。</p>}</IslandCard>
       <IslandCard title="最新完整收盘行情">{research.market_support_status === "unsupported" ? <p>暂不支持：港股跨市场行情尚未接入，不展示伪造指标。</p> : <><p>完整交易日：{research.current_latest_market?.trade_date ?? "未刷新"}</p><IslandMetricGrid market={research.current_latest_market} /></>}</IslandCard>
+      {(viewerObservation?.viewer_source_mode === "security_proxy" || viewerObservation?.fallback_reason === "no_reliable_security_proxy") && <SecurityProxyCard observation={viewerObservation} />}
     </div>
     <IslandCard title="最近5个交易日"><p>近5日累计：<strong>{formatPct(research.current_latest_market?.return_5d)}</strong>（按完整日收益复合/首尾价格计算，不作百分比简单相加）</p><div className="recent-five-detail">{research.recent_5_trading_days?.map(item => <span key={item.trade_date} className={item.daily_pct_change > 0 ? "up" : item.daily_pct_change < 0 ? "down" : "flat"}><time>{item.trade_date}</time><b>{formatPct(item.daily_pct_change)}</b><small>收盘 {item.close}</small></span>) ?? <p>暂无完整行情。</p>}</div></IslandCard>
     <IslandCard title="当前有效状态与两种持有区间"><p>本期报告状态：<strong>{PATH_LABELS[research.reported_status ?? "not_mentioned"]}</strong>；当前有效状态：<strong>{research.effective_status ? PATH_LABELS[research.effective_status] : "尚无明确观点"}</strong>。</p><HoldingSummary label="绝对持有" interval={research.strict_holding_interval} /><HoldingSummary label="广义持有" interval={research.broad_holding_interval} /></IslandCard>
@@ -43,6 +46,13 @@ export function SectorDetailPage() {
     <section><h2>历次详细解读与发布快照</h2><div className="assessment-list">{research.detailed_history?.map(item => <IslandCard key={item.report_id}><h3>{item.report_date} · {item.path.path_status_label}</h3><dl className="assessment-fields"><div><dt>历史路径</dt><dd>{item.assessment.recent_path_summary}</dd></div><div><dt>当期判断</dt><dd>{item.assessment.current_judgement || "本期未提"}</dd></div><div><dt>主要依据</dt><dd>{item.assessment.main_basis || "—"}</dd></div><div><dt>观察条件</dt><dd>{item.assessment.observation_condition || "—"}</dd></div></dl><h4>本报告发布时</h4><IslandMetricGrid market={item.report_snapshot} /><Link to={`/reports/${item.report_id}`}>来源报告</Link></IslandCard>)}</div></section>
     <p className="notice">报告快照保持不变；盘中缓存与最新完整收盘严格分离。研究辅助数据，非生产级行情服务。</p>
   </div>;
+}
+
+export function SecurityProxyCard({ observation }: { observation: ViewerObservation }) {
+  if (observation.viewer_source_mode === "unavailable") return <IslandCard title="代理观察"><p>暂无可靠的代理证券行情</p></IslandCard>;
+  const proxy = observation.security_proxy;
+  if (!proxy) return null;
+  return <IslandCard title="代理观察"><p><strong className="proxy-observation-badge">代理观察</strong> 正式板块行情暂不可用。</p><div className="proxy-observation-list">{proxy.instruments.map(item => <div key={item.symbol}><strong>{item.proxy_role === "etf" ? "代表ETF" : "核心公司"} · {item.security_name}</strong>{item.coverage_type === "partial" && <small>部分覆盖</small>}<span>{item.quote_status === "available" ? <>{formatPct(item.pct_change)} 现价：{item.current} 行情时间：{item.quote_datetime?.slice(11, 16)}</> : "行情暂不可用"}</span></div>)}</div><p className="notice">{observation.disclosure}</p></IslandCard>;
 }
 
 function HoldingSummary({ label, interval }: { label: string; interval?: NonNullable<SectorResearch["strict_holding_interval"]> | null }) {
