@@ -10,6 +10,8 @@ from pathlib import Path
 from typing import Callable, Iterable
 
 from .config import CONFIG_DIR
+from .security_proxy_dynamic_selection import SecurityProxySelectedInstrumentSnapshot
+from .security_proxy_eod_selection import load_security_proxy_candidate_pool
 from .providers.tencent_standard_quote import TencentQuoteError, TencentQuoteErrorCode, TencentStandardSecurityQuoteProvider
 
 
@@ -181,6 +183,29 @@ class SecurityProxyObservationService:
         except TencentQuoteError as exc:
             quotes, failures = {}, {symbol: exc.code for symbol in requested}
         return tuple(self._observation(path, quotes, failures, fetched_at, None) for path in paths)
+
+    def observe_selected(self, market_path_key: str, display_name: str, selected: Iterable[SecurityProxySelectedInstrumentSnapshot]) -> SecurityProxyObservation:
+        """Quote a validated snapshot, never arbitrary Viewer-provided symbols."""
+        instruments = tuple(selected)
+        _, pools = load_security_proxy_candidate_pool()
+        allowed = {candidate.symbol for pool in pools for candidate in (*pool.etf_candidates, *pool.stock_candidates) if pool.market_path_key == market_path_key and candidate.enabled}
+        if not instruments or any(item.symbol not in allowed for item in instruments):
+            raise SecurityProxyRegistryError("dynamic snapshot contains an unapproved security")
+        requested = tuple(item.symbol for item in instruments)
+        fetched_at = self._now()
+        try:
+            batch = self.provider.fetch_batch(requested, allow_network=True)
+            quotes, failures = {quote.requested_symbol: quote for quote in batch.quotes}, batch.failures
+        except TencentQuoteError as exc:
+            quotes, failures = {}, {symbol: exc.code for symbol in requested}
+        rows: list[SecurityProxyInstrumentQuote] = []
+        for order, item in enumerate(instruments, start=1):
+            quote, error = quotes.get(item.symbol), failures.get(item.symbol)
+            rows.append(SecurityProxyInstrumentQuote(item.symbol, item.security_name, "etf" if item.instrument_type == "etf" else "leader", item.proxy_coverage, quote.current if quote else None, quote.pre_close if quote else None, quote.change if quote else None, quote.pct_change if quote else None, quote.quote_datetime if quote else None, "available" if quote else "unavailable", error.value if error else None))
+        available = sum(item.quote_status == "available" for item in rows)
+        status = "available" if available == len(rows) else "partial" if available else "unavailable"
+        latest = max((item.quote_datetime for item in rows if item.quote_datetime), default=None)
+        return SecurityProxyObservation(market_path_key, display_name, "security_proxy", "代理观察", "dynamic_selection", True, latest, fetched_at, tuple(rows), FIXED_DISCLOSURE, status)
 
     @staticmethod
     def _observation(path: SecurityProxyDefinition, quotes: dict, failures: dict[str, TencentQuoteErrorCode], fetched_at: datetime, forced_status: str | None) -> SecurityProxyObservation:

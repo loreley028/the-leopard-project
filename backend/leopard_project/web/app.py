@@ -37,6 +37,7 @@ from .intraday import intraday_policy, resolve_intraday_data_status
 from .security_proxy_viewer import OfficialBoardAvailability, SecurityProxyViewerCache, SecurityProxyViewerService
 from leopard_project.providers.tencent_standard_quote import TencentStandardSecurityQuoteProvider
 from leopard_project.security_proxy_observation import SecurityProxyObservationService
+from leopard_project.security_proxy_daily_pipeline import SecurityProxyDailyPipeline, SecurityProxyDailyPipelineCoordinator
 
 
 COOKIE_NAME = "leopard_session"
@@ -86,6 +87,8 @@ class WebSettings:
     security_proxy_viewer_enabled: bool = False
     security_proxy_cache_ttl_seconds: int = 300
     security_proxy_error_cache_ttl_seconds: int = 30
+    security_proxy_eod_scheduler_enabled: bool = False
+    security_proxy_dynamic_selection_enabled: bool = False
 
     @classmethod
     def from_env(cls) -> "WebSettings":
@@ -112,6 +115,8 @@ class WebSettings:
             security_proxy_viewer_enabled=os.getenv("SECURITY_PROXY_VIEWER_ENABLED", "false").lower() == "true",
             security_proxy_cache_ttl_seconds=int(os.getenv("SECURITY_PROXY_CACHE_TTL_SECONDS", "300")),
             security_proxy_error_cache_ttl_seconds=int(os.getenv("SECURITY_PROXY_ERROR_CACHE_TTL_SECONDS", "30")),
+            security_proxy_eod_scheduler_enabled=os.getenv("SECURITY_PROXY_EOD_SCHEDULER_ENABLED", "false").lower() == "true",
+            security_proxy_dynamic_selection_enabled=os.getenv("SECURITY_PROXY_DYNAMIC_SELECTION_ENABLED", "false").lower() == "true",
         )
 
 
@@ -131,12 +136,15 @@ def create_app(settings: WebSettings | None = None, session_factory: sessionmake
     app.state.security_proxy_viewer = SecurityProxyViewerService(
         observation_service=SecurityProxyObservationService(provider=TencentStandardSecurityQuoteProvider()),
         enabled=settings.security_proxy_viewer_enabled,
+        dynamic_selection_enabled=settings.security_proxy_dynamic_selection_enabled,
         cache=SecurityProxyViewerCache(ttl_seconds=settings.security_proxy_cache_ttl_seconds, error_ttl_seconds=settings.security_proxy_error_cache_ttl_seconds),
     )
 
     def stop_market_automation() -> None:
         intraday.shutdown()
         eod_backfill.shutdown()
+        coordinator = getattr(app.state, "security_proxy_daily_pipeline", None)
+        if coordinator: coordinator.shutdown()
     app.router.add_event_handler("shutdown", stop_market_automation)
 
     if settings.data_mode == "real_local":
@@ -156,6 +164,11 @@ def create_app(settings: WebSettings | None = None, session_factory: sessionmake
                 # registration while a public EOD endpoint is responding.
                 intraday.start("system_auto_resume")
                 eod_backfill.run_async_if_needed()
+                if settings.security_proxy_eod_scheduler_enabled:
+                    pipeline = SecurityProxyDailyPipeline()
+                    coordinator = SecurityProxyDailyPipelineCoordinator(pipeline)
+                    app.state.security_proxy_daily_pipeline = coordinator
+                    coordinator.start()
 
             startup_thread = threading.Thread(
                 target=start_market_automation,

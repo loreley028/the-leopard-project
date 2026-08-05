@@ -268,6 +268,11 @@ export interface ViewerObservation {
   viewer_source_mode: "official_board" | "security_proxy" | "unavailable";
   fallback_reason: string | null;
   disclosure: string | null;
+  selection_mode?: "dynamic_eod_snapshot" | "static_approved_registry" | "official_board" | "unavailable";
+  selection_calculation_date?: string | null;
+  selection_effective_date?: string | null;
+  selection_policy_version?: string | null;
+  selection_warnings?: string[];
   security_proxy: { display_label: string; status: string; recommended_display_mode: string; instruments: ViewerSecurityProxyInstrument[]; cache_hit: boolean; quote_datetime: string | null } | null;
 }
 
