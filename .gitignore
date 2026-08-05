@@ -27,6 +27,8 @@ var/demo-fidelity/
 var/demo-real-fidelity/
 var/real-local/
 var/provider-research/security-proxy-eod-selection/
+var/provider-research/security-proxy-eod-validation/
+var/security-proxy-eod/
 var/test/
 var/*.db
 var/*.sqlite

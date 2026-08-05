@@ -122,7 +122,8 @@ def test_contract_indices_are_frozen_and_full_only() -> None:
     document = config()
     assert document["field_contract"] == {
         "name_index": 1, "symbol_index": 2, "current_index": 3, "pre_close_index": 4,
-        "quote_datetime_index": 30, "change_index": 31, "pct_change_index": 32,
+        "open_index": 5, "quote_datetime_index": 30, "change_index": 31, "pct_change_index": 32,
+        "high_index": 33, "low_index": 34, "amount_yuan": "p35_component_3", "amount_wan_yuan_index": 37,
         "p35_validation": "first_price_component_must_match_current_when_present", "p78_policy": "permanently_ignored",
     }
     assert "s_sh" not in Path("backend/leopard_project/providers/tencent_standard_quote.py").read_text(encoding="utf-8")

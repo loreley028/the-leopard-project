@@ -60,6 +60,11 @@ class StandardSecurityQuote:
     pct_change: Decimal
     response_field_count: int
     payload_sha256: str
+    open: Decimal | None = None
+    high: Decimal | None = None
+    low: Decimal | None = None
+    amount_yuan: Decimal | None = None
+    eod_extension_errors: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -180,10 +185,34 @@ class TencentStandardSecurityQuoteProvider:
             raise TencentQuoteError(TencentQuoteErrorCode.MALFORMED_RECORD, "Tencent quote timestamp is invalid") from exc
         if abs((current - pre_close) - change) > self.price_tolerance or abs(((current / pre_close - Decimal("1")) * Decimal("100")) - pct_change) > self.pct_change_tolerance:
             raise TencentQuoteError(TencentQuoteErrorCode.CALCULATION_INCONSISTENT, "Tencent quote arithmetic is inconsistent")
-        if len(fields) > 35 and fields[35]:
-            component_price = self._decimal(fields[35].split("/", 1)[0], "p35_price")
+        extension_errors: list[str] = []
+        p35 = fields[35].split("/") if len(fields) > 35 and fields[35] else []
+        if p35:
+            component_price = self._decimal(p35[0], "p35_price")
             if abs(component_price - current) > self.price_tolerance:
                 raise TencentQuoteError(TencentQuoteErrorCode.CALCULATION_INCONSISTENT, "Tencent p35 price differs from current")
+        elif len(fields) > 35:
+            extension_errors.append("p35_missing")
+        def extension_decimal(index: str, label: str) -> Decimal | None:
+            try:
+                value = self._decimal(fields[int(contract[index])], label)
+                if value <= 0: raise TencentQuoteError(TencentQuoteErrorCode.MALFORMED_RECORD, label)
+                return value
+            except (TencentQuoteError, IndexError):
+                extension_errors.append(label)
+                return None
+        open_ = extension_decimal("open_index", "open")
+        high = extension_decimal("high_index", "high")
+        low = extension_decimal("low_index", "low")
+        amount_yuan: Decimal | None = None
+        if len(p35) == 3:
+            try: amount_yuan = self._decimal(p35[2], "amount_yuan")
+            except TencentQuoteError: extension_errors.append("amount_yuan")
+        else:
+            extension_errors.append("p35_components")
+        if open_ is not None and high is not None and low is not None and not (low <= open_ <= high and low <= current <= high):
+            extension_errors.append("ohlc_bounds")
+            open_ = high = low = None
         age = (self._now().astimezone(SHANGHAI) - quote_datetime).total_seconds()
         if age > self.max_quote_age_seconds or age < -self.max_quote_age_seconds:
             raise TencentQuoteError(TencentQuoteErrorCode.STALE_QUOTE, "Tencent quote timestamp is stale")
@@ -191,6 +220,8 @@ class TencentStandardSecurityQuoteProvider:
             requested_symbol=requested_symbol, name=name, symbol=symbol, current=current, pre_close=pre_close,
             quote_datetime=quote_datetime, change=change, pct_change=pct_change,
             response_field_count=len(fields), payload_sha256=payload_sha256,
+            open=open_, high=high, low=low, amount_yuan=amount_yuan,
+            eod_extension_errors=tuple(extension_errors),
         )
 
     def fetch_batch(self, symbols: Iterable[str], *, allow_network: bool = False) -> TencentQuoteBatch:
