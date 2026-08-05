@@ -39,6 +39,11 @@ class SecurityProxySelectionPreference:
     approval_note: str
     approved_at: date
     policy_version: str
+    curated_etf_symbol: str | None = None
+    curated_etf_note: str | None = None
+    curated_etf_reviewed_at: date | None = None
+    curated_etf_coverage: str | None = None
+    curated_etf_replaceable: bool = True
     migration_warnings: tuple[str, ...] = ()
 
 
@@ -90,12 +95,26 @@ def load_selection_preferences(path: Path = PREFERENCES_PATH) -> tuple[SecurityP
         if "eligible_etf_symbols" not in raw and not old_etfs or "eligible_large_cap_symbols" not in raw and not old_large:
             raise SecurityProxyDynamicSelectionError(f"preferences need eligible candidate sets for {key}")
         migration = tuple(name for name, present in (("deprecated_preferred_etf_symbols", old_etfs), ("deprecated_preferred_large_cap_symbols", old_large)) if present)
+        curated_raw = raw.get("curated_etf_symbol")
+        curated_symbol = str(curated_raw).lower() if curated_raw else None
         preference = SecurityProxySelectionPreference(
-            key, bool(raw["enabled"]), _as_tuple(raw["required_symbols"]),
-            _as_tuple(raw.get("eligible_etf_symbols", raw.get("preferred_etf_symbols", []))),
-            _as_tuple(raw.get("eligible_large_cap_symbols", raw.get("preferred_large_cap_symbols", []))),
-            int(raw["auto_rebound_slots"]), int(raw["auto_turnover_slots"]), _as_tuple(raw["excluded_symbols"]),
-            str(raw["approval_note"]), date.fromisoformat(str(raw["approved_at"])), str(raw["policy_version"]), migration,
+            market_path_key=key,
+            enabled=bool(raw["enabled"]),
+            required_symbols=_as_tuple(raw["required_symbols"]),
+            eligible_etf_symbols=_as_tuple(raw.get("eligible_etf_symbols", raw.get("preferred_etf_symbols", []))),
+            eligible_large_cap_symbols=_as_tuple(raw.get("eligible_large_cap_symbols", raw.get("preferred_large_cap_symbols", []))),
+            auto_rebound_slots=int(raw["auto_rebound_slots"]),
+            auto_turnover_slots=int(raw["auto_turnover_slots"]),
+            excluded_symbols=_as_tuple(raw["excluded_symbols"]),
+            approval_note=str(raw["approval_note"]),
+            approved_at=date.fromisoformat(str(raw["approved_at"])),
+            policy_version=str(raw["policy_version"]),
+            curated_etf_symbol=curated_symbol,
+            curated_etf_note=str(raw["curated_etf_note"]) if raw.get("curated_etf_note") else None,
+            curated_etf_reviewed_at=date.fromisoformat(str(raw["curated_etf_reviewed_at"])) if raw.get("curated_etf_reviewed_at") else None,
+            curated_etf_coverage=str(raw["curated_etf_coverage"]) if raw.get("curated_etf_coverage") else None,
+            curated_etf_replaceable=bool(raw.get("curated_etf_replaceable", True)),
+            migration_warnings=migration,
         )
         symbols = {candidate.symbol for candidate in (*pool.etf_candidates, *pool.stock_candidates) if candidate.enabled}
         etfs = {candidate.symbol for candidate in pool.etf_candidates if candidate.enabled}
@@ -104,6 +123,12 @@ def load_selection_preferences(path: Path = PREFERENCES_PATH) -> tuple[SecurityP
             raise SecurityProxyDynamicSelectionError(f"invalid policy state for {key}")
         if not set(preference.required_symbols) <= stocks or not set(preference.eligible_etf_symbols) <= etfs:
             raise SecurityProxyDynamicSelectionError(f"preferences contain unapproved symbols for {key}")
+        if preference.curated_etf_symbol and preference.curated_etf_symbol not in etfs:
+            raise SecurityProxyDynamicSelectionError(f"curated ETF is not approved for {key}")
+        if preference.curated_etf_symbol and preference.curated_etf_symbol in preference.excluded_symbols:
+            raise SecurityProxyDynamicSelectionError(f"curated ETF is excluded for {key}")
+        if preference.curated_etf_symbol and not preference.curated_etf_note:
+            raise SecurityProxyDynamicSelectionError(f"curated ETF needs a review note for {key}")
         if not set(preference.eligible_large_cap_symbols) <= stocks or len(preference.eligible_large_cap_symbols) > 2:
             raise SecurityProxyDynamicSelectionError(f"large-cap preferences invalid for {key}")
         if not set(preference.excluded_symbols) <= symbols or set(preference.excluded_symbols) & set(preference.required_symbols):
@@ -184,7 +209,9 @@ class SecurityProxyDynamicSelectionService:
         self.preferences = {value.market_path_key: value for value in (preferences or load_selection_preferences())}
         _, loaded_pools = load_security_proxy_candidate_pool()
         self.pools = {pool.market_path_key: pool for pool in (tuple(pools) if pools is not None else loaded_pools)}
-        self.verified_aums = dict(verified_aums or {})
+        # Kept as a read-compatible constructor argument. Curated ETF selection
+        # deliberately never reads AUM, shares, or ETF turnover history.
+        del verified_aums
         self.verified_market_caps = dict(verified_market_caps or {})
         self.now = now
 
@@ -228,19 +255,11 @@ class SecurityProxyDynamicSelectionService:
         return tuple(result)
 
     def _choose_etf(self, pool, preference, metrics, choose, warnings) -> None:
-        candidates = [item for item in pool.etf_candidates if item.enabled and item.symbol in preference.eligible_etf_symbols and item.symbol not in preference.excluded_symbols]
-        verified = [item for item in candidates if self.verified_aums.get(item.symbol, Decimal("0")) > 0]
-        if verified:
-            choose(sorted(verified, key=lambda item: (-self.verified_aums[item.symbol], item.symbol))[0].symbol, "highest_verified_aum", "automatic_verified_metric"); return
-        complete = [item for item in candidates if metrics[item.symbol].get("liquidity_status") == "available" and isinstance(metrics[item.symbol].get("median_amount_yuan"), Decimal)]
-        if complete:
-            choose(sorted(complete, key=lambda item: (-metrics[item.symbol]["median_amount_yuan"], item.symbol))[0].symbol, "highest_median_turnover_etf", "automatic_liquidity_metric"); return  # type: ignore[operator]
-        partial = [item for item in candidates if metrics[item.symbol].get("liquidity_status") == "liquidity_history_partial" and isinstance(metrics[item.symbol].get("median_amount_yuan"), Decimal)]
-        if partial:
-            choose(sorted(partial, key=lambda item: (-metrics[item.symbol]["median_amount_yuan"], item.symbol))[0].symbol, "partial_history_liquidity_leader", "automatic_liquidity_metric"); warnings.append("liquidity_history_partial"); return  # type: ignore[operator]
-        if candidates:
-            choose(sorted(candidates, key=lambda item: (item.display_priority, item.symbol))[0].symbol, "static_approved_etf_fallback", "static_approved_registry")
-            warnings.extend(("insufficient_liquidity_history", "static_approved_etf_fallback"))
+        # ETFs are configuration-curated observation instruments. They are never
+        # ranked by AUM, shares, EOD turnover, return, or any same-day metric.
+        del pool, metrics, warnings
+        if preference.curated_etf_symbol:
+            choose(preference.curated_etf_symbol, "curated_observation_etf", "curated_configuration")
 
     def _choose_large_caps(self, preference, metrics, choose, warnings) -> None:
         candidates = [symbol for symbol in preference.eligible_large_cap_symbols if symbol not in preference.excluded_symbols]

@@ -1,6 +1,11 @@
-# Security proxy EOD selection
+# Security proxy EOD selection (superseded research prototype)
 
-This foundation selects research-only proxy securities from a manually approved candidate pool after a complete trading-day close. It is not a formal board index, a synthetic index, a sector return, or investment advice.
+This document records the isolated Phase 2A-4 research prototype. It is not
+the active Scheduler or Viewer selection policy. Phase 2A-5.2 supersedes its
+ETF choice with `config/security_proxy_selection_preferences_v1.json`: an ETF
+is configuration-curated, not selected from AUM or daily liquidity ranking.
+It is not a formal board index, a synthetic index, a sector return, or
+investment advice.
 
 ## Boundaries
 
@@ -8,9 +13,12 @@ This foundation selects research-only proxy securities from a manually approved 
 
 The service is explicit and read-only. It does not call Tencent or any other Provider, write SQLite, start a Scheduler, publish an observation, or change the existing Viewer. The current Viewer therefore continues to read the static proxy registry only.
 
-## Objective rules
+## Historical prototype rules
 
-At most one ETF is selected from its path-local pool by the largest fresh `latest_aum`. AUM must be positive and has an explicit data date/source. It is never inferred from stock market cap or turnover. A stale AUM is marked `aum_stale`; only an already selected ETF may be retained as a stale previous result. Otherwise the result is `no_eligible_etf`.
+The prototype had a separate AUM experiment. It remains useful only as an
+offline regression fixture and must not drive a runtime selection, snapshot,
+or Viewer state. Missing ETF AUM, shares, or security history is not a blocker
+for the active curated ETF policy.
 
 Stocks compete only inside their manually approved path-local pool after a complete EOD date:
 
@@ -26,14 +34,17 @@ One stock may lead more than one slot but is shown once with all of its selectio
 
 `manual` uses only required stocks; `hybrid` emits required stocks first and fills remaining places from the configured objective slots; `auto` has no required stocks. Required instruments are immutable for that selection, consume a leader place, and show `manual_required` with the reason `固定核心观察`. Excluded instruments remain excluded even if their metrics rank first.
 
-- CPO keeps exactly 中际旭创 (`sz300308`), 新易盛 (`sz300502`), and 天孚通信 (`sz300394`) as fixed core leaders. Its ETF remains separately eligible by AUM.
+- CPO keeps exactly 中际旭创 (`sz300308`), 新易盛 (`sz300502`), and 天孚通信 (`sz300394`) as fixed core leaders. Its active ETF is selected only by the curated policy.
 - 创新药/医药 keeps 药明康德 (`sh603259`) and 迈瑞医疗 (`sz300760`) as fixed core leaders. It may add at most one approved automatic candidate; the broad observation definition is intentional.
 
 There is no aggregate proxy percentage change, weighted return, average return, or synthetic index.
 
 ## Research-only input contract and snapshot
 
-Existing `complete_eod` rows are sector-level OHLC/amount records. They do not contain security-level total market cap or ETF AUM, so this foundation defines a separate research-only input contract: security symbol, trading date, complete EOD close/low/amount/total market cap, and ETF AUM/as-of/source. This phase does not connect an external source to fill these fields.
+Existing `complete_eod` rows are sector-level OHLC/amount records. The active
+path uses the file-backed security EOD contract for stock-level rebound and
+turnover enhancement only; it does not require ETF AUM or an imported 20-day
+history before a curated ETF can appear in a valid snapshot.
 
 Run the deterministic offline demonstration with:
 
@@ -45,4 +56,6 @@ It writes ignored, auditable files below `var/provider-research/security-proxy-e
 
 ## Before later integration
 
-A later phase would need an approved security-level EOD source for close, low, amount, total market cap, and ETF AUM; formal data-quality checks; a reviewed persistence design; controlled post-close scheduling; Viewer policy review; privacy and license review; and end-to-end tests. None is enabled here.
+A later review may decide whether any additional security-level inputs are
+worth adding. They must be justified separately and cannot replace the
+curated ETF policy without a configuration and policy review.
