@@ -38,7 +38,7 @@ class SecurityProxyEodRecord:
     high: Decimal
     low: Decimal
     close: Decimal
-    amount_yuan: Decimal
+    amount_yuan: Decimal | None
     quote_datetime: datetime
     fetched_at: datetime
     source: str = SOURCE
@@ -186,7 +186,8 @@ class SecurityProxyEodFileStore:
             raise SecurityProxyEodError("duplicate_security_date", "duplicate security record for one EOD date")
         if any(item.trading_date != day for item in ordered):
             raise SecurityProxyEodError("invalid_trading_date", "record trading date does not match file date")
-        document = {"trading_date": day.isoformat(), "source": SOURCE, "records": [_serialize(item) for item in ordered]}
+        sources = sorted({item.source for item in ordered})
+        document = {"trading_date": day.isoformat(), "source": sources[0] if len(sources) == 1 else "mixed_controlled_sources", "records": [_serialize(item) for item in ordered]}
         content = json.dumps(document, ensure_ascii=False, indent=2) + "\n"
         atomic_write_text(path, content, allow_overwrite=allow_research_overwrite)
         atomic_write_text(self.root / "latest.json", content)
@@ -239,17 +240,17 @@ class SecurityProxyEodCaptureService:
 
 
 def metrics_for(records: Iterable[SecurityProxyEodRecord], symbol: str) -> SecurityProxyEodMetrics:
-    rows = sorted((row for row in records if row.symbol == symbol and row.completeness_status == "complete"), key=lambda item: item.trading_date)
+    rows = sorted((row for row in records if row.symbol == symbol and row.completeness_status in {"complete", "partial_amount_missing"}), key=lambda item: item.trading_date)
     unique = {row.trading_date: row for row in rows}
     if len(unique) != len(rows):
         raise SecurityProxyEodError("duplicate_security_date", "duplicate dated EOD records cannot form a rolling metric")
     rows = [unique[key] for key in sorted(unique)]
     latest = rows[-1] if rows else None
     if len(rows) < 20:
-        return SecurityProxyEodMetrics(symbol, len(rows), latest.close if latest else None, latest.amount_yuan if latest else None, None, None, "insufficient_history", "available" if latest else "missing_amount")
+        return SecurityProxyEodMetrics(symbol, len(rows), latest.close if latest else None, latest.amount_yuan if latest else None, None, None, "insufficient_history", "available" if latest and latest.amount_yuan is not None else "missing_amount")
     rolling_low = min(row.low for row in rows[-20:])
     rebound_pct = latest.close / rolling_low - Decimal("1")
-    return SecurityProxyEodMetrics(symbol, len(rows), latest.close, latest.amount_yuan, rolling_low, rebound_pct, "available", "available")
+    return SecurityProxyEodMetrics(symbol, len(rows), latest.close, latest.amount_yuan, rolling_low, rebound_pct, "available", "available" if latest.amount_yuan is not None else "missing_amount")
 
 
 def _serialize(value: SecurityProxyEodRecord) -> dict[str, object]:
@@ -261,9 +262,11 @@ def _serialize(value: SecurityProxyEodRecord) -> dict[str, object]:
 
 
 def _deserialize(row: dict[str, object]) -> SecurityProxyEodRecord:
+    amount = row.get("amount_yuan")
     return SecurityProxyEodRecord(
         str(row["symbol"]), str(row["security_name"]), date.fromisoformat(str(row["trading_date"])),
-        *(Decimal(str(row[key])) for key in ("open", "high", "low", "close", "amount_yuan")),
+        *(Decimal(str(row[key])) for key in ("open", "high", "low", "close")),
+        Decimal(str(amount)) if amount not in (None, "") else None,
         datetime.fromisoformat(str(row["quote_datetime"])), datetime.fromisoformat(str(row["fetched_at"])),
         str(row.get("source", SOURCE)), str(row.get("completeness_status", "complete")), tuple(row.get("validation_errors", [])),
     )

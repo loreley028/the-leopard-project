@@ -1,0 +1,231 @@
+"""File-backed, next-trading-day security-proxy selection snapshots.
+
+Selection is deliberately deterministic and entirely local.  It consumes only
+the approved candidate pool, audited preferences, and file-backed EOD rows;
+it never fetches a quote or selects a user supplied security.
+"""
+from __future__ import annotations
+
+import json
+from dataclasses import asdict, dataclass
+from datetime import date, datetime, timezone
+from decimal import Decimal
+from pathlib import Path
+from typing import Iterable, Mapping
+
+from .security_proxy_eod import SecurityProxyEodFileStore, SecurityProxyEodRecord, atomic_write_text
+from .security_proxy_eod_selection import SecurityProxyCandidate, load_security_proxy_candidate_pool
+from .trading_calendar import CalendarStatus, load_calendar
+
+
+PREFERENCES_PATH = Path(__file__).parent.parent.parent / "config" / "security_proxy_selection_preferences_v1.json"
+DISCLOSURE = "代理证券用于观察主题相关标的表现，不代表官方板块指数或完整行业表现。"
+
+
+class SecurityProxyDynamicSelectionError(ValueError):
+    pass
+
+
+@dataclass(frozen=True)
+class SecurityProxySelectionPreference:
+    market_path_key: str
+    enabled: bool
+    required_symbols: tuple[str, ...]
+    preferred_etf_symbols: tuple[str, ...]
+    preferred_large_cap_symbols: tuple[str, ...]
+    auto_rebound_slots: int
+    auto_turnover_slots: int
+    excluded_symbols: tuple[str, ...]
+    approval_note: str
+    approved_at: date
+    policy_version: str
+
+
+@dataclass(frozen=True)
+class SecurityProxySelectedInstrumentSnapshot:
+    symbol: str
+    security_name: str
+    instrument_type: str
+    proxy_coverage: str
+    selection_reasons: tuple[str, ...]
+    selection_source: str
+    required_manual: bool
+    metric_values: dict[str, str | None]
+    metric_statuses: dict[str, str]
+
+
+@dataclass(frozen=True)
+class SecurityProxySelectionSnapshot:
+    market_path_key: str
+    calculation_trading_date: date
+    effective_from_trading_date: date
+    selected_instruments: tuple[SecurityProxySelectedInstrumentSnapshot, ...]
+    policy_version: str
+    generated_at: datetime
+    warnings: tuple[str, ...]
+
+
+def _as_tuple(value: object) -> tuple[str, ...]:
+    if not isinstance(value, list):
+        raise SecurityProxyDynamicSelectionError("preference list must be a list")
+    return tuple(str(item).lower() for item in value)
+
+
+def load_selection_preferences(path: Path = PREFERENCES_PATH) -> tuple[SecurityProxySelectionPreference, ...]:
+    document = json.loads(path.read_text(encoding="utf-8"))
+    if not document.get("policy_version") or not document.get("disclosure"):
+        raise SecurityProxyDynamicSelectionError("preferences need a policy version and disclosure")
+    _, pools = load_security_proxy_candidate_pool()
+    pool_map = {pool.market_path_key: pool for pool in pools}
+    values: list[SecurityProxySelectionPreference] = []
+    for raw in document.get("paths", []):
+        if not isinstance(raw, dict):
+            raise SecurityProxyDynamicSelectionError("preference path must be an object")
+        key = str(raw["market_path_key"])
+        pool = pool_map.get(key)
+        if pool is None:
+            raise SecurityProxyDynamicSelectionError(f"unapproved preference path: {key}")
+        preference = SecurityProxySelectionPreference(
+            key, bool(raw["enabled"]), _as_tuple(raw["required_symbols"]), _as_tuple(raw["preferred_etf_symbols"]),
+            _as_tuple(raw["preferred_large_cap_symbols"]), int(raw["auto_rebound_slots"]), int(raw["auto_turnover_slots"]),
+            _as_tuple(raw["excluded_symbols"]), str(raw["approval_note"]), date.fromisoformat(str(raw["approved_at"])), str(raw["policy_version"]),
+        )
+        symbols = {candidate.symbol for candidate in (*pool.etf_candidates, *pool.stock_candidates) if candidate.enabled}
+        etfs = {candidate.symbol for candidate in pool.etf_candidates if candidate.enabled}
+        stocks = {candidate.symbol for candidate in pool.stock_candidates if candidate.enabled}
+        if not preference.enabled or preference.policy_version != document["policy_version"]:
+            raise SecurityProxyDynamicSelectionError(f"invalid policy state for {key}")
+        if not set(preference.required_symbols) <= stocks or not set(preference.preferred_etf_symbols) <= etfs:
+            raise SecurityProxyDynamicSelectionError(f"preferences contain unapproved symbols for {key}")
+        if not set(preference.preferred_large_cap_symbols) <= stocks or len(preference.preferred_large_cap_symbols) > 2:
+            raise SecurityProxyDynamicSelectionError(f"large-cap preferences invalid for {key}")
+        if not set(preference.excluded_symbols) <= symbols or set(preference.excluded_symbols) & set(preference.required_symbols):
+            raise SecurityProxyDynamicSelectionError(f"exclusion rules invalid for {key}")
+        if preference.auto_rebound_slots < 0 or preference.auto_turnover_slots < 0:
+            raise SecurityProxyDynamicSelectionError(f"automatic slot count invalid for {key}")
+        values.append(preference)
+    if set(item.market_path_key for item in values) != set(pool_map) or len(values) != len(pool_map):
+        raise SecurityProxyDynamicSelectionError("preferences must exactly cover the 11 approved proxy paths")
+    return tuple(sorted(values, key=lambda item: item.market_path_key))
+
+
+def next_controlled_trading_day(day: date) -> date:
+    calendar = load_calendar()
+    if calendar is None:
+        raise SecurityProxyDynamicSelectionError("controlled trading calendar unavailable")
+    for candidate in sorted(calendar.trading_dates()):
+        if candidate > day:
+            return candidate
+    raise SecurityProxyDynamicSelectionError("next controlled trading day unavailable")
+
+
+def _metric(rows: Iterable[SecurityProxyEodRecord], symbol: str, calculation_date: date) -> dict[str, Decimal | None | str]:
+    values = sorted((row for row in rows if row.symbol == symbol and row.trading_date <= calculation_date and row.completeness_status in {"complete", "partial_amount_missing"}), key=lambda row: row.trading_date)
+    if len({row.trading_date for row in values}) != len(values):
+        raise SecurityProxyDynamicSelectionError(f"duplicate history for {symbol}")
+    latest = values[-1] if values and values[-1].trading_date == calculation_date else None
+    if latest is None:
+        return {"history_days": str(len(values)), "latest_close": None, "latest_amount_yuan": None, "rolling_20d_low": None, "rebound_pct": None, "rebound_status": "missing_latest_eod", "turnover_status": "missing_latest_eod"}
+    recent = values[-20:]
+    low = min((row.low for row in recent), default=None) if len(recent) == 20 else None
+    rebound = latest.close / low - Decimal("1") if low is not None else None
+    return {"history_days": str(len(values)), "latest_close": latest.close, "latest_amount_yuan": latest.amount_yuan, "rolling_20d_low": low, "rebound_pct": rebound, "rebound_status": "available" if rebound is not None else "insufficient_history", "turnover_status": "available" if latest.amount_yuan is not None else "missing_amount"}
+
+
+def _snapshot_item(candidate: SecurityProxyCandidate, *, reasons: list[str], source: str, required: bool, metrics: Mapping[str, Decimal | None | str]) -> SecurityProxySelectedInstrumentSnapshot:
+    values = {key: str(value) if isinstance(value, Decimal) else value for key, value in metrics.items() if key in {"latest_close", "latest_amount_yuan", "rolling_20d_low", "rebound_pct", "history_days"}}
+    statuses = {key: str(value) for key, value in metrics.items() if key in {"rebound_status", "turnover_status"}}
+    return SecurityProxySelectedInstrumentSnapshot(candidate.symbol, candidate.security_name, candidate.security_type, candidate.coverage_type, tuple(reasons), source, required, values, statuses)
+
+
+class SecurityProxySelectionSnapshotStore:
+    def __init__(self, root: Path = Path("var/security-proxy-selections")) -> None:
+        self.root = root
+
+    def day_path(self, day: date) -> Path:
+        return self.root / str(day.year) / f"{day.isoformat()}.json"
+
+    def write(self, *, calculation_date: date, snapshots: Iterable[SecurityProxySelectionSnapshot], allow_research_overwrite: bool = False) -> Path:
+        entries = tuple(sorted(snapshots, key=lambda value: value.market_path_key))
+        if not entries:
+            raise SecurityProxyDynamicSelectionError("refusing empty selection snapshot")
+        if any(value.calculation_trading_date != calculation_date for value in entries):
+            raise SecurityProxyDynamicSelectionError("selection snapshot date mismatch")
+        document = {"calculation_trading_date": calculation_date.isoformat(), "effective_from_trading_date": entries[0].effective_from_trading_date.isoformat(), "selections": [_to_dict(value) for value in entries]}
+        content = json.dumps(document, ensure_ascii=False, indent=2) + "\n"
+        path = self.day_path(calculation_date)
+        atomic_write_text(path, content, allow_overwrite=allow_research_overwrite)
+        atomic_write_text(self.root / "latest.json", content)
+        return path
+
+    def latest_effective_for(self, day: date) -> dict[str, SecurityProxySelectionSnapshot]:
+        candidates: list[SecurityProxySelectionSnapshot] = []
+        for path in sorted(self.root.glob("*/*.json")):
+            candidates.extend(_from_dict(row) for row in json.loads(path.read_text(encoding="utf-8")).get("selections", []))
+        effective = [row for row in candidates if row.effective_from_trading_date <= day]
+        chosen: dict[str, SecurityProxySelectionSnapshot] = {}
+        for row in sorted(effective, key=lambda item: (item.effective_from_trading_date, item.calculation_trading_date)):
+            chosen[row.market_path_key] = row
+        return chosen
+
+
+class SecurityProxyDynamicSelectionService:
+    def __init__(self, *, preferences: Iterable[SecurityProxySelectionPreference] | None = None, now=lambda: datetime.now(timezone.utc)) -> None:
+        self.preferences = {value.market_path_key: value for value in (preferences or load_selection_preferences())}
+        _, pools = load_security_proxy_candidate_pool()
+        self.pools = {pool.market_path_key: pool for pool in pools}
+        self.now = now
+
+    def build(self, calculation_date: date, records: Iterable[SecurityProxyEodRecord]) -> tuple[SecurityProxySelectionSnapshot, ...]:
+        next_day = next_controlled_trading_day(calculation_date)
+        all_records = tuple(records)
+        result: list[SecurityProxySelectionSnapshot] = []
+        for key, preference in sorted(self.preferences.items()):
+            pool = self.pools[key]
+            candidates = {item.symbol: item for item in (*pool.etf_candidates, *pool.stock_candidates) if item.enabled}
+            metrics = {symbol: _metric(all_records, symbol, calculation_date) for symbol in candidates}
+            selected: list[SecurityProxySelectedInstrumentSnapshot] = []
+            used: dict[str, SecurityProxySelectedInstrumentSnapshot] = {}
+            warnings: list[str] = []
+            def choose(symbol: str, reason: str, source: str, required: bool = False) -> None:
+                if symbol in preference.excluded_symbols:
+                    return
+                candidate = candidates[symbol]
+                if symbol in used:
+                    old = used[symbol]
+                    updated = SecurityProxySelectedInstrumentSnapshot(old.symbol, old.security_name, old.instrument_type, old.proxy_coverage, (*old.selection_reasons, reason), old.selection_source, old.required_manual or required, old.metric_values, old.metric_statuses)
+                    selected[selected.index(old)] = updated; used[symbol] = updated; return
+                item = _snapshot_item(candidate, reasons=[reason], source=source, required=required, metrics=metrics[symbol])
+                selected.append(item); used[symbol] = item
+            for symbol in preference.required_symbols:
+                choose(symbol, "required_manual", "manual_approved", True)
+                if metrics[symbol]["latest_close"] is None:
+                    warnings.append(f"required_latest_eod_missing:{symbol}")
+            for symbol in preference.preferred_etf_symbols[:1]: choose(symbol, "preferred_etf", "manual_approved")
+            for symbol in preference.preferred_large_cap_symbols: choose(symbol, "preferred_large_cap", "manual_approved")
+            for reason, count, metric_key, status_key in (("fastest_rebound", preference.auto_rebound_slots, "rebound_pct", "rebound_status"), ("highest_turnover", preference.auto_turnover_slots, "latest_amount_yuan", "turnover_status")):
+                ranked = sorted((candidate for candidate in pool.stock_candidates if candidate.enabled and candidate.symbol not in preference.excluded_symbols and metrics[candidate.symbol][status_key] == "available" and isinstance(metrics[candidate.symbol][metric_key], Decimal)), key=lambda item: (-metrics[item.symbol][metric_key], item.symbol))  # type: ignore[operator]
+                count_before = len(selected)
+                for candidate in ranked:
+                    choose(candidate.symbol, reason, "dynamic_eod_metric")
+                    if len(selected) >= count_before + count:
+                        break
+                if len(selected) < count_before + count:
+                    warnings.append(f"insufficient_{reason}_candidates")
+            result.append(SecurityProxySelectionSnapshot(key, calculation_date, next_day, tuple(selected), preference.policy_version, self.now(), tuple(warnings)))
+        return tuple(result)
+
+
+def _to_dict(value: SecurityProxySelectionSnapshot) -> dict[str, object]:
+    data = asdict(value)
+    data["calculation_trading_date"] = value.calculation_trading_date.isoformat()
+    data["effective_from_trading_date"] = value.effective_from_trading_date.isoformat()
+    data["generated_at"] = value.generated_at.isoformat()
+    return data
+
+
+def _from_dict(raw: Mapping[str, object]) -> SecurityProxySelectionSnapshot:
+    instruments = tuple(SecurityProxySelectedInstrumentSnapshot(
+        str(item["symbol"]), str(item["security_name"]), str(item["instrument_type"]), str(item["proxy_coverage"]), tuple(item["selection_reasons"]), str(item["selection_source"]), bool(item["required_manual"]), dict(item["metric_values"]), dict(item["metric_statuses"]),
+    ) for item in raw["selected_instruments"])  # type: ignore[index]
+    return SecurityProxySelectionSnapshot(str(raw["market_path_key"]), date.fromisoformat(str(raw["calculation_trading_date"])), date.fromisoformat(str(raw["effective_from_trading_date"])), instruments, str(raw["policy_version"]), datetime.fromisoformat(str(raw["generated_at"])), tuple(raw.get("warnings", [])))

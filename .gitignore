@@ -29,6 +29,8 @@ var/real-local/
 var/provider-research/security-proxy-eod-selection/
 var/provider-research/security-proxy-eod-validation/
 var/security-proxy-eod/
+var/security-proxy-selections/
+var/security-proxy-eod-import-template/
 var/test/
 var/*.db
 var/*.sqlite
