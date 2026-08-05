@@ -51,6 +51,20 @@ def test_cpo_mapping_and_all_path_proxy_limits() -> None:
         assert item.disclosure
 
 
+def test_static_observation_lists_are_fixed_and_innovative_medicine_has_four_instruments() -> None:
+    paths = {item.market_path_key: item for item in load_security_proxy_registry()}
+    expected = {
+        "commercial_space": ["sh600118"], "computing_power_rental": ["sh516510", "sz300442"],
+        "liquid_cooling": ["sz002837"], "ai_applications": ["sz159819", "sz002230"],
+        "internet_finance": ["sz159851", "sz300033"], "optical_fiber_theme": ["sh515880", "sh600487"],
+        "rare_earth": ["sh516780", "sh600111"], "semiconductor": ["sz159995", "sh688981"],
+        "hotel": ["sz159766", "sh600754"],
+    }
+    assert [item.symbol for item in paths["innovative_drug_medicine"].instruments] == ["sz159992", "sh600276", "sh603259", "sz300760"]
+    assert [item.proxy_role for item in paths["innovative_drug_medicine"].instruments] == ["etf", "leader", "leader", "leader"]
+    assert all([item.symbol for item in paths[key].instruments] == symbols for key, symbols in expected.items())
+
+
 @pytest.mark.parametrize("mutation", ["compact", "duplicate_symbol", "duplicate_order", "no_reliable_instrument"])
 def test_registry_rejects_invalid_symbols_and_structure(mutation: str) -> None:
     document = registry_document()
@@ -77,6 +91,16 @@ def test_explicit_observation_deduplicates_shared_symbol_and_keeps_independent_q
     assert observations[0].status == observations[1].status == "available"
     assert all(item.current is not None for row in observations for item in row.instruments)
     assert not hasattr(observations[0], "aggregate_pct_change") and not hasattr(observations[0], "synthetic_market_return")
+
+
+def test_innovative_medicine_returns_four_independent_instruments_without_aggregate() -> None:
+    symbols = ["sz159992", "sh600276", "sh603259", "sz300760"]
+    observation = service("\n".join(wire_record(symbol) for symbol in symbols).encode("gbk")).observe(["innovative_drug_medicine"], enable_provider=True)[0]
+    assert [item.symbol for item in observation.instruments] == symbols
+    assert [item.proxy_role for item in observation.instruments] == ["etf", "leader", "leader", "leader"]
+    assert all(item.current is not None for item in observation.instruments)
+    assert not hasattr(observation, "aggregate_pct_change") and not hasattr(observation, "average_return") and not hasattr(observation, "weighted_return")
+    assert "非板块指数" in observation.disclosure and FIXED_DISCLOSURE in registry_document()["disclosure"]
 
 
 def test_single_failure_partial_and_all_failure_unavailable_without_zero_fill() -> None:

@@ -38,6 +38,12 @@ def test_disabled_and_no_reliable_paths_never_call_provider() -> None:
     assert stub.calls == 0
 
 
+def test_official_innovative_medicine_board_never_requests_its_static_proxy_list() -> None:
+    stub = StubObservationService(); service = SecurityProxyViewerService(observation_service=stub, enabled=True)
+    result = service.observe(available("innovative_drug_medicine"))
+    assert result["viewer_source_mode"] == "official_board" and result["security_proxy"] is None and stub.calls == 0
+
+
 def test_proxy_response_has_independent_quotes_disclosure_and_no_aggregate() -> None:
     stub = StubObservationService(); result = SecurityProxyViewerService(observation_service=stub, enabled=True).observe(unavailable())
     assert result["viewer_source_mode"] == "security_proxy" and result["disclosure"]

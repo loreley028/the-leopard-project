@@ -30,4 +30,23 @@ describe("SecurityProxyCard", () => {
     render(<SecurityProxyCard observation={{ ...cpo, viewer_source_mode: "unavailable", security_proxy: null, fallback_reason: "no_reliable_security_proxy" }} />);
     expect(screen.getByText("暂无可靠的代理证券行情")).toBeInTheDocument();
   });
+
+  it("renders innovative medicine as one ETF and three independent stocks", () => {
+    const innovativeMedicine: ViewerObservation = {
+      ...cpo,
+      market_path_key: "innovative_drug_medicine",
+      security_proxy: {
+        ...cpo.security_proxy!,
+        instruments: [
+          { ...cpo.security_proxy!.instruments[0], symbol: "sz159992", security_name: "创新药ETF", proxy_role: "etf" },
+          { ...cpo.security_proxy!.instruments[1], symbol: "sh600276", security_name: "恒瑞医药" },
+          { ...cpo.security_proxy!.instruments[2], symbol: "sh603259", security_name: "药明康德" },
+          { ...cpo.security_proxy!.instruments[3], symbol: "sz300760", security_name: "迈瑞医疗" },
+        ],
+      },
+    };
+    render(<SecurityProxyCard observation={innovativeMedicine} />);
+    for (const name of ["创新药ETF", "恒瑞医药", "药明康德", "迈瑞医疗"]) expect(document.body).toHaveTextContent(name);
+    expect(screen.queryByText("板块涨跌")).not.toBeInTheDocument();
+  });
 });
