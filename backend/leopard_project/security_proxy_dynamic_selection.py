@@ -31,14 +31,15 @@ class SecurityProxySelectionPreference:
     market_path_key: str
     enabled: bool
     required_symbols: tuple[str, ...]
-    preferred_etf_symbols: tuple[str, ...]
-    preferred_large_cap_symbols: tuple[str, ...]
+    eligible_etf_symbols: tuple[str, ...]
+    eligible_large_cap_symbols: tuple[str, ...]
     auto_rebound_slots: int
     auto_turnover_slots: int
     excluded_symbols: tuple[str, ...]
     approval_note: str
     approved_at: date
     policy_version: str
+    migration_warnings: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -85,19 +86,25 @@ def load_selection_preferences(path: Path = PREFERENCES_PATH) -> tuple[SecurityP
         pool = pool_map.get(key)
         if pool is None:
             raise SecurityProxyDynamicSelectionError(f"unapproved preference path: {key}")
+        old_etfs, old_large = "preferred_etf_symbols" in raw, "preferred_large_cap_symbols" in raw
+        if "eligible_etf_symbols" not in raw and not old_etfs or "eligible_large_cap_symbols" not in raw and not old_large:
+            raise SecurityProxyDynamicSelectionError(f"preferences need eligible candidate sets for {key}")
+        migration = tuple(name for name, present in (("deprecated_preferred_etf_symbols", old_etfs), ("deprecated_preferred_large_cap_symbols", old_large)) if present)
         preference = SecurityProxySelectionPreference(
-            key, bool(raw["enabled"]), _as_tuple(raw["required_symbols"]), _as_tuple(raw["preferred_etf_symbols"]),
-            _as_tuple(raw["preferred_large_cap_symbols"]), int(raw["auto_rebound_slots"]), int(raw["auto_turnover_slots"]),
-            _as_tuple(raw["excluded_symbols"]), str(raw["approval_note"]), date.fromisoformat(str(raw["approved_at"])), str(raw["policy_version"]),
+            key, bool(raw["enabled"]), _as_tuple(raw["required_symbols"]),
+            _as_tuple(raw.get("eligible_etf_symbols", raw.get("preferred_etf_symbols", []))),
+            _as_tuple(raw.get("eligible_large_cap_symbols", raw.get("preferred_large_cap_symbols", []))),
+            int(raw["auto_rebound_slots"]), int(raw["auto_turnover_slots"]), _as_tuple(raw["excluded_symbols"]),
+            str(raw["approval_note"]), date.fromisoformat(str(raw["approved_at"])), str(raw["policy_version"]), migration,
         )
         symbols = {candidate.symbol for candidate in (*pool.etf_candidates, *pool.stock_candidates) if candidate.enabled}
         etfs = {candidate.symbol for candidate in pool.etf_candidates if candidate.enabled}
         stocks = {candidate.symbol for candidate in pool.stock_candidates if candidate.enabled}
         if not preference.enabled or preference.policy_version != document["policy_version"]:
             raise SecurityProxyDynamicSelectionError(f"invalid policy state for {key}")
-        if not set(preference.required_symbols) <= stocks or not set(preference.preferred_etf_symbols) <= etfs:
+        if not set(preference.required_symbols) <= stocks or not set(preference.eligible_etf_symbols) <= etfs:
             raise SecurityProxyDynamicSelectionError(f"preferences contain unapproved symbols for {key}")
-        if not set(preference.preferred_large_cap_symbols) <= stocks or len(preference.preferred_large_cap_symbols) > 2:
+        if not set(preference.eligible_large_cap_symbols) <= stocks or len(preference.eligible_large_cap_symbols) > 2:
             raise SecurityProxyDynamicSelectionError(f"large-cap preferences invalid for {key}")
         if not set(preference.excluded_symbols) <= symbols or set(preference.excluded_symbols) & set(preference.required_symbols):
             raise SecurityProxyDynamicSelectionError(f"exclusion rules invalid for {key}")
@@ -125,16 +132,19 @@ def _metric(rows: Iterable[SecurityProxyEodRecord], symbol: str, calculation_dat
         raise SecurityProxyDynamicSelectionError(f"duplicate history for {symbol}")
     latest = values[-1] if values and values[-1].trading_date == calculation_date else None
     if latest is None:
-        return {"history_days": str(len(values)), "latest_close": None, "latest_amount_yuan": None, "rolling_20d_low": None, "rebound_pct": None, "rebound_status": "missing_latest_eod", "turnover_status": "missing_latest_eod"}
+        return {"history_days": str(len(values)), "latest_close": None, "latest_amount_yuan": None, "median_amount_yuan": None, "rolling_20d_low": None, "rebound_pct": None, "rebound_status": "missing_latest_eod", "turnover_status": "missing_latest_eod"}
     recent = values[-20:]
     low = min((row.low for row in recent), default=None) if len(recent) == 20 else None
     rebound = latest.close / low - Decimal("1") if low is not None else None
-    return {"history_days": str(len(values)), "latest_close": latest.close, "latest_amount_yuan": latest.amount_yuan, "rolling_20d_low": low, "rebound_pct": rebound, "rebound_status": "available" if rebound is not None else "insufficient_history", "turnover_status": "available" if latest.amount_yuan is not None else "missing_amount"}
+    amounts = sorted(row.amount_yuan for row in recent if row.amount_yuan is not None and row.amount_yuan > 0)
+    median = amounts[len(amounts) // 2] if len(amounts) % 2 else (amounts[len(amounts) // 2 - 1] + amounts[len(amounts) // 2]) / Decimal("2") if amounts else None
+    liquidity_status = "available" if len(recent) == 20 and len(amounts) == 20 else "liquidity_history_partial" if len(values) >= 5 and len(amounts) >= 5 else "insufficient_liquidity_history"
+    return {"history_days": str(len(values)), "latest_close": latest.close, "latest_amount_yuan": latest.amount_yuan, "median_amount_yuan": median, "rolling_20d_low": low, "rebound_pct": rebound, "rebound_status": "available" if rebound is not None else "insufficient_history", "turnover_status": "available" if latest.amount_yuan is not None else "missing_amount", "liquidity_status": liquidity_status}
 
 
 def _snapshot_item(candidate: SecurityProxyCandidate, *, reasons: list[str], source: str, required: bool, metrics: Mapping[str, Decimal | None | str]) -> SecurityProxySelectedInstrumentSnapshot:
-    values = {key: str(value) if isinstance(value, Decimal) else value for key, value in metrics.items() if key in {"latest_close", "latest_amount_yuan", "rolling_20d_low", "rebound_pct", "history_days"}}
-    statuses = {key: str(value) for key, value in metrics.items() if key in {"rebound_status", "turnover_status"}}
+    values = {key: str(value) if isinstance(value, Decimal) else value for key, value in metrics.items() if key in {"latest_close", "latest_amount_yuan", "median_amount_yuan", "rolling_20d_low", "rebound_pct", "history_days"}}
+    statuses = {key: str(value) for key, value in metrics.items() if key in {"rebound_status", "turnover_status", "liquidity_status"}}
     return SecurityProxySelectedInstrumentSnapshot(candidate.symbol, candidate.security_name, candidate.security_type, candidate.coverage_type, tuple(reasons), source, required, values, statuses)
 
 
@@ -170,10 +180,12 @@ class SecurityProxySelectionSnapshotStore:
 
 
 class SecurityProxyDynamicSelectionService:
-    def __init__(self, *, preferences: Iterable[SecurityProxySelectionPreference] | None = None, now=lambda: datetime.now(timezone.utc)) -> None:
+    def __init__(self, *, preferences: Iterable[SecurityProxySelectionPreference] | None = None, pools: Iterable[object] | None = None, verified_aums: Mapping[str, Decimal] | None = None, verified_market_caps: Mapping[str, Decimal] | None = None, now=lambda: datetime.now(timezone.utc)) -> None:
         self.preferences = {value.market_path_key: value for value in (preferences or load_selection_preferences())}
-        _, pools = load_security_proxy_candidate_pool()
-        self.pools = {pool.market_path_key: pool for pool in pools}
+        _, loaded_pools = load_security_proxy_candidate_pool()
+        self.pools = {pool.market_path_key: pool for pool in (tuple(pools) if pools is not None else loaded_pools)}
+        self.verified_aums = dict(verified_aums or {})
+        self.verified_market_caps = dict(verified_market_caps or {})
         self.now = now
 
     def build(self, calculation_date: date, records: Iterable[SecurityProxyEodRecord]) -> tuple[SecurityProxySelectionSnapshot, ...]:
@@ -201,9 +213,9 @@ class SecurityProxyDynamicSelectionService:
                 choose(symbol, "required_manual", "manual_approved", True)
                 if metrics[symbol]["latest_close"] is None:
                     warnings.append(f"required_latest_eod_missing:{symbol}")
-            for symbol in preference.preferred_etf_symbols[:1]: choose(symbol, "preferred_etf", "manual_approved")
-            for symbol in preference.preferred_large_cap_symbols: choose(symbol, "preferred_large_cap", "manual_approved")
-            for reason, count, metric_key, status_key in (("fastest_rebound", preference.auto_rebound_slots, "rebound_pct", "rebound_status"), ("highest_turnover", preference.auto_turnover_slots, "latest_amount_yuan", "turnover_status")):
+            self._choose_etf(pool, preference, metrics, choose, warnings)
+            self._choose_large_caps(preference, metrics, choose, warnings)
+            for reason, count, metric_key, status_key in (("fastest_20d_rebound", preference.auto_rebound_slots, "rebound_pct", "rebound_status"), ("highest_latest_turnover", preference.auto_turnover_slots, "latest_amount_yuan", "turnover_status")):
                 ranked = sorted((candidate for candidate in pool.stock_candidates if candidate.enabled and candidate.symbol not in preference.excluded_symbols and metrics[candidate.symbol][status_key] == "available" and isinstance(metrics[candidate.symbol][metric_key], Decimal)), key=lambda item: (-metrics[item.symbol][metric_key], item.symbol))  # type: ignore[operator]
                 count_before = len(selected)
                 for candidate in ranked:
@@ -214,6 +226,33 @@ class SecurityProxyDynamicSelectionService:
                     warnings.append(f"insufficient_{reason}_candidates")
             result.append(SecurityProxySelectionSnapshot(key, calculation_date, next_day, tuple(selected), preference.policy_version, self.now(), tuple(warnings)))
         return tuple(result)
+
+    def _choose_etf(self, pool, preference, metrics, choose, warnings) -> None:
+        candidates = [item for item in pool.etf_candidates if item.enabled and item.symbol in preference.eligible_etf_symbols and item.symbol not in preference.excluded_symbols]
+        verified = [item for item in candidates if self.verified_aums.get(item.symbol, Decimal("0")) > 0]
+        if verified:
+            choose(sorted(verified, key=lambda item: (-self.verified_aums[item.symbol], item.symbol))[0].symbol, "highest_verified_aum", "automatic_verified_metric"); return
+        complete = [item for item in candidates if metrics[item.symbol].get("liquidity_status") == "available" and isinstance(metrics[item.symbol].get("median_amount_yuan"), Decimal)]
+        if complete:
+            choose(sorted(complete, key=lambda item: (-metrics[item.symbol]["median_amount_yuan"], item.symbol))[0].symbol, "highest_median_turnover_etf", "automatic_liquidity_metric"); return  # type: ignore[operator]
+        partial = [item for item in candidates if metrics[item.symbol].get("liquidity_status") == "liquidity_history_partial" and isinstance(metrics[item.symbol].get("median_amount_yuan"), Decimal)]
+        if partial:
+            choose(sorted(partial, key=lambda item: (-metrics[item.symbol]["median_amount_yuan"], item.symbol))[0].symbol, "partial_history_liquidity_leader", "automatic_liquidity_metric"); warnings.append("liquidity_history_partial"); return  # type: ignore[operator]
+        if candidates:
+            choose(sorted(candidates, key=lambda item: (item.display_priority, item.symbol))[0].symbol, "static_approved_etf_fallback", "static_approved_registry")
+            warnings.extend(("insufficient_liquidity_history", "static_approved_etf_fallback"))
+
+    def _choose_large_caps(self, preference, metrics, choose, warnings) -> None:
+        candidates = [symbol for symbol in preference.eligible_large_cap_symbols if symbol not in preference.excluded_symbols]
+        verified = [symbol for symbol in candidates if self.verified_market_caps.get(symbol, Decimal("0")) > 0]
+        for index, symbol in enumerate(sorted(verified, key=lambda value: (-self.verified_market_caps[value], value))[:2]):
+            choose(symbol, "highest_verified_market_cap" if index == 0 else "second_verified_market_cap", "automatic_verified_metric")
+        for symbol in candidates:
+            if len(verified) >= 2: break
+            if symbol not in verified:
+                choose(symbol, "approved_large_cap_candidate", "approved_candidate")
+                warnings.append(f"market_cap_unverified:{symbol}")
+                verified.append(symbol)
 
 
 def _to_dict(value: SecurityProxySelectionSnapshot) -> dict[str, object]:

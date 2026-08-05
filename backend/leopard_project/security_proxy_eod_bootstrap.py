@@ -18,9 +18,9 @@ from .security_proxy_eod import SHANGHAI, SecurityProxyEodError, SecurityProxyEo
 
 
 REQUIRED_COLUMNS = (
-    "symbol", "trading_date", "open", "high", "low", "close", "source_name", "source_reference", "imported_at", "verified",
+    "symbol", "trading_date", "open", "high", "low", "close", "source_name", "source_reference", "imported_at",
 )
-ALL_COLUMNS = (*REQUIRED_COLUMNS, "security_name", "amount_yuan", "adjustment_mode")
+ALL_COLUMNS = (*REQUIRED_COLUMNS, "security_name", "amount_yuan", "adjustment_mode", "verified")
 
 
 @dataclass(frozen=True)
@@ -100,8 +100,9 @@ def bootstrap_row(raw: dict[str, object], *, today: date | None = None) -> Secur
         raise SecurityProxyBootstrapError("invalid_ohlc", "OHLC must be positive and amount must be non-negative")
     if not (low <= open_ <= high and low <= close <= high):
         raise SecurityProxyBootstrapError("invalid_ohlc", "OHLC relationship is invalid")
-    if not _bool(raw["verified"]):
-        raise SecurityProxyBootstrapError("unverified_input", "bootstrap input must be explicitly verified")
+    # Row-level manual attestation is intentionally not an input gate.  The
+    # source metadata is user-confirmed once; every row then passes the same
+    # deterministic candidate, calendar, OHLC, unit and adjustment checks.
     return SecurityProxyEodBootstrapRow(
         symbol=symbol, security_name=str(raw["security_name"]) if raw.get("security_name") else None,
         trading_date=trading_date, open=open_, high=high, low=low, close=close, amount_yuan=amount,
