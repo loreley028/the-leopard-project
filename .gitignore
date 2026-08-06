@@ -27,6 +27,8 @@ var/demo-fidelity/
 var/demo-real-fidelity/
 var/real-local/
 var/test/
+var/pr7-visual-preview/
+var/pr7-visual-preview-fixed/
 var/*.db
 var/*.sqlite
 var/*.sqlite3

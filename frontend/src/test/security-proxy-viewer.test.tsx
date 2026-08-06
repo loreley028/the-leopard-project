@@ -1,6 +1,7 @@
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import { SecurityProxyCard } from "../pages/SectorDetailPage";
+import { normalizeViewerObservation } from "../api/client";
 import type { ViewerObservation } from "../types";
 
 const cpo: ViewerObservation = {
@@ -48,5 +49,41 @@ describe("SecurityProxyCard", () => {
     render(<SecurityProxyCard observation={innovativeMedicine} />);
     for (const name of ["创新药ETF", "恒瑞医药", "药明康德", "迈瑞医疗"]) expect(document.body).toHaveTextContent(name);
     expect(screen.queryByText("板块涨跌")).not.toBeInTheDocument();
+  });
+
+  it("renders four CPO instruments from real numeric-string API values without a synthetic return", () => {
+    const numericStringCpo = normalizeViewerObservation({
+      ...cpo,
+      security_proxy: {
+        ...cpo.security_proxy!,
+        instruments: cpo.security_proxy!.instruments.map((item, index) => ({
+          ...item,
+          current: ["0.632", "914.43", "410.50", "207.44"][index],
+          pre_close: ["0.642", "947.74", "424.30", "216.85"][index],
+          change: ["-0.010", "-33.31", "-13.80", "-9.41"][index],
+          pct_change: ["-1.56", "-3.51", "-3.25", "-4.34"][index],
+        })),
+      },
+    });
+    render(<SecurityProxyCard observation={numericStringCpo} />);
+    expect(screen.getByText(/-1\.56% 现价：0\.632/)).toBeInTheDocument();
+    expect(screen.queryByText("NaN")).not.toBeInTheDocument();
+    expect(screen.queryByText("0.00%")).not.toBeInTheDocument();
+    expect(screen.queryByText("板块涨跌")).not.toBeInTheDocument();
+  });
+
+  it("keeps a malformed individual quote visible without fabricated values or a page failure", () => {
+    const malformed = normalizeViewerObservation({
+      ...cpo,
+      security_proxy: {
+        ...cpo.security_proxy!,
+        instruments: cpo.security_proxy!.instruments.map((item, index) => index === 0 ? { ...item, current: "", pre_close: "bad", change: Infinity, pct_change: "NaN", quote_datetime: undefined } : item),
+      },
+    });
+    render(<SecurityProxyCard observation={malformed} />);
+    expect(screen.getByText(/— 现价：— 行情时间：—/)).toBeInTheDocument();
+    expect(screen.getAllByText(/核心公司/)).toHaveLength(3);
+    expect(screen.queryByText("0.00%")).not.toBeInTheDocument();
+    expect(screen.queryByText("NaN")).not.toBeInTheDocument();
   });
 });

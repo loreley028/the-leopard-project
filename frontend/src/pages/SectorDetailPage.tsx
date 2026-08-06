@@ -52,7 +52,7 @@ export function SecurityProxyCard({ observation }: { observation: ViewerObservat
   if (observation.viewer_source_mode === "unavailable") return <IslandCard title="代理观察"><p>暂无可靠的代理证券行情</p></IslandCard>;
   const proxy = observation.security_proxy;
   if (!proxy) return null;
-  return <IslandCard title="代理观察"><p><strong className="proxy-observation-badge">代理观察</strong> 正式板块行情暂不可用。</p><div className="proxy-observation-list">{proxy.instruments.map(item => <div key={item.symbol}><strong>{item.proxy_role === "etf" ? "代表ETF" : "核心公司"} · {item.security_name}</strong>{item.coverage_type === "partial" && <small>部分覆盖</small>}<span>{item.quote_status === "available" ? <>{formatPct(item.pct_change)} 现价：{item.current} 行情时间：{item.quote_datetime?.slice(11, 16)}</> : "行情暂不可用"}</span></div>)}</div><p className="notice">{observation.disclosure}</p></IslandCard>;
+  return <IslandCard title="代理观察"><p><strong className="proxy-observation-badge">代理观察</strong> 正式板块行情暂不可用。</p><div className="proxy-observation-list">{proxy.instruments.map(item => <div key={item.symbol}><strong>{item.proxy_role === "etf" ? "代表ETF" : "核心公司"} · {item.security_name}</strong>{item.coverage_type === "partial" && <small>部分覆盖</small>}<span>{item.quote_status === "available" ? <>{item.pct_change == null ? "—" : formatPct(item.pct_change)} 现价：{item.current ?? "—"} 行情时间：{item.quote_datetime?.slice(11, 16) ?? "—"}</> : "行情暂不可用"}</span></div>)}</div><p className="notice">{observation.disclosure}</p></IslandCard>;
 }
 
 function HoldingSummary({ label, interval }: { label: string; interval?: NonNullable<SectorResearch["strict_holding_interval"]> | null }) {

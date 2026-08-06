@@ -1,4 +1,4 @@
-import type { EnhancedReport, Interpretation, IntradayStatus, PathMatrix, Principal, Report, Sector, SectorAssessment, SectorResearch, ViewerObservation } from "../types";
+import type { EnhancedReport, Interpretation, IntradayStatus, PathMatrix, Principal, Report, Sector, SectorAssessment, SectorResearch, ViewerObservation, ViewerSecurityProxyInstrument } from "../types";
 
 export class ApiError extends Error {
   constructor(public code: string, message: string, public status: number) { super(message); }
@@ -14,6 +14,51 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   return response.json() as Promise<T>;
 }
 
+type ViewerSecurityProxyInstrumentWire = Omit<ViewerSecurityProxyInstrument, "current" | "pre_close" | "change" | "pct_change" | "quote_datetime"> & {
+  current?: unknown;
+  pre_close?: unknown;
+  change?: unknown;
+  pct_change?: unknown;
+  quote_datetime?: unknown;
+};
+
+type ViewerObservationWire = Omit<ViewerObservation, "security_proxy"> & {
+  security_proxy: Omit<NonNullable<ViewerObservation["security_proxy"]>, "instruments"> & {
+    instruments: ViewerSecurityProxyInstrumentWire[];
+  } | null;
+};
+
+export function parseFiniteNumber(value: unknown): number | null {
+  if (typeof value === "number") return Number.isFinite(value) ? value : null;
+  if (typeof value !== "string") return null;
+  const normalized = value.trim();
+  if (!normalized) return null;
+  const parsed = Number(normalized);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function normalizeViewerSecurityProxyInstrument(value: ViewerSecurityProxyInstrumentWire): ViewerSecurityProxyInstrument {
+  return {
+    ...value,
+    current: parseFiniteNumber(value.current),
+    pre_close: parseFiniteNumber(value.pre_close),
+    change: parseFiniteNumber(value.change),
+    pct_change: parseFiniteNumber(value.pct_change),
+    quote_datetime: typeof value.quote_datetime === "string" ? value.quote_datetime : null,
+  };
+}
+
+export function normalizeViewerObservation(value: ViewerObservationWire): ViewerObservation {
+  if (!value.security_proxy) return { ...value, security_proxy: null };
+  return {
+    ...value,
+    security_proxy: {
+      ...value.security_proxy,
+      instruments: value.security_proxy.instruments.map(normalizeViewerSecurityProxyInstrument),
+    },
+  };
+}
+
 export const api = {
   login: (username: string, password: string) => request<Principal>("/auth/login", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ username, password }) }),
   logout: () => request<void>("/auth/logout", { method: "POST" }),
@@ -27,7 +72,7 @@ export const api = {
   sectors: (includeLowAttention = false, lowAttentionOnly = false) => request<Sector[]>(`/sectors?include_low_attention=${includeLowAttention}&low_attention_only=${lowAttentionOnly}`),
   sector: (key: string) => request<Sector>(`/sectors/${key}`),
   sectorResearch: (key: string, pathPeriods = 20, marketDays = 20) => request<SectorResearch>(`/sectors/${key}/research?path_periods=${pathPeriods}&market_days=${marketDays}`),
-  viewerObservation: (key: string) => request<ViewerObservation>(`/market-paths/${encodeURIComponent(key)}/viewer-observation`),
+  viewerObservation: async (key: string) => normalizeViewerObservation(await request<ViewerObservationWire>(`/market-paths/${encodeURIComponent(key)}/viewer-observation`)),
   adminSummary: () => request<Record<string, number>>("/admin/summary"),
   reportDays: (start: string, end: string) => request<Array<{ report_date: string; weekday: string; expected_status: string; state: string; skip_reason: string; reports: Report[] }>>(`/admin/report-days?start=${start}&end=${end}`),
   skipReportDay: (day: string, reason = "") => request(`/admin/report-days/${day}/skip`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ reason }) }),
