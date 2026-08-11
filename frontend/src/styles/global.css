@@ -51,6 +51,23 @@ button, a, input, textarea, [tabindex] { outline-offset: 4px; }
 .report-tabs a { padding: .55rem .8rem; white-space: nowrap; text-decoration: none; }
 .enhanced-report { min-width: 0; }
 .enhanced-report section { min-width: 0; scroll-margin-top: 9rem; }
+.report-overview-grid { display: grid; grid-template-columns: minmax(0, 2fr) minmax(16rem, .8fr); gap: var(--space-4); align-items: stretch; }
+.core-insight-panel { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(16rem, .9fr); gap: 1rem; }
+.core-insight-panel > section { min-width: 0; padding: .9rem; border-radius: 14px; background: rgb(233 239 220 / 45%); }
+.core-insight-panel > section:first-child { grid-column: 1 / -1; }
+.core-view-summary { margin: .35rem 0 0; max-width: 72ch; font-size: 1.02rem; line-height: 1.75; }
+.market-anchor-heading { display: flex; flex-wrap: wrap; align-items: baseline; gap: .45rem .75rem; margin: .45rem 0; }
+.market-anchor-heading strong { font-size: 1.05rem; }
+.market-anchor-heading span { font-size: 1.5rem; font-weight: 700; }
+.market-anchor-heading em { color: var(--text-muted); font-style: normal; }
+.market-anchor-panel dl, .defense-line-panel dl { display: grid; gap: .5rem; margin: .75rem 0 0; }
+.market-anchor-panel dl div, .defense-line-panel dl div { display: grid; grid-template-columns: 6rem minmax(0, 1fr); gap: .65rem; }
+.market-anchor-panel dt, .defense-line-panel dt { color: var(--text-muted); font-size: .78rem; }
+.market-anchor-panel dd, .defense-line-panel dd { margin: 0; }
+.defense-level { display: flex; align-items: baseline; justify-content: space-between; gap: .75rem; margin: .4rem 0; padding-bottom: .55rem; border-bottom: 1px solid var(--border-soft); }
+.defense-level span { color: var(--text-muted); font-size: .78rem; }
+.defense-level strong { font-size: 1.25rem; }
+.defense-source { margin: .8rem 0 0; color: var(--text-muted); font-size: .78rem; line-height: 1.55; }
 .assessment-list { display: grid; gap: 1rem; }
 .assessment-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .7rem; }
 .assessment-fields div { padding: .8rem; border-left: 3px solid #8eb6a0; background: rgb(255 255 255 / 50%); }
@@ -338,12 +355,15 @@ button, a, input, textarea, [tabindex] { outline-offset: 4px; }
 .intraday-detail-list > div { display: grid; grid-template-columns: minmax(7rem, .8fr) minmax(0, 1.2fr); gap: .65rem; }
 .intraday-detail-list dt { color: var(--text-muted); font-size: .75rem; }
 .intraday-detail-list dd { margin: 0; overflow-wrap: anywhere; font-size: .82rem; font-weight: 600; }
+.proxy-observation-panel { margin: var(--space-4) 0; }
+.proxy-observation-panel > .island-card { width: 100%; }
 .proxy-observation-intro { margin: 0; color: var(--text-muted); font-size: .86rem; }
-.proxy-observation-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 17rem), 1fr)); gap: .75rem; margin: .75rem 0; }
+.proxy-observation-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .9rem; margin: .85rem 0; }
 .proxy-observation-item { display: grid; gap: .65rem; min-width: 0; padding: .8rem; border: 1px solid #decdf3; border-radius: 13px; background: linear-gradient(145deg, #fff 0%, #faf5ff 100%); }
 .proxy-observation-item header { display: flex; align-items: start; justify-content: space-between; gap: .5rem; }
 .proxy-observation-item header > div { display: grid; gap: .2rem; min-width: 0; }
 .proxy-observation-item small { color: var(--text-muted); }
+.proxy-observation-item .proxy-role { width: fit-content; padding: .12rem .42rem; border-radius: 999px; background: #eee5f8; color: #554268; font-size: .68rem; font-weight: 700; letter-spacing: .04em; }
 .proxy-quote { display: grid; justify-items: end; white-space: nowrap; }
 .proxy-quote span { font-size: 1.1rem; }
 .proxy-quote em { color: var(--text-muted); font-size: .8rem; font-style: normal; }
@@ -359,10 +379,14 @@ button, a, input, textarea, [tabindex] { outline-offset: 4px; }
 .proxy-ma-list > div { display: grid; grid-template-columns: 3.2rem 1fr 1fr; gap: .4rem; }
 .proxy-ma-list dt, .proxy-ma-list dd { margin: 0; font-size: .78rem; }
 .proxy-ma-list dt { color: var(--text-muted); }
-.proxy-ma-list dd:last-child { text-align: right; }
+.proxy-ma-list dd:last-child { display: flex; justify-content: flex-end; gap: .35rem; text-align: right; }
+.proxy-ma-list dd span { color: var(--text-muted); font-size: .68rem; }
 .proxy-observation-item footer { color: var(--text-muted); font-size: .72rem; }
 .proxy-disclosure { margin: .35rem 0 0; color: var(--text-muted); font-size: .75rem; line-height: 1.45; }
 @media (max-width: 760px) {
+  .report-overview-grid, .core-insight-panel { grid-template-columns: 1fr; }
+  .core-insight-panel > section:first-child { grid-column: auto; }
+  .market-anchor-panel dl div, .defense-line-panel dl div { grid-template-columns: 1fr; gap: .15rem; }
   .sectors-research, .sector-research-detail { min-width: 0; max-width: 100%; overflow-x: clip; }
   .sector-table-wrap { width: 100%; overflow-x: auto; }
   .recent-five-detail { grid-template-columns: 1fr; }

@@ -13,7 +13,7 @@ const report: Report = {
   detected_report_date: "2026-07-19", report_date_source: "pdf_title", report_date_confidence: "high", report_date_confirmed_by_user: false,
   market_as_of_date: "2026-07-17", candidate_market_as_of_date: "2026-07-17", market_as_of_date_confirmed: true, enhanced_status: "ready", enhanced_revision_number: 1,
   interpretation_status: "ready",
-  status: "published", core_view: "保持耐心，观察结构性机会。", market_path: "震荡整理。", risk_warning: "仅为测试。", focus_sectors: ["半导体", "恒生科技"],
+  status: "published", core_view: "保持耐心，观察结构性机会。", market_path: "3844点以下继续防守；即使站上，也必须通过时间、市场宽度和量能验证。", risk_warning: "仅为测试。", focus_sectors: ["半导体", "恒生科技"],
   created_at: "2026-07-19T20:00:00Z", published_at: "2026-07-19T21:00:00Z", pdf_url: "/api/v1/reports/report-1/pdf", pdf_download_url: "/api/v1/reports/report-1/pdf/download", data_notice: "研究辅助数据，非生产级行情服务。",
   mentions: [{ sector_key: "semiconductor", sector_name: "半导体", summary: "关注需求验证。", extraction_status: "explicit" }], raw_text: "fixture", original_filename: "fixture.pdf", unmapped_terms: [],
 };
@@ -51,6 +51,18 @@ const sectors: Sector[] = Array.from({ length: 67 }, (_, index) => ({
 const pathEntry = { id: "path-1", sector_key: "semiconductor", sector_name: "半导体", path_status: "hold" as const, path_status_label: "持有", path_status_color: "#15803d", explicitly_mentioned: true, judgement_summary: "关注需求验证。", source_text_reference: "fixture", review_status: "confirmed", manually_modified: false, revision_id: "initial" };
 const assessment = { id: "assessment-1", sector_key: "semiconductor", sector_name: "半导体", current_path_status: "hold" as const, path_status_label: "持有", explicitly_mentioned: true, recent_path_summary: "观察转持有", current_judgement: "关注需求验证。", main_basis: "量价结构", observation_condition: "需求确认", source_section: "板块详细汇总", source_text_reference: "fixture", review_status: "confirmed", manually_modified: false, revision_id: "initial", market: null };
 const enhanced: EnhancedReport = { report, path_entries: [pathEntry], sector_assessments: [assessment], status_groups: [{ status: "hold", count: 1, items: [assessment] }], market_snapshots: [], comparison: { previous_report_id: null, status_changes: [], counts: {} }, market_data_attached: false, data_notice: report.data_notice };
+const enhancedWithShanghaiAnchor: EnhancedReport = {
+  ...enhanced,
+  market_snapshots: [{
+    ...sectors[0].latest_market!,
+    sector_key: "shanghai_composite",
+    close: 3502.1,
+    daily_pct_change: 1.2,
+    ma5: 3488.6,
+    ma20: 3420.2,
+  }],
+  market_data_attached: true,
+};
 const interpretation: Interpretation = {
   report_id: report.id, status: "ready", report_date: report.report_date, detected_report_date: report.detected_report_date,
   report_date_source: "pdf_title", report_date_confidence: "high", report_date_confirmed_by_user: false,
@@ -66,11 +78,11 @@ const matrix: PathMatrix = { caption: "板块历史路径矩阵", dates: [{ repo
 const research: SectorResearch = { sector_key: "sector-2", sector_name: "板块2", group_name: "分组1", latest_explicit_view: { report_id: report.id, report_date: report.report_date!, path: pathEntry, assessment, report_snapshot: null }, current_latest_market: null, market_support_status: "supported", data_status: "supported", market_status_detail: "研究辅助数据", history: [{ report_id: report.id, report_date: report.report_date!, path: pathEntry, assessment, report_snapshot: null }] };
 
 function response(payload: unknown, status = 200) { return Promise.resolve(new Response(status === 204 ? null : JSON.stringify(payload), { status, headers: { "Content-Type": "application/json" } })); }
-function mockApi(options: { empty?: boolean; duplicate?: boolean } = {}) {
+function mockApi(options: { empty?: boolean; duplicate?: boolean; enhancedReport?: EnhancedReport } = {}) {
   vi.stubGlobal("fetch", vi.fn((input: RequestInfo | URL) => {
     const url = String(input);
     if (url.endsWith("/reports/latest")) return options.empty ? response({ error: { code: "no_published_report", message: "none" } }, 404) : response(report);
-    if (url.endsWith("/reports/report-1/enhanced")) return response(enhanced);
+    if (url.endsWith("/reports/report-1/enhanced")) return response(options.enhancedReport ?? enhanced);
     if (url.endsWith("/reports/report-1/pdf/preview")) return response({ page_count: 2, page_urls: ["/preview/1", "/preview/2"], render_mode: "server_memory_png" });
     if (url.includes("/reports/report-1/path-matrix")) return response(matrix);
     if (url.endsWith("/reports") && !url.includes("admin")) return response(options.empty ? [] : [report]);
@@ -95,7 +107,8 @@ function renderAt(path: string, principal: Principal | null = { username: "viewe
 describe("Viewer research pages", () => {
   beforeEach(() => mockApi());
   it("shows a friendly empty home state", async () => { mockApi({ empty: true }); renderAt("/"); expect(await screen.findByText("暂无已发布报告。")).toBeInTheDocument(); });
-  it("shows the latest published report", async () => { renderAt("/"); expect(await screen.findByRole("heading", { name: report.title })).toBeInTheDocument(); expect(screen.getByText(report.core_view)).toBeInTheDocument(); });
+  it("shows the latest published report with a factual market anchor and structured defense line", async () => { renderAt("/"); expect(await screen.findByRole("heading", { name: report.title })).toBeInTheDocument(); expect(screen.getByText(report.core_view)).toBeInTheDocument(); expect(screen.getByText("猎豹核心判断")).toBeInTheDocument(); expect(screen.getByText("当天大A行情锚点")).toBeInTheDocument(); expect(screen.getByText("上证指数")).toBeInTheDocument(); expect(screen.getByText("行情未附加")).toBeInTheDocument(); expect(screen.getByText("3844 点")).toBeInTheDocument(); expect(screen.getByText("次日需要关注的攻防线")).toBeInTheDocument(); });
+  it("uses an existing Shanghai snapshot without requesting a new market source", async () => { mockApi({ enhancedReport: enhancedWithShanghaiAnchor }); renderAt("/"); expect(await screen.findByText("3502.1")).toBeInTheDocument(); expect(screen.getByText("+1.20%")).toBeInTheDocument(); expect(screen.getByText("3488.6")).toBeInTheDocument(); expect(screen.getByText("3420.2")).toBeInTheDocument(); expect(screen.queryByText("行情未附加")).not.toBeInTheDocument(); });
   it("shows the report list without weekend missing warnings", async () => { renderAt("/reports"); expect(await screen.findByRole("table", { name: "已发布报告" })).toBeInTheDocument(); expect(screen.getByText(/周五、周六无报告属于正常节奏/)).toBeInTheDocument(); });
   it("shows report details without requesting PDF or preview pages until requested", async () => { const user = userEvent.setup(); renderAt("/reports/report-1"); expect(await screen.findByRole("heading", { level: 1, name: report.title })).toBeInTheDocument(); expect(screen.getByRole("table", { name: /板块历史路径矩阵/ })).toBeInTheDocument(); expect(screen.getByRole("button", { name: "最近20期" })).toHaveClass("active"); expect(screen.queryByLabelText("原始PDF逐页预览")).not.toBeInTheDocument(); expect(screen.getByRole("link", { name: "下载原始PDF" })).toHaveAttribute("href", report.pdf_download_url); expect(fetch).not.toHaveBeenCalledWith(expect.stringContaining("/pdf/preview"), expect.anything()); await user.click(screen.getByRole("button", { name: "加载逐页预览" })); expect(await screen.findByLabelText("原始PDF逐页预览")).toBeInTheDocument(); expect(screen.getByAltText("原始PDF第1页")).toHaveAttribute("src", "/preview/1"); });
   it("renders 67 market paths from 66 report topics in eight fixed groups", async () => { renderAt("/sectors"); const table = await screen.findByRole("table", { name: /板块研究档案/ }); expect(within(table).getAllByRole("row")).toHaveLength(76); expect(screen.getByRole("navigation", { name: "板块研究一级分组快捷导航" }).querySelectorAll("button")).toHaveLength(8); });

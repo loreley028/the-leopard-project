@@ -14,6 +14,46 @@ const chineseDate = (value: string | null) => value ? `${Number(value.slice(0, 4
 const pct = (value: number | null | undefined) => value == null ? "—" : formatPct(value);
 const ratio = (value: number | null | undefined) => value == null ? "—" : `${value.toFixed(2)}x`;
 
+const SHANGHAI_ANCHOR_KEYS = new Set(["shanghai_composite", "sse_composite", "sh000001"]);
+
+function defenseLine(value: string) {
+  const sentences = value.split(/[。；;\n]+/).map(item => item.trim()).filter(Boolean);
+  const keyLevel = value.match(/(?<!\d)(\d{3,5}(?:\.\d+)?)\s*点/)?.[1] ?? null;
+  const above = sentences.find(item => /站上|收复|突破/.test(item)) ?? null;
+  const below = sentences.find(item => /跌破|失守|以下|下方/.test(item)) ?? null;
+  const validation = sentences.find(item => /时间|宽度|量能|成交量|资金|持续/.test(item)) ?? null;
+  return { keyLevel, above, below, validation };
+}
+
+function ReportOverview({ enhanced }: { enhanced: EnhancedReport }) {
+  const { report } = enhanced;
+  const anchor = enhanced.market_snapshots.find(item => SHANGHAI_ANCHOR_KEYS.has(item.sector_key ?? "")) ?? null;
+  const defense = defenseLine(report.market_path);
+  return <div className="report-overview-grid">
+    <IslandCard title="核心观点">
+      <div className="core-insight-panel">
+        <section><p className="eyebrow">猎豹核心判断</p><p className="core-view-summary">{report.core_view}</p></section>
+        <section className="market-anchor-panel" aria-label="当天大A行情锚点">
+          <p className="eyebrow">当天大A行情锚点</p>
+          <div className="market-anchor-heading"><strong>上证指数</strong><span>{anchor ? anchor.close : "—"}</span><em>{anchor ? pct(anchor.daily_pct_change) : "行情未附加"}</em></div>
+          {anchor ? <dl><div><dt>完整交易日</dt><dd>{anchor.trade_date}</dd></div><div><dt>MA5</dt><dd>{anchor.ma5 ?? "—"}</dd></div><div><dt>MA20</dt><dd>{anchor.ma20 ?? "—"}</dd></div></dl> : <p className="muted">当前报告没有可核验的上证指数独立行情；攻防点位不会被当作收盘点位。</p>}
+        </section>
+        <section className="defense-line-panel" aria-label="次日攻防线">
+          <p className="eyebrow">次日需要关注的攻防线</p>
+          <div className="defense-level"><span>关键点位</span><strong>{defense.keyLevel ? `${defense.keyLevel} 点` : "报告未单列"}</strong></div>
+          <dl>
+            <div><dt>站上怎么看</dt><dd>{defense.above ?? "报告未单列站上后的确认条件。"}</dd></div>
+            <div><dt>跌破怎么看</dt><dd>{defense.below ?? "报告未单列跌破后的应对条件。"}</dd></div>
+            <div><dt>验证条件</dt><dd>{defense.validation ?? "继续按报告原文观察时间、宽度、量能或资金确认。"}</dd></div>
+          </dl>
+          <p className="defense-source">原始大盘路径：{report.market_path || "本报告未可靠单列大盘路径。"}</p>
+        </section>
+      </div>
+    </IslandCard>
+    <IslandCard title="风险提示"><p>{report.risk_warning || "本报告未单列风险提示。"}</p></IslandCard>
+  </div>;
+}
+
 function MarketStrip({ market, holding }: { market: MarketSnapshot | null; holding: SectorAssessment["active_holding_interval"] }) {
   return <div className="assessment-market-strip" aria-label="行情辅助">
     <strong>行情辅助</strong><span>日期 {market?.trade_date ?? "—"}</span><span>当日 {pct(market?.daily_pct_change)}</span>
@@ -67,7 +107,7 @@ export function ReportDetailPage({ latest = false }: { latest?: boolean }) {
     <header className="report-header"><div><IslandStatusBadge status={report.status} /><p className="eyebrow">直播总结动态加强版 · {chineseDate(report.report_date)}</p><h1>{report.title}</h1></div><div className="date-contract"><span>报告日期<strong>{report.report_date}</strong></span><span>目标交易日<strong>{report.target_trade_date ?? "待确认"}</strong></span><span>行情截止日期<strong>{report.market_as_of_date ?? "行情未附加"}</strong></span></div></header>
     {!enhanced.market_data_attached && <p className="notice report-market-notice">行情辅助数据尚未附加。</p>}
     <nav className="report-tabs" aria-label="增强报告章节"><a href="#overview">报告概览</a><a href="#path">历史路径</a><a href="#assessments">板块观点</a><a href="#market">行情辅助</a><a href="#source">原始PDF</a></nav>
-    <section id="overview"><h2>报告概览</h2><div className="dashboard-grid"><IslandCard title="核心观点"><p>{report.core_view}</p></IslandCard><IslandCard title="大盘路径"><p>{report.market_path || "本报告未可靠单列大盘路径。"}</p></IslandCard><IslandCard title="风险提示"><p>{report.risk_warning || "本报告未单列风险提示。"}</p></IslandCard></div></section>
+    <section id="overview"><h2>报告概览</h2><ReportOverview enhanced={enhanced} /></section>
     <section id="path"><h2>历史路径矩阵</h2>{matrix ? <IslandPathMatrix matrix={matrix} period={period} onPeriodChange={setPeriod} /> : <p>路径矩阵加载中…</p>}</section>
     <section id="assessments"><h2>{chineseDate(report.report_date)}板块观点详细汇总</h2><p className="muted">按原PDF分组展示五列主体；路径历史来自矩阵，详细观点历史来自已上传PDF，两者分别保存。</p>{GROUP_ORDER.map(group => grouped.get(group)?.length ? <AssessmentTable key={group} title={group} items={grouped.get(group)!} /> : null)}<details className="advanced-review"><summary>本期未提及 {unmentioned} 个板块</summary><p>“未提”只表示本期PDF没有明确观点，不代表既有观点失效。</p></details></section>
     <section id="market"><h2>行情辅助</h2><p className="notice">{enhanced.market_data_attached ? `已固化 ${enhanced.market_snapshots.length}/65 个支持板块；发布快照不会被后续刷新覆盖。` : "尚未绑定真实行情；不会使用演示行情填充。"}</p></section>

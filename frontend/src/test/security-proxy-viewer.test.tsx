@@ -21,10 +21,12 @@ describe("SecurityProxyCard", () => {
     render(<SecurityProxyCard observation={cpo} />);
     expect(screen.getAllByText("代理观察")).toHaveLength(1);
     expect(screen.getByText("部分覆盖")).toBeInTheDocument();
-    expect(screen.getAllByText(/^核心公司 ·/)).toHaveLength(3);
+    expect(screen.getByText("代理ETF")).toBeInTheDocument();
+    expect(screen.getAllByText("核心公司")).toHaveLength(3);
     expect(screen.getByText(/不代表官方板块指数/)).toBeInTheDocument();
     expect(screen.getAllByText("近5日走势")).toHaveLength(4);
     expect(screen.getAllByText("MA5")).toHaveLength(4);
+    expect(screen.getAllByText("相对位置")).toHaveLength(12);
     expect(screen.queryByText("板块涨跌")).not.toBeInTheDocument();
   });
 
@@ -88,7 +90,7 @@ describe("SecurityProxyCard", () => {
     });
     render(<SecurityProxyCard observation={malformed} />);
     expect(screen.getAllByText("—").length).toBeGreaterThan(3);
-    expect(screen.getAllByText(/^核心公司 ·/)).toHaveLength(3);
+    expect(screen.getAllByText("核心公司")).toHaveLength(3);
     expect(screen.queryByText("0.00%")).not.toBeInTheDocument();
     expect(screen.queryByText("NaN")).not.toBeInTheDocument();
   });
