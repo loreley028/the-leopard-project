@@ -262,7 +262,11 @@ export interface ViewerSecurityProxyInstrument {
   symbol: string; security_name: string; proxy_role: "etf" | "leader"; coverage_type: string;
   current: number | null; pre_close: number | null; change: number | null; pct_change: number | null;
   quote_datetime: string | null; quote_status: "available" | "unavailable"; error_class: string | null;
+  recent_closes: ViewerSecurityProxyRecentClose[];
+  ma5: number | null; ma10: number | null; ma20: number | null;
+  distance_to_ma5_pct: number | null; distance_to_ma10_pct: number | null; distance_to_ma20_pct: number | null;
 }
+export interface ViewerSecurityProxyRecentClose { trading_date: string; close: number; }
 export interface ViewerObservation {
   market_path_key: string;
   viewer_source_mode: "official_board" | "security_proxy" | "unavailable";

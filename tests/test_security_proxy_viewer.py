@@ -1,10 +1,13 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime
+from decimal import Decimal
 
 from leopard_project.security_proxy_observation import SecurityProxyObservationService
 from leopard_project.providers.tencent_standard_quote import TencentStandardSecurityQuoteProvider
 from leopard_project.web.security_proxy_viewer import OfficialBoardAvailability, SecurityProxyViewerCache, SecurityProxyViewerService
+from leopard_project.web.database import create_session_factory
+from leopard_project.web.models import SecurityProxyDaily
 
 
 def available(key: str = "cpo") -> OfficialBoardAvailability:
@@ -57,3 +60,29 @@ def test_cache_hit_and_short_error_ttl() -> None:
     assert cache.get_or_fetch(("x",), failed)[1] is False
     assert cache.get_or_fetch(("x",), failed)[1] is True and calls[0] == 1
     now[0] = 31; assert cache.get_or_fetch(("x",), failed)[1] is False and calls[0] == 2
+
+
+def test_proxy_viewer_adds_recent_history_and_metrics_without_using_current_in_ma(tmp_path) -> None:
+    sessions = create_session_factory(f"sqlite:///{tmp_path / 'viewer.sqlite3'}")
+    with sessions() as session:
+        for index in range(21):
+            session.add(SecurityProxyDaily(symbol="sh515880", trading_date=date(2026, 7, 1).fromordinal(date(2026, 7, 1).toordinal() + index), close=Decimal(index + 1), fetched_at=datetime(2026, 8, 4, 14, 30), source="fixture"))
+        session.commit()
+        result = SecurityProxyViewerService(observation_service=StubObservationService(), enabled=True).observe(unavailable(), session=session)
+    instrument = result["security_proxy"]["instruments"][0]
+    assert instrument["recent_closes"] == [
+        {"trading_date": (date(2026, 7, 1).fromordinal(date(2026, 7, 1).toordinal() + index)).isoformat(), "close": float(Decimal(index + 1))}
+        for index in range(16, 21)
+    ]
+    assert instrument["ma5"] == 19 and instrument["ma10"] == 16.5 and instrument["ma20"] == 11.5
+    assert instrument["distance_to_ma5_pct"] is None
+
+
+def test_proxy_trend_distance_is_fact_only_and_history_is_optional() -> None:
+    payload = SecurityProxyViewerService._trend_payload(
+        [type("Daily", (), {"trading_date": date(2026, 8, day), "close": Decimal(day)})() for day in range(1, 6)],
+        Decimal("6"),
+    )
+    assert payload["ma5"] == 3 and payload["distance_to_ma5_pct"] == 100
+    empty = SecurityProxyViewerService._trend_payload((), Decimal("6"))
+    assert empty == {"recent_closes": [], "ma5": None, "ma10": None, "ma20": None, "distance_to_ma5_pct": None, "distance_to_ma10_pct": None, "distance_to_ma20_pct": None}

@@ -7,6 +7,9 @@ from dataclasses import asdict, dataclass
 from datetime import datetime
 from typing import Callable, Iterable
 
+from sqlalchemy.orm import Session
+
+from leopard_project.security_proxy_daily import build_security_proxy_trend_metrics, get_security_proxy_daily_histories
 from leopard_project.security_proxy_observation import SecurityProxyObservationService
 
 
@@ -47,7 +50,7 @@ class SecurityProxyViewerService:
     def __init__(self, *, observation_service: SecurityProxyObservationService, enabled: bool = False, cache: SecurityProxyViewerCache | None = None, now: Callable[[], datetime] = datetime.now) -> None:
         self.observation_service, self.enabled, self.cache, self.now = observation_service, enabled, cache or SecurityProxyViewerCache(), now
 
-    def observe(self, availability: OfficialBoardAvailability) -> dict:
+    def observe(self, availability: OfficialBoardAvailability, *, session: Session | None = None) -> dict:
         base = {"market_path_key": availability.market_path_key, "official_board": asdict(availability), "security_proxy": None, "fallback_reason": None, "disclosure": None, "generated_at": self.now().isoformat()}
         if availability.available and availability.fresh:
             return {**base, "viewer_source_mode": "official_board"}
@@ -61,6 +64,7 @@ class SecurityProxyViewerService:
         key = tuple(sorted(item.symbol for item in definition.instruments if item.enabled))
         observations, cache_hit = self.cache.get_or_fetch(key, lambda: self.observation_service.observe([availability.market_path_key], enable_provider=True))
         observation = observations[0]
+        histories = get_security_proxy_daily_histories(session, (item.symbol for item in observation.instruments)) if session else {}
         instruments = [{
             "symbol": item.symbol, "security_name": item.security_name, "proxy_role": item.proxy_role,
             "coverage_type": item.coverage_type, "current": str(item.current) if item.current is not None else None,
@@ -68,5 +72,22 @@ class SecurityProxyViewerService:
             "pct_change": str(item.pct_change) if item.pct_change is not None else None,
             "quote_datetime": item.quote_datetime.isoformat() if item.quote_datetime else None,
             "quote_status": item.quote_status, "error_class": item.error_class,
+            **self._trend_payload(histories.get(item.symbol, ()), item.current),
         } for item in observation.instruments]
         return {**base, "viewer_source_mode": "security_proxy", "fallback_reason": availability.reason or availability.status, "disclosure": DISCLAIMER, "security_proxy": {"display_label": "代理观察", "status": observation.status, "recommended_display_mode": observation.recommended_display_mode, "instruments": instruments, "cache_hit": cache_hit, "quote_datetime": observation.quote_datetime.isoformat() if observation.quote_datetime else None}}
+
+    @staticmethod
+    def _trend_payload(history: Iterable[object], current: object) -> dict:
+        metrics = build_security_proxy_trend_metrics(history, current)
+        return {
+            "recent_closes": [
+                {"trading_date": item.trading_date.isoformat(), "close": float(item.close)}
+                for item in metrics.recent_closes
+            ],
+            "ma5": float(metrics.ma5) if metrics.ma5 is not None else None,
+            "ma10": float(metrics.ma10) if metrics.ma10 is not None else None,
+            "ma20": float(metrics.ma20) if metrics.ma20 is not None else None,
+            "distance_to_ma5_pct": float(metrics.distance_to_ma5_pct) if metrics.distance_to_ma5_pct is not None else None,
+            "distance_to_ma10_pct": float(metrics.distance_to_ma10_pct) if metrics.distance_to_ma10_pct is not None else None,
+            "distance_to_ma20_pct": float(metrics.distance_to_ma20_pct) if metrics.distance_to_ma20_pct is not None else None,
+        }

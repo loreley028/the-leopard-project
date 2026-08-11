@@ -206,7 +206,7 @@ def create_app(settings: WebSettings | None = None, session_factory: sessionmake
 
     @app.get("/api/v1/market-paths/{market_path_key}/viewer-observation")
     def viewer_observation(market_path_key: str, current: Principal = Depends(principal), session: Session = Depends(db_session)) -> dict:
-        return app.state.security_proxy_viewer.observe(official_board_availability(session, market_path_key))
+        return app.state.security_proxy_viewer.observe(official_board_availability(session, market_path_key), session=session)
 
     @app.post("/api/v1/market-paths/viewer-observations/query")
     def viewer_observations_query(payload: dict, current: Principal = Depends(principal), session: Session = Depends(db_session)) -> dict:
@@ -216,7 +216,7 @@ def create_app(settings: WebSettings | None = None, session_factory: sessionmake
         ordered = list(dict.fromkeys(keys))
         results = []
         for key in ordered:
-            try: results.append(app.state.security_proxy_viewer.observe(official_board_availability(session, key)))
+            try: results.append(app.state.security_proxy_viewer.observe(official_board_availability(session, key), session=session))
             except WebDomainError as exc: results.append({"market_path_key": key, "viewer_source_mode": "unavailable", "fallback_reason": exc.code, "official_board": None, "security_proxy": None, "disclosure": None, "generated_at": datetime.now(timezone.utc).isoformat()})
         return {"items": results}
 

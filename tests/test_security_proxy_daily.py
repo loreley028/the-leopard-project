@@ -15,6 +15,7 @@ from leopard_project.security_proxy_daily import (
     build_security_proxy_trend_metrics,
     capture_fixed_security_proxy_daily,
     fixed_proxy_symbols,
+    get_security_proxy_daily_histories,
     get_security_proxy_daily_history,
 )
 from leopard_project.security_proxy_observation import load_security_proxy_registry
@@ -188,6 +189,18 @@ def test_history_read_is_ascending_limited_to_twenty_and_invalid_current_has_no_
         assert len(history) == 20 and history[0].trading_date < history[-1].trading_date
         metrics = build_security_proxy_trend_metrics(history, "invalid")
         assert metrics.ma20 == Decimal("11.5") and metrics.distance_to_ma5_pct is None
+
+
+def test_batched_history_read_uses_recent_twenty_per_requested_symbol(tmp_path) -> None:
+    factory = sessions(tmp_path)
+    with factory() as session:
+        for symbol in ("sh510300", "sz300308"):
+            for index in range(21):
+                session.add(SecurityProxyDaily(symbol=symbol, trading_date=date(2026, 1, 1).fromordinal(date(2026, 1, 1).toordinal() + index), close=Decimal(index + 1), fetched_at=NOW, source="test"))
+        session.commit()
+        histories = get_security_proxy_daily_histories(session, ("sh510300", "sz300308", "missing"))
+        assert {symbol: len(rows) for symbol, rows in histories.items()} == {"sh510300": 20, "sz300308": 20, "missing": 0}
+        assert histories["sh510300"][0].trading_date < histories["sh510300"][-1].trading_date
 
 
 def test_history_helper_excludes_missing_close_and_rejects_duplicate_dates() -> None:

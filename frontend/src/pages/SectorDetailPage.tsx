@@ -5,6 +5,7 @@ import { IslandCard } from "../components/island/IslandCard";
 import { IslandMetricGrid } from "../components/island/IslandMetricGrid";
 import { IslandMarketSparkline } from "../components/island/IslandMarketSparkline";
 import { IslandStatusBadge } from "../components/island/IslandStatusBadge";
+import { SecurityProxySparkline } from "../components/island/SecurityProxySparkline";
 import type { SectorResearch, ViewerObservation } from "../types";
 import { formatPct } from "../utils/format";
 import { intradayDataLabel } from "../utils/intraday";
@@ -52,7 +53,7 @@ export function SecurityProxyCard({ observation }: { observation: ViewerObservat
   if (observation.viewer_source_mode === "unavailable") return <IslandCard title="代理观察"><p>暂无可靠的代理证券行情</p></IslandCard>;
   const proxy = observation.security_proxy;
   if (!proxy) return null;
-  return <IslandCard title="代理观察"><p><strong className="proxy-observation-badge">代理观察</strong> 正式板块行情暂不可用。</p><div className="proxy-observation-list">{proxy.instruments.map(item => <div key={item.symbol}><strong>{item.proxy_role === "etf" ? "代表ETF" : "核心公司"} · {item.security_name}</strong>{item.coverage_type === "partial" && <small>部分覆盖</small>}<span>{item.quote_status === "available" ? <>{item.pct_change == null ? "—" : formatPct(item.pct_change)} 现价：{item.current ?? "—"} 行情时间：{item.quote_datetime?.slice(11, 16) ?? "—"}</> : "行情暂不可用"}</span></div>)}</div><p className="notice">{observation.disclosure}</p></IslandCard>;
+  return <IslandCard title="代理观察"><p className="proxy-observation-intro">正式板块行情暂不可用，以下为代表性ETF和核心公司观察。</p><div className="proxy-observation-list">{proxy.instruments.map(item => <article className="proxy-observation-item" key={item.symbol}><header><div><strong>{item.proxy_role === "etf" ? "代表ETF" : "核心公司"} · {item.security_name}</strong>{item.coverage_type === "partial" && <small>部分覆盖</small>}</div>{item.quote_status === "available" ? <b className="proxy-quote"><span>{item.current ?? "—"}</span><em>{item.pct_change == null ? "—" : formatPct(item.pct_change)}</em></b> : <span>行情暂不可用</span>}</header><section><h4>近5日走势</h4><SecurityProxySparkline closes={item.recent_closes} />{item.recent_closes.length > 0 && <div className="proxy-recent-closes">{item.recent_closes.map(close => <span key={close.trading_date}><time>{close.trading_date.slice(5)}</time><b>{close.close}</b></span>)}</div>}</section><dl className="proxy-ma-list">{[["MA5", item.ma5, item.distance_to_ma5_pct], ["MA10", item.ma10, item.distance_to_ma10_pct], ["MA20", item.ma20, item.distance_to_ma20_pct]].map(([label, average, distance]) => <div key={String(label)}><dt>{label}</dt><dd>{average ?? "—"}</dd><dd>{typeof distance === "number" ? formatPct(distance) : "—"}</dd></div>)}</dl><footer>行情时间：{item.quote_datetime?.slice(11, 16) ?? "—"}</footer></article>)}</div><p className="proxy-disclosure">{observation.disclosure}</p></IslandCard>;
 }
 
 function HoldingSummary({ label, interval }: { label: string; interval?: NonNullable<SectorResearch["strict_holding_interval"]> | null }) {

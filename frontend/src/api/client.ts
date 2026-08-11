@@ -14,12 +14,19 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   return response.json() as Promise<T>;
 }
 
-type ViewerSecurityProxyInstrumentWire = Omit<ViewerSecurityProxyInstrument, "current" | "pre_close" | "change" | "pct_change" | "quote_datetime"> & {
+type ViewerSecurityProxyInstrumentWire = Omit<ViewerSecurityProxyInstrument, "current" | "pre_close" | "change" | "pct_change" | "quote_datetime" | "recent_closes" | "ma5" | "ma10" | "ma20" | "distance_to_ma5_pct" | "distance_to_ma10_pct" | "distance_to_ma20_pct"> & {
   current?: unknown;
   pre_close?: unknown;
   change?: unknown;
   pct_change?: unknown;
   quote_datetime?: unknown;
+  recent_closes?: unknown;
+  ma5?: unknown;
+  ma10?: unknown;
+  ma20?: unknown;
+  distance_to_ma5_pct?: unknown;
+  distance_to_ma10_pct?: unknown;
+  distance_to_ma20_pct?: unknown;
 };
 
 type ViewerObservationWire = Omit<ViewerObservation, "security_proxy"> & {
@@ -38,6 +45,17 @@ export function parseFiniteNumber(value: unknown): number | null {
 }
 
 function normalizeViewerSecurityProxyInstrument(value: ViewerSecurityProxyInstrumentWire): ViewerSecurityProxyInstrument {
+  let recent_closes: Array<{ trading_date: string; close: number }> = [];
+  if (Array.isArray(value.recent_closes)) for (const item of value.recent_closes) {
+    if (!item || typeof item !== "object") continue;
+    const wire = item as { trading_date?: unknown; close?: unknown };
+    const close = parseFiniteNumber(wire.close);
+    if (typeof wire.trading_date === "string" && /^\d{4}-\d{2}-\d{2}$/.test(wire.trading_date) && close != null) recent_closes.push({ trading_date: wire.trading_date, close });
+  }
+  recent_closes.sort((left, right) => left.trading_date.localeCompare(right.trading_date));
+  const seen_dates = new Set<string>();
+  recent_closes = recent_closes.filter(item => !seen_dates.has(item.trading_date) && !!seen_dates.add(item.trading_date));
+  recent_closes.splice(0, Math.max(0, recent_closes.length - 5));
   return {
     ...value,
     current: parseFiniteNumber(value.current),
@@ -45,6 +63,10 @@ function normalizeViewerSecurityProxyInstrument(value: ViewerSecurityProxyInstru
     change: parseFiniteNumber(value.change),
     pct_change: parseFiniteNumber(value.pct_change),
     quote_datetime: typeof value.quote_datetime === "string" ? value.quote_datetime : null,
+    recent_closes,
+    ma5: parseFiniteNumber(value.ma5), ma10: parseFiniteNumber(value.ma10), ma20: parseFiniteNumber(value.ma20),
+    distance_to_ma5_pct: parseFiniteNumber(value.distance_to_ma5_pct),
+    distance_to_ma10_pct: parseFiniteNumber(value.distance_to_ma10_pct), distance_to_ma20_pct: parseFiniteNumber(value.distance_to_ma20_pct),
   };
 }
 

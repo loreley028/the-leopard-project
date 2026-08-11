@@ -194,6 +194,29 @@ def get_security_proxy_daily_history(session: Session, symbol: str, *, limit: in
     return tuple(reversed(rows))
 
 
+def get_security_proxy_daily_histories(
+    session: Session,
+    symbols: Iterable[str],
+    *,
+    limit: int = 20,
+) -> dict[str, tuple[SecurityProxyDaily, ...]]:
+    """Read recent completed closes for several fixed symbols in one query."""
+
+    if limit < 1 or limit > 20:
+        raise ValueError("limit must be between 1 and 20")
+    requested = tuple(dict.fromkeys(symbols))
+    if not requested:
+        return {}
+    rows = session.scalars(select(SecurityProxyDaily).where(
+        SecurityProxyDaily.symbol.in_(requested),
+    ).order_by(SecurityProxyDaily.symbol, SecurityProxyDaily.trading_date.desc()))
+    grouped: dict[str, list[SecurityProxyDaily]] = {symbol: [] for symbol in requested}
+    for row in rows:
+        if len(grouped[row.symbol]) < limit:
+            grouped[row.symbol].append(row)
+    return {symbol: tuple(reversed(items)) for symbol, items in grouped.items()}
+
+
 def build_security_proxy_trend_metrics(history: Iterable[object], current_price: object) -> SecurityProxyTrendMetrics:
     """Build MA data from completed daily closes; never use current in an MA."""
 

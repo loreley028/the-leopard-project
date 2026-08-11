@@ -4,22 +4,27 @@ import { SecurityProxyCard } from "../pages/SectorDetailPage";
 import { normalizeViewerObservation } from "../api/client";
 import type { ViewerObservation } from "../types";
 
+const history = Array.from({ length: 5 }, (_, index) => ({ trading_date: `2026-08-${String(index + 3).padStart(2, "0")}`, close: 10 + index }));
+const trend = { recent_closes: history, ma5: 12, ma10: null, ma20: null, distance_to_ma5_pct: 2, distance_to_ma10_pct: null, distance_to_ma20_pct: null };
+
 const cpo: ViewerObservation = {
   market_path_key: "cpo", viewer_source_mode: "security_proxy", fallback_reason: "provider_failed",
   disclosure: "代理证券用于观察主题相关标的表现，不代表官方板块指数或完整行业表现。",
   security_proxy: { display_label: "代理观察", status: "available", recommended_display_mode: "etf_plus_three_leaders", cache_hit: false, quote_datetime: "2026-08-04T14:30:00+08:00", instruments: [
-    { symbol: "sh515880", security_name: "通信ETF", proxy_role: "etf", coverage_type: "partial", current: .636, pre_close: .582, change: .054, pct_change: 9.28, quote_datetime: "2026-08-04T14:30:00+08:00", quote_status: "available", error_class: null },
-    ...["中际旭创", "新易盛", "天孚通信"].map((security_name, index) => ({ symbol: `sz300${308 + index}`, security_name, proxy_role: "leader" as const, coverage_type: "leader_representative", current: 1, pre_close: 1, change: 0, pct_change: 1, quote_datetime: "2026-08-04T14:30:00+08:00", quote_status: "available" as const, error_class: null })),
+    { symbol: "sh515880", security_name: "通信ETF", proxy_role: "etf", coverage_type: "partial", current: .636, pre_close: .582, change: .054, pct_change: 9.28, quote_datetime: "2026-08-04T14:30:00+08:00", quote_status: "available", error_class: null, ...trend },
+    ...["中际旭创", "新易盛", "天孚通信"].map((security_name, index) => ({ symbol: `sz300${308 + index}`, security_name, proxy_role: "leader" as const, coverage_type: "leader_representative", current: 1, pre_close: 1, change: 0, pct_change: 1, quote_datetime: "2026-08-04T14:30:00+08:00", quote_status: "available" as const, error_class: null, ...trend })),
   ] },
 };
 
 describe("SecurityProxyCard", () => {
   it("shows CPO as ETF plus three independent leaders without aggregate board return", () => {
     render(<SecurityProxyCard observation={cpo} />);
-    expect(screen.getAllByText("代理观察")).toHaveLength(2);
+    expect(screen.getAllByText("代理观察")).toHaveLength(1);
     expect(screen.getByText("部分覆盖")).toBeInTheDocument();
-    expect(screen.getAllByText(/核心公司/)).toHaveLength(3);
+    expect(screen.getAllByText(/^核心公司 ·/)).toHaveLength(3);
     expect(screen.getByText(/不代表官方板块指数/)).toBeInTheDocument();
+    expect(screen.getAllByText("近5日走势")).toHaveLength(4);
+    expect(screen.getAllByText("MA5")).toHaveLength(4);
     expect(screen.queryByText("板块涨跌")).not.toBeInTheDocument();
   });
 
@@ -66,7 +71,8 @@ describe("SecurityProxyCard", () => {
       },
     });
     render(<SecurityProxyCard observation={numericStringCpo} />);
-    expect(screen.getByText(/-1\.56% 现价：0\.632/)).toBeInTheDocument();
+    expect(screen.getByText("0.632")).toBeInTheDocument();
+    expect(screen.getByText("-1.56%")).toBeInTheDocument();
     expect(screen.queryByText("NaN")).not.toBeInTheDocument();
     expect(screen.queryByText("0.00%")).not.toBeInTheDocument();
     expect(screen.queryByText("板块涨跌")).not.toBeInTheDocument();
@@ -81,8 +87,8 @@ describe("SecurityProxyCard", () => {
       },
     });
     render(<SecurityProxyCard observation={malformed} />);
-    expect(screen.getByText(/— 现价：— 行情时间：—/)).toBeInTheDocument();
-    expect(screen.getAllByText(/核心公司/)).toHaveLength(3);
+    expect(screen.getAllByText("—").length).toBeGreaterThan(3);
+    expect(screen.getAllByText(/^核心公司 ·/)).toHaveLength(3);
     expect(screen.queryByText("0.00%")).not.toBeInTheDocument();
     expect(screen.queryByText("NaN")).not.toBeInTheDocument();
   });
