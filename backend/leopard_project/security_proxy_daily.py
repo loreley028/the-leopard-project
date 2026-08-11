@@ -46,6 +46,7 @@ class SecurityProxyDailyCaptureSummary:
 class SecurityProxyRecentClose:
     trading_date: date
     close: Decimal
+    change_pct_from_previous_close: Decimal | None
 
 
 @dataclass(frozen=True)
@@ -229,12 +230,21 @@ def build_security_proxy_trend_metrics(history: Iterable[object], current_price:
         if day in by_day:
             raise ValueError("duplicate_security_proxy_daily_date")
         by_day[day] = close
-    ordered = tuple(SecurityProxyRecentClose(day, by_day[day]) for day in sorted(by_day))
-    closes = tuple(item.close for item in ordered)
+    ordered_days = tuple(sorted(by_day))
+    closes = tuple(by_day[day] for day in ordered_days)
     ma5, ma10, ma20 = (moving_average(closes, window) for window in (5, 10, 20))
     current = _finite_decimal(current_price, positive=True)
+    first_recent_index = max(0, len(ordered_days) - 10)
+    recent_closes = tuple(
+        SecurityProxyRecentClose(
+            trading_date=day,
+            close=by_day[day],
+            change_pct_from_previous_close=(by_day[day] / by_day[ordered_days[index - 1]] - Decimal("1")) * Decimal("100") if index else None,
+        )
+        for index, day in enumerate(ordered_days[first_recent_index:], start=first_recent_index)
+    )
     return SecurityProxyTrendMetrics(
-        ordered[-5:], ma5, ma10, ma20,
+        recent_closes, ma5, ma10, ma20,
         distance_from_average(current, ma5) if current is not None else None,
         distance_from_average(current, ma10) if current is not None else None,
         distance_from_average(current, ma20) if current is not None else None,

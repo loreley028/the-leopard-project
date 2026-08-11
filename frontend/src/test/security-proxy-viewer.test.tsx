@@ -4,7 +4,7 @@ import { SecurityProxyCard } from "../pages/SectorDetailPage";
 import { normalizeViewerObservation } from "../api/client";
 import type { ViewerObservation } from "../types";
 
-const history = Array.from({ length: 5 }, (_, index) => ({ trading_date: `2026-08-${String(index + 3).padStart(2, "0")}`, close: 10 + index }));
+const history = Array.from({ length: 10 }, (_, index) => ({ trading_date: `2026-08-${String(index + 3).padStart(2, "0")}`, close: 10 + index, change_pct_from_previous_close: index ? ((10 + index) / (9 + index) - 1) * 100 : null }));
 const trend = { recent_closes: history, ma5: 12, ma10: null, ma20: null, distance_to_ma5_pct: 2, distance_to_ma10_pct: null, distance_to_ma20_pct: null };
 
 const cpo: ViewerObservation = {
@@ -24,9 +24,16 @@ describe("SecurityProxyCard", () => {
     expect(screen.getByText("代理ETF")).toBeInTheDocument();
     expect(screen.getAllByText("核心公司")).toHaveLength(3);
     expect(screen.getByText(/不代表官方板块指数/)).toBeInTheDocument();
-    expect(screen.getAllByText("近5日走势")).toHaveLength(4);
+    expect(screen.getAllByText("近10个交易日")).toHaveLength(4);
     expect(screen.getAllByText("MA5")).toHaveLength(4);
     expect(screen.getAllByText("相对位置")).toHaveLength(12);
+    expect(screen.getAllByText("+10.00%")).toHaveLength(4);
+    expect(screen.getAllByText("+9.09%")).toHaveLength(4);
+    const series = Array.from(document.querySelectorAll(".proxy-recent-closes"));
+    expect(series).toHaveLength(4);
+    expect(series.every(item => item.children.length === 10)).toBe(true);
+    expect(series.every(item => item.children[0].textContent?.includes("—"))).toBe(true);
+    expect(document.querySelectorAll(".proxy-recent-closes .a-share-positive")).toHaveLength(36);
     expect(screen.queryByText("板块涨跌")).not.toBeInTheDocument();
   });
 

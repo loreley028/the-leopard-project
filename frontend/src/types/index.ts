@@ -266,7 +266,7 @@ export interface ViewerSecurityProxyInstrument {
   ma5: number | null; ma10: number | null; ma20: number | null;
   distance_to_ma5_pct: number | null; distance_to_ma10_pct: number | null; distance_to_ma20_pct: number | null;
 }
-export interface ViewerSecurityProxyRecentClose { trading_date: string; close: number; }
+export interface ViewerSecurityProxyRecentClose { trading_date: string; close: number; change_pct_from_previous_close: number | null; }
 export interface ViewerObservation {
   market_path_key: string;
   viewer_source_mode: "official_board" | "security_proxy" | "unavailable";

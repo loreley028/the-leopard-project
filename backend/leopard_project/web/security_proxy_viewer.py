@@ -81,7 +81,11 @@ class SecurityProxyViewerService:
         metrics = build_security_proxy_trend_metrics(history, current)
         return {
             "recent_closes": [
-                {"trading_date": item.trading_date.isoformat(), "close": float(item.close)}
+                {
+                    "trading_date": item.trading_date.isoformat(),
+                    "close": float(item.close),
+                    "change_pct_from_previous_close": float(item.change_pct_from_previous_close) if item.change_pct_from_previous_close is not None else None,
+                }
                 for item in metrics.recent_closes
             ],
             "ma5": float(metrics.ma5) if metrics.ma5 is not None else None,

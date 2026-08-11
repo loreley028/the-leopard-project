@@ -64,20 +64,23 @@ function ReportOverview({ enhanced }: { enhanced: EnhancedReport }) {
         </section>
         <section className="defense-validation-panel" aria-label="近10个交易日攻防验证">
           <div className="defense-validation-heading"><div><p className="eyebrow">近10个交易日攻防验证</p><p>按前一份报告提出的攻防线，对照下一受控交易日上证指数实际收盘；不构成预测评分。</p></div><span>自然积累</span></div>
-          {validations.length === 0 ? <p className="defense-validation-empty">攻防验证记录将随交易日自然积累。</p> : <ol className="defense-validation-list">
-            {validations.map(item => <li key={`${item.source_report_id}-${item.trading_date}`}>
-              <div><small>交易日</small><strong>{item.trading_date}</strong></div>
-              <div><small>来源报告</small><strong>{item.source_report_date}</strong></div>
-              <div><small>攻防线</small><strong>{point(item.defense_line_value)}</strong></div>
-              <div><small>{item.index_name}收盘</small><strong>{point(item.index_close)}</strong></div>
-              <div><small>距攻防线</small><strong className={signedTone(item.distance_points)}>{signedPoint(item.distance_points)}</strong><em className={signedTone(item.distance_pct)}>{pct(item.distance_pct)}</em></div>
-              <div><small>收盘位置</small><strong className={positionTone(item.close_position)}>{validationPositionLabel[item.close_position]}</strong></div>
-            </li>)}
-          </ol>}
+          <div className="defense-validation-table" role="table" aria-label="攻防验证明细">
+            <div className="defense-validation-row defense-validation-header" role="row"><span>交易日</span><span>攻防线来源</span><span>攻防线</span><span>上证收盘</span><span>距攻防线</span><span>收盘位置</span></div>
+            {validations.map(item => <div className="defense-validation-row" role="row" key={`${item.source_report_id}-${item.trading_date}`}>
+              <div role="cell"><small>交易日</small><strong>{item.trading_date.slice(5)}</strong></div>
+              <div role="cell"><small>攻防线来源</small><strong>来自 {item.source_report_date.slice(5)} 报告</strong></div>
+              <div role="cell"><small>攻防线</small><strong>{point(item.defense_line_value)}</strong></div>
+              <div role="cell"><small>上证收盘</small><strong>{point(item.index_close)}</strong></div>
+              <div role="cell"><small>距攻防线</small><strong className={signedTone(item.distance_points)}>{signedPoint(item.distance_points)}</strong><em className={signedTone(item.distance_pct)}>{pct(item.distance_pct)}</em></div>
+              <div role="cell"><small>收盘位置</small><strong className={positionTone(item.close_position)}>{validationPositionLabel[item.close_position]}</strong></div>
+            </div>)}
+          </div>
+          {validations.length === 0 && <p className="defense-validation-empty">攻防验证记录将随交易日自然积累。</p>}
+          <p className="defense-validation-count">当前已积累 {validations.length} / 10 条完整验证记录。</p>
         </section>
       </div>
     </IslandCard>
-    <IslandCard title="风险提示"><p>{report.risk_warning || "本报告未单列风险提示。"}</p></IslandCard>
+    <IslandCard title="风险提示"><p className={report.risk_warning ? "" : "report-risk-empty"}>{report.risk_warning || "本报告未单列风险提示。"}</p></IslandCard>
   </div>;
 }
 

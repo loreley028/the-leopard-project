@@ -45,17 +45,18 @@ export function parseFiniteNumber(value: unknown): number | null {
 }
 
 function normalizeViewerSecurityProxyInstrument(value: ViewerSecurityProxyInstrumentWire): ViewerSecurityProxyInstrument {
-  let recent_closes: Array<{ trading_date: string; close: number }> = [];
+  let recent_closes: ViewerSecurityProxyInstrument["recent_closes"] = [];
   if (Array.isArray(value.recent_closes)) for (const item of value.recent_closes) {
     if (!item || typeof item !== "object") continue;
-    const wire = item as { trading_date?: unknown; close?: unknown };
+    const wire = item as { trading_date?: unknown; close?: unknown; change_pct_from_previous_close?: unknown };
     const close = parseFiniteNumber(wire.close);
-    if (typeof wire.trading_date === "string" && /^\d{4}-\d{2}-\d{2}$/.test(wire.trading_date) && close != null) recent_closes.push({ trading_date: wire.trading_date, close });
+    const changePct = parseFiniteNumber(wire.change_pct_from_previous_close);
+    if (typeof wire.trading_date === "string" && /^\d{4}-\d{2}-\d{2}$/.test(wire.trading_date) && close != null) recent_closes.push({ trading_date: wire.trading_date, close, change_pct_from_previous_close: changePct });
   }
   recent_closes.sort((left, right) => left.trading_date.localeCompare(right.trading_date));
   const seen_dates = new Set<string>();
   recent_closes = recent_closes.filter(item => !seen_dates.has(item.trading_date) && !!seen_dates.add(item.trading_date));
-  recent_closes.splice(0, Math.max(0, recent_closes.length - 5));
+  recent_closes.splice(0, Math.max(0, recent_closes.length - 10));
   return {
     ...value,
     current: parseFiniteNumber(value.current),

@@ -19,3 +19,10 @@ export function formatPct(value: number | null | undefined) {
 export function formatNumber(value: number | null | undefined, digits = 2) {
   return value == null ? "历史不足" : value.toFixed(digits);
 }
+
+/** Keep quote, completed-close, and MA precision readable and consistent. */
+export function formatSecurityPrice(value: number | null | undefined) {
+  if (value == null) return "—";
+  const digits = Math.abs(value) < 10 ? 3 : 2;
+  return value.toLocaleString("zh-CN", { minimumFractionDigits: digits, maximumFractionDigits: digits });
+}

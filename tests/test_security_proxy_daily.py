@@ -173,8 +173,14 @@ def test_trend_metrics_use_only_completed_daily_closes(count, expected_ma5, expe
     history = [SimpleNamespace(trading_date=date(2026, 1, 1).fromordinal(date(2026, 1, 1).toordinal() + index), close=Decimal(index + 1)) for index in range(count)]
     metrics = build_security_proxy_trend_metrics(history, Decimal(count + 1))
     assert (metrics.ma5, metrics.ma10, metrics.ma20) == (expected_ma5, expected_ma10, expected_ma20)
-    assert len(metrics.recent_closes) == min(count, 5)
+    assert len(metrics.recent_closes) == min(count, 10)
     assert tuple(item.trading_date for item in metrics.recent_closes) == tuple(sorted(item.trading_date for item in metrics.recent_closes))
+    if count <= 10:
+        assert metrics.recent_closes[0].change_pct_from_previous_close is None
+    else:
+        assert metrics.recent_closes[0].change_pct_from_previous_close is not None
+    if count > 1:
+        assert metrics.recent_closes[-1].change_pct_from_previous_close == (Decimal(count) / Decimal(count - 1) - 1) * 100
     if expected_ma5 is not None:
         assert metrics.distance_to_ma5_pct == (Decimal(count + 1) / expected_ma5 - 1) * 100
 
@@ -208,9 +214,23 @@ def test_history_helper_excludes_missing_close_and_rejects_duplicate_dates() -> 
     metrics = build_security_proxy_trend_metrics([
         SimpleNamespace(trading_date=day, close=None), SimpleNamespace(trading_date=date(2026, 8, 2), close="10"),
     ], "11")
-    assert len(metrics.recent_closes) == 1 and metrics.ma5 is None
+    assert len(metrics.recent_closes) == 1 and metrics.recent_closes[0].change_pct_from_previous_close is None and metrics.ma5 is None
     with pytest.raises(ValueError, match="duplicate"):
         build_security_proxy_trend_metrics([SimpleNamespace(trading_date=day, close="10"), SimpleNamespace(trading_date=day, close="11")], "12")
+
+
+def test_recent_closes_preserve_controlled_trading_days_and_daily_change_semantics() -> None:
+    history = [
+        SimpleNamespace(trading_date=date(2026, 8, 6), close=Decimal("10")),
+        SimpleNamespace(trading_date=date(2026, 8, 7), close=Decimal("11")),
+        # The next completed market session skips the weekend; no natural-day placeholders are introduced.
+        SimpleNamespace(trading_date=date(2026, 8, 10), close=Decimal("11")),
+        SimpleNamespace(trading_date=date(2026, 8, 11), close=Decimal("10")),
+    ]
+    metrics = build_security_proxy_trend_metrics(history, Decimal("10.5"))
+
+    assert [item.trading_date.isoformat() for item in metrics.recent_closes] == ["2026-08-06", "2026-08-07", "2026-08-10", "2026-08-11"]
+    assert [item.change_pct_from_previous_close for item in metrics.recent_closes] == [None, Decimal("10.0"), Decimal("0"), Decimal("-9.090909090909090909090909090")]
 
 
 def test_history_foundation_has_no_aggregate_contract() -> None:

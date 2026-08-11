@@ -71,8 +71,12 @@ def test_proxy_viewer_adds_recent_history_and_metrics_without_using_current_in_m
         result = SecurityProxyViewerService(observation_service=StubObservationService(), enabled=True).observe(unavailable(), session=session)
     instrument = result["security_proxy"]["instruments"][0]
     assert instrument["recent_closes"] == [
-        {"trading_date": (date(2026, 7, 1).fromordinal(date(2026, 7, 1).toordinal() + index)).isoformat(), "close": float(Decimal(index + 1))}
-        for index in range(16, 21)
+        {
+            "trading_date": (date(2026, 7, 1).fromordinal(date(2026, 7, 1).toordinal() + index)).isoformat(),
+            "close": float(Decimal(index + 1)),
+            "change_pct_from_previous_close": float((Decimal(index + 1) / Decimal(index) - 1) * 100),
+        }
+        for index in range(11, 21)
     ]
     assert instrument["ma5"] == 19 and instrument["ma10"] == 16.5 and instrument["ma20"] == 11.5
     assert instrument["distance_to_ma5_pct"] is None
