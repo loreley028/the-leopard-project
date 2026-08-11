@@ -5,7 +5,7 @@ import { IslandCard } from "../components/island/IslandCard";
 import { IslandPathMatrix } from "../components/island/IslandPathMatrix";
 import { IslandStatusBadge } from "../components/island/IslandStatusBadge";
 import { PdfPagePreview } from "../components/PdfPagePreview";
-import type { EnhancedReport, MarketSnapshot, PathMatrix, SectorAssessment } from "../types";
+import type { EnhancedReport, LiveMarketAnchor, MarketSnapshot, PathMatrix, SectorAssessment } from "../types";
 import { formatPct } from "../utils/format";
 import { judgementDetail, pdfGroup } from "../utils/judgement";
 
@@ -14,39 +14,42 @@ const chineseDate = (value: string | null) => value ? `${Number(value.slice(0, 4
 const pct = (value: number | null | undefined) => value == null ? "—" : formatPct(value);
 const ratio = (value: number | null | undefined) => value == null ? "—" : `${value.toFixed(2)}x`;
 
-const SHANGHAI_ANCHOR_KEYS = new Set(["shanghai_composite", "sse_composite", "sh000001"]);
-
-function defenseLine(value: string) {
-  const sentences = value.split(/[。；;\n]+/).map(item => item.trim()).filter(Boolean);
-  const keyLevel = value.match(/(?<!\d)(\d{3,5}(?:\.\d+)?)\s*点/)?.[1] ?? null;
-  const above = sentences.find(item => /站上|收复|突破/.test(item)) ?? null;
-  const below = sentences.find(item => /跌破|失守|以下|下方/.test(item)) ?? null;
-  const validation = sentences.find(item => /时间|宽度|量能|成交量|资金|持续/.test(item)) ?? null;
-  return { keyLevel, above, below, validation };
-}
+const point = (value: number | null | undefined) => value == null ? "—" : value.toLocaleString("zh-CN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const signedPoint = (value: number | null | undefined) => value == null ? "—" : `${value > 0 ? "+" : ""}${point(value)}`;
+const positionLabel: Record<NonNullable<LiveMarketAnchor["defense_position"]>, string> = {
+  above_defense_line: "攻防线上方",
+  below_defense_line: "攻防线下方",
+  at_defense_line: "攻防线附近 / 等于攻防线",
+};
 
 function ReportOverview({ enhanced }: { enhanced: EnhancedReport }) {
   const { report } = enhanced;
-  const anchor = enhanced.market_snapshots.find(item => SHANGHAI_ANCHOR_KEYS.has(item.sector_key ?? "")) ?? null;
-  const defense = defenseLine(report.market_path);
+  const anchor = enhanced.live_market_anchor;
+  const quoteAvailable = anchor.quote_status === "available";
+  const defenseSource = anchor.defense_line_source === "market_path" ? "大盘路径" : anchor.defense_line_source === "core_view" ? "核心判断安全回退" : null;
   return <div className="report-overview-grid">
     <IslandCard title="核心观点">
       <div className="core-insight-panel">
         <section><p className="eyebrow">猎豹核心判断</p><p className="core-view-summary">{report.core_view}</p></section>
-        <section className="market-anchor-panel" aria-label="当天大A行情锚点">
-          <p className="eyebrow">当天大A行情锚点</p>
-          <div className="market-anchor-heading"><strong>上证指数</strong><span>{anchor ? anchor.close : "—"}</span><em>{anchor ? pct(anchor.daily_pct_change) : "行情未附加"}</em></div>
-          {anchor ? <dl><div><dt>完整交易日</dt><dd>{anchor.trade_date}</dd></div><div><dt>MA5</dt><dd>{anchor.ma5 ?? "—"}</dd></div><div><dt>MA20</dt><dd>{anchor.ma20 ?? "—"}</dd></div></dl> : <p className="muted">当前报告没有可核验的上证指数独立行情；攻防点位不会被当作收盘点位。</p>}
+        <section className="market-anchor-panel" aria-label="大盘观察 / 市场锚点">
+          <div className="market-anchor-title"><p className="eyebrow">大盘观察 / 市场锚点</p><span>当前市场辅助</span></div>
+          <p className="market-context-note">{anchor.market_context_note}</p>
+          {quoteAvailable ? <div className="market-anchor-metrics">
+            <div><span>上个交易日收盘</span><strong>{point(anchor.pre_close)}</strong></div>
+            <div><span>今日上证指数</span><strong>{point(anchor.current)}</strong><em>{pct(anchor.pct_change)}</em></div>
+            <div><span>今日攻防线</span><strong>{anchor.defense_line_value == null ? "报告未单列" : `${point(anchor.defense_line_value)} 点`}</strong></div>
+            <div><span>距攻防线</span><strong>{anchor.distance_points == null ? "—" : `${signedPoint(anchor.distance_points)} 点`}</strong><em>{pct(anchor.distance_pct)}</em></div>
+          </div> : <p className="market-anchor-unavailable">上证指数行情暂不可用；攻防点位不会被当作指数点位。</p>}
+          <div className="market-anchor-position"><span>当前位置</span><strong>{anchor.defense_position ? positionLabel[anchor.defense_position] : "—"}</strong>{quoteAvailable && <em>行情时间 {anchor.quote_datetime ?? "—"}</em>}</div>
         </section>
-        <section className="defense-line-panel" aria-label="次日攻防线">
-          <p className="eyebrow">次日需要关注的攻防线</p>
-          <div className="defense-level"><span>关键点位</span><strong>{defense.keyLevel ? `${defense.keyLevel} 点` : "报告未单列"}</strong></div>
+        <section className="defense-line-panel" aria-label="猎豹攻防线">
+          <div className="defense-level"><span>猎豹攻防点</span><strong>{anchor.defense_line_value == null ? "报告未单列" : `${point(anchor.defense_line_value)} 点`}</strong></div>
           <dl>
-            <div><dt>站上怎么看</dt><dd>{defense.above ?? "报告未单列站上后的确认条件。"}</dd></div>
-            <div><dt>跌破怎么看</dt><dd>{defense.below ?? "报告未单列跌破后的应对条件。"}</dd></div>
-            <div><dt>验证条件</dt><dd>{defense.validation ?? "继续按报告原文观察时间、宽度、量能或资金确认。"}</dd></div>
+            <div><dt>站上条件</dt><dd>{anchor.stand_above_condition ?? "报告未单列站上后的确认条件。"}</dd></div>
+            <div><dt>跌破条件</dt><dd>{anchor.break_below_condition ?? "报告未单列跌破后的应对条件。"}</dd></div>
+            <div><dt>验证条件</dt><dd>{anchor.validation_conditions ?? "继续按报告原文观察时间、宽度、量能或资金确认。"}</dd></div>
           </dl>
-          <p className="defense-source">原始大盘路径：{report.market_path || "本报告未可靠单列大盘路径。"}</p>
+          <p className="defense-source">攻防线来源：{defenseSource ?? "报告未单列"}。报告观点与当前市场辅助按各自日期语义展示。</p>
         </section>
       </div>
     </IslandCard>

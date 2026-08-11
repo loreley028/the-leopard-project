@@ -35,6 +35,7 @@ from .review_workflow import ReviewWorkflowService
 from .enhanced import EnhancedReportService
 from .intraday import intraday_policy, resolve_intraday_data_status
 from .security_proxy_viewer import OfficialBoardAvailability, SecurityProxyViewerCache, SecurityProxyViewerService
+from .live_market_anchor import LiveMarketAnchorCache, LiveShanghaiMarketAnchorService
 from leopard_project.providers.tencent_standard_quote import TencentStandardSecurityQuoteProvider
 from leopard_project.security_proxy_observation import SecurityProxyObservationService
 
@@ -86,6 +87,9 @@ class WebSettings:
     security_proxy_viewer_enabled: bool = False
     security_proxy_cache_ttl_seconds: int = 300
     security_proxy_error_cache_ttl_seconds: int = 30
+    live_market_anchor_enabled: bool = False
+    live_market_anchor_cache_ttl_seconds: int = 300
+    live_market_anchor_error_cache_ttl_seconds: int = 30
 
     @classmethod
     def from_env(cls) -> "WebSettings":
@@ -112,6 +116,9 @@ class WebSettings:
             security_proxy_viewer_enabled=os.getenv("SECURITY_PROXY_VIEWER_ENABLED", "false").lower() == "true",
             security_proxy_cache_ttl_seconds=int(os.getenv("SECURITY_PROXY_CACHE_TTL_SECONDS", "300")),
             security_proxy_error_cache_ttl_seconds=int(os.getenv("SECURITY_PROXY_ERROR_CACHE_TTL_SECONDS", "30")),
+            live_market_anchor_enabled=os.getenv("LEOPARD_LIVE_MARKET_ANCHOR_ENABLED", "false").lower() == "true",
+            live_market_anchor_cache_ttl_seconds=int(os.getenv("LEOPARD_LIVE_MARKET_ANCHOR_CACHE_TTL_SECONDS", "300")),
+            live_market_anchor_error_cache_ttl_seconds=int(os.getenv("LEOPARD_LIVE_MARKET_ANCHOR_ERROR_CACHE_TTL_SECONDS", "30")),
         )
 
 
@@ -132,6 +139,14 @@ def create_app(settings: WebSettings | None = None, session_factory: sessionmake
         observation_service=SecurityProxyObservationService(provider=TencentStandardSecurityQuoteProvider()),
         enabled=settings.security_proxy_viewer_enabled,
         cache=SecurityProxyViewerCache(ttl_seconds=settings.security_proxy_cache_ttl_seconds, error_ttl_seconds=settings.security_proxy_error_cache_ttl_seconds),
+    )
+    app.state.live_market_anchor = LiveShanghaiMarketAnchorService(
+        provider=TencentStandardSecurityQuoteProvider(),
+        enabled=settings.live_market_anchor_enabled,
+        cache=LiveMarketAnchorCache(
+            ttl_seconds=settings.live_market_anchor_cache_ttl_seconds,
+            error_ttl_seconds=settings.live_market_anchor_error_cache_ttl_seconds,
+        ),
     )
 
     def stop_market_automation() -> None:
@@ -733,5 +748,8 @@ def create_app(settings: WebSettings | None = None, session_factory: sessionmake
         session.commit()
         return {"id": item.id, "is_current": True}
 
-    register_enhanced_routes(app, sessions, principal, admin, required_report, data_mode=settings.data_mode, intraday=intraday, eod_backfill=eod_backfill)
+    register_enhanced_routes(
+        app, sessions, principal, admin, required_report, data_mode=settings.data_mode,
+        intraday=intraday, eod_backfill=eod_backfill, live_market_anchor=app.state.live_market_anchor,
+    )
     return app

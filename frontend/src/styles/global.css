@@ -56,10 +56,17 @@ button, a, input, textarea, [tabindex] { outline-offset: 4px; }
 .core-insight-panel > section { min-width: 0; padding: .9rem; border-radius: 14px; background: rgb(233 239 220 / 45%); }
 .core-insight-panel > section:first-child { grid-column: 1 / -1; }
 .core-view-summary { margin: .35rem 0 0; max-width: 72ch; font-size: 1.02rem; line-height: 1.75; }
-.market-anchor-heading { display: flex; flex-wrap: wrap; align-items: baseline; gap: .45rem .75rem; margin: .45rem 0; }
-.market-anchor-heading strong { font-size: 1.05rem; }
-.market-anchor-heading span { font-size: 1.5rem; font-weight: 700; }
-.market-anchor-heading em { color: var(--text-muted); font-style: normal; }
+.market-anchor-title { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .5rem; }
+.market-anchor-title p { margin: 0; }
+.market-anchor-title span { padding: .2rem .45rem; border-radius: 999px; background: rgb(255 250 240 / 80%); color: var(--text-muted); font-size: .72rem; font-weight: 800; }
+.market-context-note, .market-anchor-unavailable { margin: .45rem 0 .7rem; color: var(--text-muted); font-size: .8rem; line-height: 1.5; }
+.market-anchor-metrics { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .5rem; }
+.market-anchor-metrics > div { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: baseline; gap: .2rem .5rem; padding: .55rem; border-radius: 10px; background: rgb(255 250 240 / 65%); }
+.market-anchor-metrics span, .market-anchor-position span { color: var(--text-muted); font-size: .72rem; }
+.market-anchor-metrics strong { font-size: 1.05rem; }
+.market-anchor-metrics em, .market-anchor-position em { color: var(--text-muted); font-size: .78rem; font-style: normal; }
+.market-anchor-position { display: flex; flex-wrap: wrap; align-items: baseline; gap: .3rem .65rem; margin-top: .65rem; padding-top: .6rem; border-top: 1px solid var(--border-soft); }
+.market-anchor-position strong { font-size: 1.05rem; }
 .market-anchor-panel dl, .defense-line-panel dl { display: grid; gap: .5rem; margin: .75rem 0 0; }
 .market-anchor-panel dl div, .defense-line-panel dl div { display: grid; grid-template-columns: 6rem minmax(0, 1fr); gap: .65rem; }
 .market-anchor-panel dt, .defense-line-panel dt { color: var(--text-muted); font-size: .78rem; }
@@ -387,6 +394,7 @@ button, a, input, textarea, [tabindex] { outline-offset: 4px; }
   .report-overview-grid, .core-insight-panel { grid-template-columns: 1fr; }
   .core-insight-panel > section:first-child { grid-column: auto; }
   .market-anchor-panel dl div, .defense-line-panel dl div { grid-template-columns: 1fr; gap: .15rem; }
+  .market-anchor-metrics { grid-template-columns: 1fr; }
   .sectors-research, .sector-research-detail { min-width: 0; max-width: 100%; overflow-x: clip; }
   .sector-table-wrap { width: 100%; overflow-x: auto; }
   .recent-five-detail { grid-template-columns: 1fr; }

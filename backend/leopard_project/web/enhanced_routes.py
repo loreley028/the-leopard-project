@@ -50,6 +50,7 @@ from .services import WebDomainError
 from .market_ingestion import import_real_market, refresh_real_market
 from .intraday import IntradayRefreshCoordinator, intraday_policy, resolve_intraday_data_status
 from .market_automation import EodBackfillCoordinator
+from .live_market_anchor import LiveShanghaiMarketAnchorService
 from .path_history import ensure_latest_path_history, matrix_dates
 
 
@@ -62,9 +63,11 @@ def register_enhanced_routes(
     data_mode: str = "test",
     intraday: IntradayRefreshCoordinator | None = None,
     eod_backfill: EodBackfillCoordinator | None = None,
+    live_market_anchor: LiveShanghaiMarketAnchorService | None = None,
 ) -> None:
     intraday = intraday or IntradayRefreshCoordinator(sessions)
     eod_backfill = eod_backfill or EodBackfillCoordinator(sessions)
+    live_market_anchor = live_market_anchor or app.state.live_market_anchor
     def db_session():
         session = sessions()
         try:
@@ -105,6 +108,7 @@ def register_enhanced_routes(
             payload["active_holding_interval"] = service.holding_interval_for_sector(report, item.sector_key)
             assessments.append(payload)
         paths = [path_entry_payload(item) for item in service.path_entries(report.id)]
+        current_market_anchor = live_market_anchor.observe(market_path=report.market_path, core_view=report.core_view)
         groups: dict[str, list[dict]] = {}
         for item in assessments:
             groups.setdefault(item["current_path_status"], []).append(item)
@@ -114,6 +118,7 @@ def register_enhanced_routes(
             "sector_assessments": assessments,
             "status_groups": [{"status": key, "count": len(value), "items": value} for key, value in groups.items()],
             "market_snapshots": list(snapshots.values()),
+            "live_market_anchor": current_market_anchor,
             "comparison": service.comparison(report),
             "market_data_attached": bool(snapshots),
             "data_notice": "研究辅助数据，非生产级行情服务。",

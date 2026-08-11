@@ -364,9 +364,35 @@ export interface EnhancedReport {
   sector_assessments: SectorAssessment[];
   status_groups: Array<{ status: PathStatus; count: number; items: SectorAssessment[] }>;
   market_snapshots: MarketSnapshot[];
+  live_market_anchor: LiveMarketAnchor;
   comparison: { previous_report_id: string | null; previous_report_date?: string; status_changes: Array<{ sector_key: string; sector_name: string; from: PathStatus; to: PathStatus }>; counts: Record<string, number> };
   market_data_attached: boolean;
   data_notice: string;
+}
+
+export interface LiveMarketAnchor {
+  market_context: "live_market_anchor";
+  market_context_note: string;
+  quote_status: "available" | "unavailable";
+  symbol: "sh000001";
+  index_name: string;
+  current: number | null;
+  pre_close: number | null;
+  change: number | null;
+  pct_change: number | null;
+  quote_datetime: string | null;
+  provider: string;
+  provider_role: string;
+  error_code: string | null;
+  cache_hit: boolean;
+  defense_line_value: number | null;
+  defense_line_source: "market_path" | "core_view" | null;
+  stand_above_condition: string | null;
+  break_below_condition: string | null;
+  validation_conditions: string | null;
+  distance_points: number | null;
+  distance_pct: number | null;
+  defense_position: "above_defense_line" | "below_defense_line" | "at_defense_line" | null;
 }
 
 export interface PathMatrix {
