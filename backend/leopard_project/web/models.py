@@ -377,6 +377,30 @@ class SecurityProxyDaily(Base):
     source: Mapped[str] = mapped_column(String(100))
 
 
+class LiveMarketAnchorDaily(Base):
+    """Completed daily Shanghai Composite observations for report-line validation.
+
+    This is deliberately separate from ``security_proxy_daily``: the latter is
+    only for the fixed ETF and stock observation list, while this table records
+    the single market anchor used by report overview defense-line history.
+    """
+
+    __tablename__ = "live_market_anchor_daily"
+    __table_args__ = (UniqueConstraint("symbol", "trading_date", name="uq_live_market_anchor_daily_symbol_date"),)
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=new_id)
+    symbol: Mapped[str] = mapped_column(String(16), index=True)
+    trading_date: Mapped[date] = mapped_column(Date, index=True)
+    close: Mapped[float] = mapped_column(Numeric(20, 6))
+    pre_close: Mapped[float] = mapped_column(Numeric(20, 6))
+    pct_change: Mapped[float] = mapped_column(Numeric(16, 6))
+    high: Mapped[float | None] = mapped_column(Numeric(20, 6), nullable=True)
+    low: Mapped[float | None] = mapped_column(Numeric(20, 6), nullable=True)
+    quote_datetime: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    fetched_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+    source: Mapped[str] = mapped_column(String(100))
+
+
 class SectorIndicatorSnapshot(Base):
     __tablename__ = "sector_indicator_snapshots"
     id: Mapped[str] = mapped_column(String(32), primary_key=True, default=new_id)

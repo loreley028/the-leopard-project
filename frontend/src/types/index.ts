@@ -365,9 +365,22 @@ export interface EnhancedReport {
   status_groups: Array<{ status: PathStatus; count: number; items: SectorAssessment[] }>;
   market_snapshots: MarketSnapshot[];
   live_market_anchor: LiveMarketAnchor;
+  recent_defense_line_validations: DefenseLineValidation[];
   comparison: { previous_report_id: string | null; previous_report_date?: string; status_changes: Array<{ sector_key: string; sector_name: string; from: PathStatus; to: PathStatus }>; counts: Record<string, number> };
   market_data_attached: boolean;
   data_notice: string;
+}
+
+export interface DefenseLineValidation {
+  trading_date: string;
+  source_report_id: string;
+  source_report_date: string;
+  defense_line_value: number;
+  index_name: string;
+  index_close: number;
+  distance_points: number;
+  distance_pct: number;
+  close_position: "close_above_defense_line" | "close_below_defense_line" | "close_at_defense_line";
 }
 
 export interface LiveMarketAnchor {

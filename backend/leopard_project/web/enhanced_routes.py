@@ -51,6 +51,7 @@ from .market_ingestion import import_real_market, refresh_real_market
 from .intraday import IntradayRefreshCoordinator, intraday_policy, resolve_intraday_data_status
 from .market_automation import EodBackfillCoordinator
 from .live_market_anchor import LiveShanghaiMarketAnchorService
+from leopard_project.live_market_anchor_daily import recent_defense_line_validations
 from .path_history import ensure_latest_path_history, matrix_dates
 
 
@@ -119,6 +120,7 @@ def register_enhanced_routes(
             "status_groups": [{"status": key, "count": len(value), "items": value} for key, value in groups.items()],
             "market_snapshots": list(snapshots.values()),
             "live_market_anchor": current_market_anchor,
+            "recent_defense_line_validations": recent_defense_line_validations(session),
             "comparison": service.comparison(report),
             "market_data_attached": bool(snapshots),
             "data_notice": "研究辅助数据，非生产级行情服务。",

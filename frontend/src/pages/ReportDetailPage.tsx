@@ -5,7 +5,7 @@ import { IslandCard } from "../components/island/IslandCard";
 import { IslandPathMatrix } from "../components/island/IslandPathMatrix";
 import { IslandStatusBadge } from "../components/island/IslandStatusBadge";
 import { PdfPagePreview } from "../components/PdfPagePreview";
-import type { EnhancedReport, LiveMarketAnchor, MarketSnapshot, PathMatrix, SectorAssessment } from "../types";
+import type { DefenseLineValidation, EnhancedReport, LiveMarketAnchor, MarketSnapshot, PathMatrix, SectorAssessment } from "../types";
 import { formatPct } from "../utils/format";
 import { judgementDetail, pdfGroup } from "../utils/judgement";
 
@@ -21,12 +21,23 @@ const positionLabel: Record<NonNullable<LiveMarketAnchor["defense_position"]>, s
   below_defense_line: "攻防线下方",
   at_defense_line: "攻防线附近 / 等于攻防线",
 };
+const validationPositionLabel: Record<DefenseLineValidation["close_position"], string> = {
+  close_above_defense_line: "收盘在线上",
+  close_below_defense_line: "收盘在线下",
+  close_at_defense_line: "收盘与线相等",
+};
+const signedTone = (value: number | null | undefined) => value == null || value === 0 ? "a-share-neutral" : value > 0 ? "a-share-positive" : "a-share-negative";
+const positionTone = (position: LiveMarketAnchor["defense_position"] | DefenseLineValidation["close_position"] | null) => (
+  position === "above_defense_line" || position === "close_above_defense_line" ? "a-share-positive"
+    : position === "below_defense_line" || position === "close_below_defense_line" ? "a-share-negative" : "a-share-neutral"
+);
 
 function ReportOverview({ enhanced }: { enhanced: EnhancedReport }) {
   const { report } = enhanced;
   const anchor = enhanced.live_market_anchor;
   const quoteAvailable = anchor.quote_status === "available";
   const defenseSource = anchor.defense_line_source === "market_path" ? "大盘路径" : anchor.defense_line_source === "core_view" ? "核心判断安全回退" : null;
+  const validations = enhanced.recent_defense_line_validations;
   return <div className="report-overview-grid">
     <IslandCard title="核心观点">
       <div className="core-insight-panel">
@@ -36,20 +47,33 @@ function ReportOverview({ enhanced }: { enhanced: EnhancedReport }) {
           <p className="market-context-note">{anchor.market_context_note}</p>
           {quoteAvailable ? <div className="market-anchor-metrics">
             <div><span>上个交易日收盘</span><strong>{point(anchor.pre_close)}</strong></div>
-            <div><span>今日上证指数</span><strong>{point(anchor.current)}</strong><em>{pct(anchor.pct_change)}</em></div>
-            <div><span>今日攻防线</span><strong>{anchor.defense_line_value == null ? "报告未单列" : `${point(anchor.defense_line_value)} 点`}</strong></div>
-            <div><span>距攻防线</span><strong>{anchor.distance_points == null ? "—" : `${signedPoint(anchor.distance_points)} 点`}</strong><em>{pct(anchor.distance_pct)}</em></div>
+            <div><span>今日上证指数</span><strong>{point(anchor.current)}</strong><em className={signedTone(anchor.pct_change)}>{pct(anchor.pct_change)}</em></div>
+            <div><span>今日攻防线</span><strong>{anchor.defense_line_value == null ? "报告未单列" : point(anchor.defense_line_value)}</strong></div>
+            <div><span>距攻防线</span><strong className={signedTone(anchor.distance_points)}>{anchor.distance_points == null ? "—" : signedPoint(anchor.distance_points)}</strong><em className={signedTone(anchor.distance_pct)}>{pct(anchor.distance_pct)}</em></div>
           </div> : <p className="market-anchor-unavailable">上证指数行情暂不可用；攻防点位不会被当作指数点位。</p>}
-          <div className="market-anchor-position"><span>当前位置</span><strong>{anchor.defense_position ? positionLabel[anchor.defense_position] : "—"}</strong>{quoteAvailable && <em>行情时间 {anchor.quote_datetime ?? "—"}</em>}</div>
+          <div className="market-anchor-position"><span>当前位置</span><strong className={positionTone(anchor.defense_position)}>{anchor.defense_position ? positionLabel[anchor.defense_position] : "—"}</strong>{quoteAvailable && <em>行情时间 {anchor.quote_datetime ?? "—"}</em>}</div>
         </section>
         <section className="defense-line-panel" aria-label="猎豹攻防线">
-          <div className="defense-level"><span>猎豹攻防点</span><strong>{anchor.defense_line_value == null ? "报告未单列" : `${point(anchor.defense_line_value)} 点`}</strong></div>
+          <div className="defense-level"><span>猎豹攻防点</span><strong>{anchor.defense_line_value == null ? "报告未单列" : point(anchor.defense_line_value)}</strong></div>
           <dl>
             <div><dt>站上条件</dt><dd>{anchor.stand_above_condition ?? "报告未单列站上后的确认条件。"}</dd></div>
             <div><dt>跌破条件</dt><dd>{anchor.break_below_condition ?? "报告未单列跌破后的应对条件。"}</dd></div>
             <div><dt>验证条件</dt><dd>{anchor.validation_conditions ?? "继续按报告原文观察时间、宽度、量能或资金确认。"}</dd></div>
           </dl>
           <p className="defense-source">攻防线来源：{defenseSource ?? "报告未单列"}。报告观点与当前市场辅助按各自日期语义展示。</p>
+        </section>
+        <section className="defense-validation-panel" aria-label="近10个交易日攻防验证">
+          <div className="defense-validation-heading"><div><p className="eyebrow">近10个交易日攻防验证</p><p>按前一份报告提出的攻防线，对照下一受控交易日上证指数实际收盘；不构成预测评分。</p></div><span>自然积累</span></div>
+          {validations.length === 0 ? <p className="defense-validation-empty">攻防验证记录将随交易日自然积累。</p> : <ol className="defense-validation-list">
+            {validations.map(item => <li key={`${item.source_report_id}-${item.trading_date}`}>
+              <div><small>交易日</small><strong>{item.trading_date}</strong></div>
+              <div><small>来源报告</small><strong>{item.source_report_date}</strong></div>
+              <div><small>攻防线</small><strong>{point(item.defense_line_value)}</strong></div>
+              <div><small>{item.index_name}收盘</small><strong>{point(item.index_close)}</strong></div>
+              <div><small>距攻防线</small><strong className={signedTone(item.distance_points)}>{signedPoint(item.distance_points)}</strong><em className={signedTone(item.distance_pct)}>{pct(item.distance_pct)}</em></div>
+              <div><small>收盘位置</small><strong className={positionTone(item.close_position)}>{validationPositionLabel[item.close_position]}</strong></div>
+            </li>)}
+          </ol>}
         </section>
       </div>
     </IslandCard>
