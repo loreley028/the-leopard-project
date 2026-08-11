@@ -358,6 +358,25 @@ class SectorDailyBar(Base):
     source_response_hash: Mapped[str] = mapped_column(String(64))
 
 
+class SecurityProxyDaily(Base):
+    """Completed daily closes for the fixed, manually curated proxy securities."""
+
+    __tablename__ = "security_proxy_daily"
+    __table_args__ = (UniqueConstraint("symbol", "trading_date", name="uq_security_proxy_daily_symbol_date"),)
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=new_id)
+    symbol: Mapped[str] = mapped_column(String(16), index=True)
+    trading_date: Mapped[date] = mapped_column(Date, index=True)
+    close: Mapped[float] = mapped_column(Numeric(20, 6))
+    open: Mapped[float | None] = mapped_column(Numeric(20, 6), nullable=True)
+    high: Mapped[float | None] = mapped_column(Numeric(20, 6), nullable=True)
+    low: Mapped[float | None] = mapped_column(Numeric(20, 6), nullable=True)
+    amount_yuan: Mapped[float | None] = mapped_column(Numeric(24, 4), nullable=True)
+    quote_datetime: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    fetched_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+    source: Mapped[str] = mapped_column(String(100))
+
+
 class SectorIndicatorSnapshot(Base):
     __tablename__ = "sector_indicator_snapshots"
     id: Mapped[str] = mapped_column(String(32), primary_key=True, default=new_id)

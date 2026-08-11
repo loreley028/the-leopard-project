@@ -23,13 +23,16 @@ def config() -> dict[str, object]:
     return deepcopy(load_tencent_quote_config())
 
 
-def record(symbol: str, *, name: str = "示例证券", current: str = "10.02", pre_close: str = "10.00", change: str = "0.02", pct: str = "0.20", p35: str | None = None, p78: str = "777.77", timestamp: str = "20260804141930", fields: int = 88) -> str:
+def record(symbol: str, *, name: str = "示例证券", current: str = "10.02", pre_close: str = "10.00", open_: str = "10.01", high: str = "10.20", low: str = "9.90", change: str = "0.02", pct: str = "0.20", p35: str | None = None, p78: str = "777.77", timestamp: str = "20260804141930", fields: int = 88) -> str:
     values = [""] * fields
     values[1], values[2], values[3], values[4] = name, symbol[2:], current, pre_close
     if fields > 30: values[30] = timestamp
     if fields > 31: values[31] = change
     if fields > 32: values[32] = pct
+    if fields > 33: values[33] = high
+    if fields > 34: values[34] = low
     if fields > 35: values[35] = p35 if p35 is not None else f"{current}/1000/10000"
+    if fields > 5: values[5] = open_
     if fields > 78: values[78] = p78
     return f'v_{symbol}="{"~".join(values)}";'
 
@@ -67,6 +70,14 @@ def test_p35_is_an_internal_price_check_and_p78_is_ignored() -> None:
     rejected = fetch(provider(payload(record("sh510300", p35="9.00/1000/10000"))), ["sh510300"])
     assert len(accepted.quotes) == 1
     assert rejected.failures == {"sh510300": TencentQuoteErrorCode.CALCULATION_INCONSISTENT}
+
+
+def test_optional_eod_fields_are_normalized_without_using_p78() -> None:
+    batch = fetch(provider(payload(record("sh510300", open_="10.01", high="10.20", low="9.90", p35="10.02/1000/12345678", p78="0"))), ["sh510300"])
+    quote = batch.quotes[0]
+    assert (quote.open, quote.high, quote.low, quote.amount_yuan) == (
+        Decimal("10.01"), Decimal("10.20"), Decimal("9.90"), Decimal("12345678"),
+    )
 
 
 @pytest.mark.parametrize("current,pre_close,change,pct", [("10.02", "10.00", "0.02", "0.20"), ("10.021", "10.00", "0.02", "0.21")])
@@ -123,6 +134,8 @@ def test_contract_indices_are_frozen_and_full_only() -> None:
     assert document["field_contract"] == {
         "name_index": 1, "symbol_index": 2, "current_index": 3, "pre_close_index": 4,
         "quote_datetime_index": 30, "change_index": 31, "pct_change_index": 32,
+        "open_index": 5, "high_index": 33, "low_index": 34,
+        "p35_amount": "third_component_is_amount_yuan_when_finite_non_negative",
         "p35_validation": "first_price_component_must_match_current_when_present", "p78_policy": "permanently_ignored",
     }
     assert "s_sh" not in Path("backend/leopard_project/providers/tencent_standard_quote.py").read_text(encoding="utf-8")

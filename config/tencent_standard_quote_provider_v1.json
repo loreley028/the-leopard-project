@@ -22,10 +22,14 @@
     "symbol_index": 2,
     "current_index": 3,
     "pre_close_index": 4,
+    "open_index": 5,
     "quote_datetime_index": 30,
     "change_index": 31,
     "pct_change_index": 32,
+    "high_index": 33,
+    "low_index": 34,
     "p35_validation": "first_price_component_must_match_current_when_present",
+    "p35_amount": "third_component_is_amount_yuan_when_finite_non_negative",
     "p78_policy": "permanently_ignored"
   },
   "request": {
