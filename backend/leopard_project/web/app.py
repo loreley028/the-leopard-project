@@ -199,6 +199,20 @@ def create_app(settings: WebSettings | None = None, session_factory: sessionmake
         except AuthenticationError as exc:
             raise WebDomainError("invalid_session", "The session is invalid or expired", 401) from exc
 
+    def optional_principal(session_cookie: str | None = Cookie(default=None, alias=COOKIE_NAME)) -> Principal | None:
+        """Return an authenticated identity when present, without gating public reads.
+
+        Published research is intentionally public-read.  A malformed or expired
+        reader cookie is treated like an anonymous visit, while every mutation
+        still goes through the strict ``admin`` dependency below.
+        """
+        if not session_cookie:
+            return None
+        try:
+            return auth.verify(session_cookie)
+        except AuthenticationError:
+            return None
+
     def admin(current: Principal = Depends(principal)) -> Principal:
         if current.role != "admin":
             raise WebDomainError("admin_required", "Administrator permission is required", 403)
@@ -220,11 +234,11 @@ def create_app(settings: WebSettings | None = None, session_factory: sessionmake
         return OfficialBoardAvailability(market_path_key, fresh, fresh, status, None if fresh else status, snapshot.get("observed_at") if snapshot else None)
 
     @app.get("/api/v1/market-paths/{market_path_key}/viewer-observation")
-    def viewer_observation(market_path_key: str, current: Principal = Depends(principal), session: Session = Depends(db_session)) -> dict:
+    def viewer_observation(market_path_key: str, current: Principal | None = Depends(optional_principal), session: Session = Depends(db_session)) -> dict:
         return app.state.security_proxy_viewer.observe(official_board_availability(session, market_path_key), session=session)
 
     @app.post("/api/v1/market-paths/viewer-observations/query")
-    def viewer_observations_query(payload: dict, current: Principal = Depends(principal), session: Session = Depends(db_session)) -> dict:
+    def viewer_observations_query(payload: dict, current: Principal | None = Depends(optional_principal), session: Session = Depends(db_session)) -> dict:
         keys = payload.get("market_path_keys")
         if not isinstance(keys, list) or not all(isinstance(item, str) for item in keys) or not keys or len(keys) > 20:
             raise WebDomainError("invalid_market_path_keys", "market_path_keys must contain 1..20 path keys", 422)
@@ -244,6 +258,18 @@ def create_app(settings: WebSettings | None = None, session_factory: sessionmake
         response.set_cookie(COOKIE_NAME, auth.issue(current), httponly=True, secure=settings.cookie_secure, samesite="strict", max_age=28_800, path="/")
         return PrincipalResponse(username=current.username, role=current.role)
 
+    @app.post("/api/v1/auth/admin/login", response_model=PrincipalResponse)
+    def admin_login(payload: LoginRequest, response: Response) -> PrincipalResponse:
+        """Issue a session only for the dedicated management entry point."""
+        try:
+            current = auth.authenticate(payload.username, payload.password)
+        except AuthenticationError as exc:
+            raise WebDomainError("invalid_credentials", "Invalid username or password", 401) from exc
+        if current.role != "admin":
+            raise WebDomainError("admin_required", "Administrator permission is required", 403)
+        response.set_cookie(COOKIE_NAME, auth.issue(current), httponly=True, secure=settings.cookie_secure, samesite="strict", max_age=28_800, path="/")
+        return PrincipalResponse(username=current.username, role=current.role)
+
     @app.post("/api/v1/auth/logout", status_code=204)
     def logout(response: Response) -> None:
         response.delete_cookie(COOKIE_NAME, path="/")
@@ -253,11 +279,11 @@ def create_app(settings: WebSettings | None = None, session_factory: sessionmake
         return PrincipalResponse(username=current.username, role=current.role)
 
     @app.get("/api/v1/reports")
-    def reports(current: Principal = Depends(principal), session: Session = Depends(db_session)) -> list[dict]:
+    def reports(current: Principal | None = Depends(optional_principal), session: Session = Depends(db_session)) -> list[dict]:
         return [report_payload(item) for item in ReportRepository(session).list_reports(published_only=True)]
 
     @app.get("/api/v1/reports/latest")
-    def latest_report(current: Principal = Depends(principal), session: Session = Depends(db_session)) -> dict:
+    def latest_report(current: Principal | None = Depends(optional_principal), session: Session = Depends(db_session)) -> dict:
         items = ReportRepository(session).list_reports(published_only=True)
         if not items:
             raise WebDomainError("no_published_report", "No report has been published", 404)
@@ -266,16 +292,16 @@ def create_app(settings: WebSettings | None = None, session_factory: sessionmake
         return payload
 
     @app.get("/api/v1/reports/{report_id}")
-    def report_detail(report_id: str, current: Principal = Depends(principal), session: Session = Depends(db_session)) -> dict:
+    def report_detail(report_id: str, current: Principal | None = Depends(optional_principal), session: Session = Depends(db_session)) -> dict:
         item = ReportRepository(session).by_id(report_id)
-        if item is None or (item.status != ReportStatus.PUBLISHED.value and current.role != "admin"):
+        if item is None or (item.status != ReportStatus.PUBLISHED.value and (current is None or current.role != "admin")):
             raise WebDomainError("report_not_found", "Published report not found", 404)
         return report_payload(item)
 
     @app.get("/api/v1/reports/{report_id}/pdf/preview")
-    def report_pdf_preview_info(report_id: str, current: Principal = Depends(principal), session: Session = Depends(db_session)) -> dict:
+    def report_pdf_preview_info(report_id: str, current: Principal | None = Depends(optional_principal), session: Session = Depends(db_session)) -> dict:
         item = ReportRepository(session).by_id(report_id)
-        if item is None or (item.status != ReportStatus.PUBLISHED.value and current.role != "admin"):
+        if item is None or (item.status != ReportStatus.PUBLISHED.value and (current is None or current.role != "admin")):
             raise WebDomainError("report_not_found", "Published report not found", 404)
         from pypdfium2 import PdfDocument
 
@@ -295,11 +321,11 @@ def create_app(settings: WebSettings | None = None, session_factory: sessionmake
     def report_pdf_preview_page(
         report_id: str,
         page_number: int,
-        current: Principal = Depends(principal),
+        current: Principal | None = Depends(optional_principal),
         session: Session = Depends(db_session),
     ) -> Response:
         item = ReportRepository(session).by_id(report_id)
-        if item is None or (item.status != ReportStatus.PUBLISHED.value and current.role != "admin"):
+        if item is None or (item.status != ReportStatus.PUBLISHED.value and (current is None or current.role != "admin")):
             raise WebDomainError("report_not_found", "Published report not found", 404)
         from pypdfium2 import PdfDocument
 
@@ -317,9 +343,9 @@ def create_app(settings: WebSettings | None = None, session_factory: sessionmake
         )
 
     @app.get("/api/v1/reports/{report_id}/pdf/download")
-    def report_pdf_download(report_id: str, current: Principal = Depends(principal), session: Session = Depends(db_session)) -> FileResponse:
+    def report_pdf_download(report_id: str, current: Principal | None = Depends(optional_principal), session: Session = Depends(db_session)) -> FileResponse:
         item = ReportRepository(session).by_id(report_id)
-        if item is None or (item.status != ReportStatus.PUBLISHED.value and current.role != "admin"):
+        if item is None or (item.status != ReportStatus.PUBLISHED.value and (current is None or current.role != "admin")):
             raise WebDomainError("report_not_found", "Published report not found", 404)
         return FileResponse(
             settings.upload_dir / item.file.storage_filename,
@@ -340,7 +366,7 @@ def create_app(settings: WebSettings | None = None, session_factory: sessionmake
         sort: str = Query(default="research", pattern="^(research|status|daily|five_day|view_date|group)$"),
         page: int = Query(default=1, ge=1),
         page_size: int = Query(default=100, ge=1, le=100),
-        current: Principal = Depends(principal),
+        current: Principal | None = Depends(optional_principal),
         session: Session = Depends(db_session),
     ) -> list[dict]:
         rows = sector_payloads(ReportRepository(session))
@@ -406,7 +432,7 @@ def create_app(settings: WebSettings | None = None, session_factory: sessionmake
         return Response(status_code=204)
 
     @app.get("/api/v1/sectors/{sector_key}")
-    def sector_detail(sector_key: str, current: Principal = Depends(principal), session: Session = Depends(db_session)) -> dict:
+    def sector_detail(sector_key: str, current: Principal | None = Depends(optional_principal), session: Session = Depends(db_session)) -> dict:
         repo = ReportRepository(session)
         sector = next((item for item in sector_payloads(repo) if item["sector_key"] == sector_key), None)
         if sector is None:
@@ -749,7 +775,7 @@ def create_app(settings: WebSettings | None = None, session_factory: sessionmake
         return {"id": item.id, "is_current": True}
 
     register_enhanced_routes(
-        app, sessions, principal, admin, required_report, data_mode=settings.data_mode,
+        app, sessions, optional_principal, admin, required_report, data_mode=settings.data_mode,
         intraday=intraday, eod_backfill=eod_backfill, live_market_anchor=app.state.live_market_anchor,
     )
     return app

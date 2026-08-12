@@ -103,8 +103,35 @@ def test_auth_cookie_roles_and_no_registration(web) -> None:
     login(client, "viewer")
     assert client.get("/api/v1/auth/me").json()["role"] == "viewer"
     assert client.get("/api/v1/admin/reports").status_code == 403
+    assert client.post("/api/v1/auth/admin/login", json={"username": "viewer", "password": "viewer-test-password"}).status_code == 403
     assert client.post("/api/v1/auth/register", json={}).status_code == 404
     assert client.post("/api/v1/auth/logout").status_code == 204
+
+
+def test_public_read_only_routes_do_not_require_a_viewer_session(web) -> None:
+    client, _, _ = web
+    assert client.get("/api/v1/reports").status_code == 200
+    assert client.get("/api/v1/sectors").status_code == 200
+    assert client.get("/api/v1/sectors/semiconductor").status_code == 200
+    assert client.get("/api/v1/market/intraday/status").status_code == 200
+    assert client.get("/api/v1/market-paths/cpo/viewer-observation").status_code == 200
+    assert client.post("/api/v1/admin/reports").status_code == 401
+    assert client.post("/api/v1/admin/reports/unknown/publish").status_code == 401
+    assert client.delete("/api/v1/admin/sectors/semiconductor/pin").status_code == 401
+
+
+def test_published_report_is_public_but_admin_mutations_require_admin(web) -> None:
+    client, _, _ = web
+    login(client)
+    report_id = complete_report(client)
+    client.post("/api/v1/auth/logout")
+    assert client.get(f"/api/v1/reports/{report_id}").status_code == 200
+    assert client.get(f"/api/v1/reports/{report_id}/enhanced").status_code == 200
+    assert client.get(f"/api/v1/reports/{report_id}/pdf/download").status_code == 200
+    assert client.post(f"/api/v1/admin/reports/{report_id}/publish").status_code == 401
+    response = client.post("/api/v1/auth/admin/login", json={"username": "admin", "password": "admin-test-password"})
+    assert response.status_code == 200 and response.json()["role"] == "admin"
+    assert client.get("/api/v1/admin/reports").status_code == 200
 
 
 def test_admin_upload_duplicate_and_safe_storage(web) -> None:

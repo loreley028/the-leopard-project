@@ -84,6 +84,7 @@ export function normalizeViewerObservation(value: ViewerObservationWire): Viewer
 
 export const api = {
   login: (username: string, password: string) => request<Principal>("/auth/login", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ username, password }) }),
+  adminLogin: (username: string, password: string) => request<Principal>("/auth/admin/login", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ username, password }) }),
   logout: () => request<void>("/auth/logout", { method: "POST" }),
   me: () => request<Principal>("/auth/me"),
   reports: () => request<Report[]>("/reports"),

@@ -124,8 +124,9 @@ describe("Viewer research pages", () => {
 
 describe("Admin workflow and permissions", () => {
   beforeEach(() => mockApi());
-  it("redirects a viewer away from admin routes", async () => { renderAt("/admin", { username: "viewer", role: "viewer" }); expect(await screen.findByRole("heading", { name: "登录研究手册" })).toBeInTheDocument(); });
-  it("redirects an unauthenticated visitor to login", async () => { renderAt("/reports", null); expect(await screen.findByRole("heading", { name: "登录研究手册" })).toBeInTheDocument(); });
+  it("redirects a non-admin away from admin routes", async () => { renderAt("/admin", { username: "viewer", role: "viewer" }); expect(await screen.findByRole("heading", { name: "Admin 登录" })).toBeInTheDocument(); });
+  it("allows an unauthenticated visitor to read reports", async () => { renderAt("/reports", null); expect(await screen.findByRole("table", { name: "已发布报告" })).toBeInTheDocument(); });
+  it("keeps the Admin entry low-profile but available to anonymous readers", async () => { renderAt("/", null); expect(await screen.findByRole("link", { name: "Admin" })).toHaveAttribute("href", "/admin/login"); });
   it("allows an admin to see the dashboard", async () => { renderAt("/admin", { username: "admin", role: "admin" }); expect(await screen.findByRole("heading", { name: "最近两周直播日程" })).toBeInTheDocument(); });
   it("shows one upload-and-interpret action without technical parse buttons", () => { renderAt("/admin/reports/new", { username: "admin", role: "admin" }); expect(screen.getByRole("button", { name: "上传并解读" })).toBeInTheDocument(); expect(screen.queryByRole("button", { name: "本地解析" })).not.toBeInTheDocument(); expect(screen.queryByRole("button", { name: "增强解析" })).not.toBeInTheDocument(); });
   it("rejects an invalid PDF in the browser", () => { renderAt("/admin/reports/new", { username: "admin", role: "admin" }); const input = document.querySelector('input[type="file"]') as HTMLInputElement; fireEvent.change(input, { target: { files: [new File(["bad"], "bad.txt", { type: "text/plain" })] } }); expect(screen.getByRole("alert")).toHaveTextContent("请选择有效 PDF 文件"); });
@@ -136,7 +137,7 @@ describe("Admin workflow and permissions", () => {
 
 describe("Accessibility foundations", () => {
   beforeEach(() => mockApi());
-  it("supports keyboard focus on primary navigation", async () => { const user = userEvent.setup(); renderAt("/"); await user.tab(); expect(document.activeElement).toHaveAttribute("href", "/"); });
+  it("supports keyboard focus on the low-priority Admin entry and primary navigation", async () => { const user = userEvent.setup(); renderAt("/"); await user.tab(); expect(document.activeElement).toHaveAttribute("href", "/admin/login"); await user.tab(); expect(document.activeElement).toHaveAttribute("href", "/"); });
   it("uses text and symbols for status, not color alone", async () => { renderAt("/sectors"); expect(await screen.findByText("暂不支持")).toHaveTextContent("暂不支持"); });
   it("declares reduced-motion behavior", () => { const css = readFileSync(resolve(process.cwd(), "src/styles/global.css"), "utf8"); expect(css).toContain("prefers-reduced-motion"); });
   it("keeps narrative copy at normal weight", () => { const css = readFileSync(resolve(process.cwd(), "src/styles/global.css"), "utf8"); expect(css).toMatch(/body\s*\{[^}]*font-weight:\s*400/); expect(css).toMatch(/pdf-assessment-table td:nth-child\(4\)[^}]*font-weight:\s*400/); expect(css).toMatch(/pdf-assessment-table td:nth-child\(5\)[^}]*font-weight:\s*400/); expect(css).toMatch(/\.sector-table\s*\{[^}]*PingFang SC[^}]*font-size:\s*13px/); expect(css).toMatch(/\.sector-table thead th[^}]*font-weight:\s*600[^}]*white-space:\s*nowrap/); expect(css).toMatch(/\.sector-table td[^}]*font-weight:\s*400/); expect(css).toMatch(/\.realtime-cell b[^}]*font-size:\s*14px[^}]*font-weight:\s*600/); });

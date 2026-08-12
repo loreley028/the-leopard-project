@@ -58,7 +58,7 @@ from .path_history import ensure_latest_path_history, matrix_dates
 def register_enhanced_routes(
     app: FastAPI,
     sessions: sessionmaker[Session],
-    principal: Callable,
+    optional_principal: Callable,
     admin: Callable,
     required_report: Callable,
     data_mode: str = "test",
@@ -76,8 +76,8 @@ def register_enhanced_routes(
         finally:
             session.close()
 
-    def readable(report: Report, current: Principal) -> Report:
-        if report.status != ReportStatus.PUBLISHED.value and current.role != "admin":
+    def readable(report: Report, current: Principal | None) -> Report:
+        if report.status != ReportStatus.PUBLISHED.value and (current is None or current.role != "admin"):
             raise WebDomainError("report_not_found", "Published report not found", 404)
         return report
 
@@ -94,11 +94,11 @@ def register_enhanced_routes(
         return item.status if item else None
 
     @app.get("/api/v1/path-statuses", response_model=ApiObjectResponse)
-    def status_contract(current: Principal = Depends(principal)) -> dict:
+    def status_contract(current: Principal | None = Depends(optional_principal)) -> dict:
         return path_status_document()
 
     @app.get("/api/v1/reports/{report_id}/enhanced", response_model=ApiObjectResponse)
-    def enhanced_report(report_id: str, current: Principal = Depends(principal), session: Session = Depends(db_session)) -> dict:
+    def enhanced_report(report_id: str, current: Principal | None = Depends(optional_principal), session: Session = Depends(db_session)) -> dict:
         report = readable(required_report(report_id, session), current)
         service = EnhancedReportService(session)
         service.ensure_structure(report)
@@ -131,7 +131,7 @@ def register_enhanced_routes(
         report_id: str,
         periods: str = Query(default="20", pattern="^(10|20|40|all)$", alias="periods"),
         period: str | None = Query(default=None, pattern="^(10|20|40|all)$", alias="period"),
-        current: Principal = Depends(principal),
+        current: Principal | None = Depends(optional_principal),
         session: Session = Depends(db_session),
     ) -> dict:
         report = readable(required_report(report_id, session), current)
@@ -264,7 +264,7 @@ def register_enhanced_routes(
         }
 
     @app.get("/api/v1/reports/{report_id}/sector-assessments", response_model=list[ApiListItem])
-    def report_assessments(report_id: str, current: Principal = Depends(principal), session: Session = Depends(db_session)) -> list[dict]:
+    def report_assessments(report_id: str, current: Principal | None = Depends(optional_principal), session: Session = Depends(db_session)) -> list[dict]:
         report = readable(required_report(report_id, session), current)
         service = EnhancedReportService(session)
         service.ensure_structure(report)
@@ -272,12 +272,12 @@ def register_enhanced_routes(
         return [assessment_payload(item, snapshots.get(item.sector_key)) for item in service.assessments(report.id)]
 
     @app.get("/api/v1/reports/{report_id}/market-snapshots", response_model=list[ApiListItem])
-    def report_market_snapshots(report_id: str, current: Principal = Depends(principal), session: Session = Depends(db_session)) -> list[dict]:
+    def report_market_snapshots(report_id: str, current: Principal | None = Depends(optional_principal), session: Session = Depends(db_session)) -> list[dict]:
         report = readable(required_report(report_id, session), current)
         return EnhancedReportService(session).report_snapshots(report.id)
 
     @app.get("/api/v1/reports/{report_id}/comparison", response_model=ApiObjectResponse)
-    def report_comparison(report_id: str, current: Principal = Depends(principal), session: Session = Depends(db_session)) -> dict:
+    def report_comparison(report_id: str, current: Principal | None = Depends(optional_principal), session: Session = Depends(db_session)) -> dict:
         report = readable(required_report(report_id, session), current)
         return EnhancedReportService(session).comparison(report)
 
@@ -287,7 +287,7 @@ def register_enhanced_routes(
         path_periods: int = Query(default=20, ge=10, le=60),
         market_days: int = Query(default=20, ge=20, le=60),
         path_period: int | None = Query(default=None, ge=5, le=60),
-        current: Principal = Depends(principal),
+        current: Principal | None = Depends(optional_principal),
         session: Session = Depends(db_session),
     ) -> dict:
         market_path = market_path_for_key(sector_key)
@@ -449,7 +449,7 @@ def register_enhanced_routes(
         }
 
     @app.get("/api/v1/sectors/{sector_key}/market/latest", response_model=ApiObjectResponse)
-    def sector_latest_market(sector_key: str, current: Principal = Depends(principal), session: Session = Depends(db_session)) -> dict:
+    def sector_latest_market(sector_key: str, current: Principal | None = Depends(optional_principal), session: Session = Depends(db_session)) -> dict:
         market_path = market_path_for_key(sector_key)
         if market_path is None:
             raise WebDomainError("sector_not_found", "Sector not found", 404)
@@ -524,7 +524,7 @@ def register_enhanced_routes(
         return import_real_market(session, current.username, file.filename or "market.csv", payload, confirmed=confirmed)
 
     @app.get("/api/v1/market/status", response_model=ApiObjectResponse)
-    def market_status(current: Principal = Depends(principal), session: Session = Depends(db_session)) -> dict:
+    def market_status(current: Principal | None = Depends(optional_principal), session: Session = Depends(db_session)) -> dict:
         latest_run = session.scalar(select(MarketRefreshRun).order_by(desc(MarketRefreshRun.started_at)))
         latest_bar = session.scalar(select(SectorDailyBar).where(SectorDailyBar.eod_status == "complete_eod").order_by(desc(SectorDailyBar.trade_date)))
         bar_count = len(list(session.scalars(select(SectorDailyBar).where(SectorDailyBar.eod_status == "complete_eod"))))
@@ -543,7 +543,7 @@ def register_enhanced_routes(
         }
 
     @app.get("/api/v1/market/intraday/status", response_model=ApiObjectResponse)
-    def intraday_status(current: Principal = Depends(principal)) -> dict:
+    def intraday_status(current: Principal | None = Depends(optional_principal)) -> dict:
         return intraday.status()
 
     @app.get("/api/v1/admin/market/intraday/sessions", response_model=list[ApiListItem])
@@ -576,7 +576,7 @@ def register_enhanced_routes(
         return intraday.probe_provider(provider_key)
 
     @app.get("/api/v1/market/intraday/sectors", response_model=list[ApiListItem])
-    def intraday_sectors(current: Principal = Depends(principal), session: Session = Depends(db_session)) -> list[dict]:
+    def intraday_sectors(current: Principal | None = Depends(optional_principal), session: Session = Depends(db_session)) -> list[dict]:
         service = EnhancedReportService(session)
         status = intraday.status()
         policy = intraday_policy()

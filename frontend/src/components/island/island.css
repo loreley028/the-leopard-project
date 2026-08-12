@@ -1,8 +1,11 @@
 .island-shell { width: min(1380px, calc(100% - 2rem)); margin: auto; padding: 1rem 0 3rem; }
 .island-shell footer { display: flex; flex-wrap: wrap; justify-content: center; gap: .35rem 1rem; margin-top: 3rem; text-align: center; color: var(--text-muted); font-size: .85rem; }
-.island-header { display: flex; align-items: center; gap: .8rem; padding: .7rem 0; }
-.island-header div:last-child { display: grid; }
+.island-header { display: flex; align-items: center; justify-content: space-between; gap: .8rem; padding: .7rem 0; }
+.island-brand { display: flex; align-items: center; gap: .8rem; }
+.island-brand > div:last-child { display: grid; }
 .island-header span { color: var(--text-muted); font-size: .8rem; }
+.admin-entry { color: var(--text-muted); font-size: .78rem; text-decoration: none; opacity: .75; }
+.admin-entry:hover, .admin-entry:focus-visible { color: var(--text-bark); opacity: 1; text-decoration: underline; }
 .brand-mark { display: grid; place-items: center; width: 44px; aspect-ratio: 1; border-radius: 45% 55% 50% 48%; background: var(--surface-leaf); font-weight: 700; }
 .island-nav { position: sticky; top: .7rem; z-index: 10; display: flex; gap: .4rem; width: fit-content; max-width: 100%; margin: .6rem auto 1.5rem; padding: .4rem; overflow-x: auto; border: 1px solid var(--border-soft); border-radius: var(--radius-pill); background: rgb(255 250 240 / 92%); backdrop-filter: blur(12px); box-shadow: var(--shadow-soft); }
 .island-nav a { padding: .65rem 1rem; border-radius: var(--radius-pill); text-decoration: none; white-space: nowrap; }
