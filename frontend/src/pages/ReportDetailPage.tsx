@@ -1,6 +1,6 @@
 import { Fragment, useEffect, useMemo, useState } from "react";
 import { Link, useLocation, useParams } from "../routes/router";
-import { api } from "../api/client";
+import { api, publicResourcePath } from "../api/client";
 import { IslandCard } from "../components/island/IslandCard";
 import { IslandPathMatrix } from "../components/island/IslandPathMatrix";
 import { IslandStatusBadge } from "../components/island/IslandStatusBadge";
@@ -141,6 +141,6 @@ export function ReportDetailPage({ latest = false }: { latest?: boolean }) {
     <section id="path"><h2>历史路径矩阵</h2>{matrix ? <IslandPathMatrix matrix={matrix} period={period} onPeriodChange={setPeriod} /> : <p>路径矩阵加载中…</p>}</section>
     <section id="assessments"><h2>{chineseDate(report.report_date)}板块观点详细汇总</h2><p className="muted">按原PDF分组展示五列主体；路径历史来自矩阵，详细观点历史来自已上传PDF，两者分别保存。</p>{GROUP_ORDER.map(group => grouped.get(group)?.length ? <AssessmentTable key={group} title={group} items={grouped.get(group)!} /> : null)}<details className="advanced-review"><summary>本期未提及 {unmentioned} 个板块</summary><p>“未提”只表示本期PDF没有明确观点，不代表既有观点失效。</p></details></section>
     <section id="market"><h2>行情辅助</h2><p className="notice">{enhanced.market_data_attached ? `已固化 ${enhanced.market_snapshots.length}/65 个支持板块；发布快照不会被后续刷新覆盖。` : "尚未绑定真实行情；不会使用演示行情填充。"}</p></section>
-    <section id="source"><h2>原始PDF</h2>{previewLoaded ? <PdfPagePreview reportId={report.id} /> : <div className="pdf-preview-placeholder"><p>打开或刷新报告不会请求PDF；点击后仅加载内存渲染的逐页图片，不会写入下载目录。</p><button type="button" onClick={() => setPreviewLoaded(true)}>加载逐页预览</button></div>}<p><a href={report.pdf_download_url}>下载原始PDF</a></p><p>{enhanced.data_notice} 来源追溯由Admin保留，Viewer正文不重复展示原文摘录。</p></section>
+    <section id="source"><h2>原始PDF</h2>{previewLoaded ? <PdfPagePreview reportId={report.id} /> : <div className="pdf-preview-placeholder"><p>打开或刷新报告不会请求PDF；点击后仅加载内存渲染的逐页图片，不会写入下载目录。</p><button type="button" onClick={() => setPreviewLoaded(true)}>加载逐页预览</button></div>}<p><a href={publicResourcePath(report.pdf_download_url)}>下载原始PDF</a></p><p>{enhanced.data_notice} 来源追溯由Admin保留，Viewer正文不重复展示原文摘录。</p></section>
   </article>;
 }

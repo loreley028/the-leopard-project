@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { api, ApiError } from "../api/client";
+import { api, ApiError, publicResourcePath } from "../api/client";
 
 export function PdfPagePreview({ reportId, initialPage }: { reportId: string; initialPage?: number }) {
   const [pages, setPages] = useState<string[]>();
@@ -17,7 +17,7 @@ export function PdfPagePreview({ reportId, initialPage }: { reportId: string; in
     : pages;
   return <div className="pdf-page-preview" aria-label="原始PDF逐页预览">
     {ordered.map((url, index) => <figure key={url}>
-      <img src={url} alt={`原始PDF第${initialPage && index === 0 ? initialPage : pages.indexOf(url) + 1}页`} loading="lazy" />
+      <img src={publicResourcePath(url)} alt={`原始PDF第${initialPage && index === 0 ? initialPage : pages.indexOf(url) + 1}页`} loading="lazy" />
       <figcaption>第 {initialPage && index === 0 ? initialPage : pages.indexOf(url) + 1} 页</figcaption>
     </figure>)}
   </div>;

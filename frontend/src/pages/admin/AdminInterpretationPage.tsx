@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { FormEvent } from "react";
 import { Link, useNavigate, useParams } from "../../routes/router";
-import { api, ApiError } from "../../api/client";
+import { api, ApiError, publicResourcePath } from "../../api/client";
 import { IslandButton } from "../../components/island/IslandButton";
 import { IslandCard } from "../../components/island/IslandCard";
 import { IslandField } from "../../components/island/IslandField";
@@ -110,7 +110,7 @@ export function AdminInterpretationPage() {
 
     <details className="advanced-review"><summary>查看自动解读内容</summary><div className="dashboard-grid"><IslandCard title="核心观点"><p>{report.core_view}</p></IslandCard><IslandCard title="大盘路径"><p>{report.market_path}</p></IslandCard><IslandCard title="风险提示"><p>{report.risk_warning}</p></IslandCard><IslandCard title="重点板块"><div className="tag-list">{report.focus_sectors.map(item => <span key={item}>{item}</span>)}</div></IslandCard></div></details>
     <details className="advanced-review"><summary>查看全部66个板块路径</summary><div className="grouped-path-review">{groupedPaths.map(([group, items]) => <section key={group}><h3>{group}</h3><ul>{items.map(item => <li key={item.id}><span>{item.sector_name}</span><strong>{item.path_status_label}</strong></li>)}</ul></section>)}</div></details>
-    <details className="advanced-review"><summary>高级技术信息</summary><p>以下内容仅用于少数恢复场景，不影响普通确认流程。</p><details><summary>原始提取文本</summary><pre className="raw-text-collapsed">{report.raw_text}</pre></details><details><summary>解析诊断</summary><pre>{JSON.stringify({ field_provenance: interpretation.field_provenance, quality_summary: interpretation.quality_summary, external_llm_calls: 0, ocr_used: false }, null, 2)}</pre></details><a href={report.pdf_download_url}>下载原始PDF</a></details>
+    <details className="advanced-review"><summary>高级技术信息</summary><p>以下内容仅用于少数恢复场景，不影响普通确认流程。</p><details><summary>原始提取文本</summary><pre className="raw-text-collapsed">{report.raw_text}</pre></details><details><summary>解析诊断</summary><pre>{JSON.stringify({ field_provenance: interpretation.field_provenance, quality_summary: interpretation.quality_summary, external_llm_calls: 0, ocr_used: false }, null, 2)}</pre></details><a href={publicResourcePath(report.pdf_download_url)}>下载原始PDF</a></details>
     <p role={message.includes("失败") ? "alert" : "status"}>{message}</p>
   </div>;
 }

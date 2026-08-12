@@ -43,6 +43,31 @@ def main() -> None:
         'X-Robots-Tag "noindex, nofollow"',
         "proxy_pass http://127.0.0.1:8080",
     ))
+    checks += require(ROOT / "deployment/nginx/leopard-public-ip-subpath.conf", (
+        "server_name 47.116.209.204",
+        "location = /leopard",
+        "location ^~ /leopard/",
+        "location ^~ /leopard/api/v1/admin/",
+        "X-Forwarded-Prefix /leopard",
+        'X-Robots-Tag "noindex, nofollow"',
+        "proxy_pass http://127.0.0.1:8080",
+    ))
+    checks += require(ROOT / "deployment/nginx/temporary-ip-default-404.conf", (
+        "listen 80 default_server",
+        "return 404",
+    ))
+    checks += require(ROOT / "deployment/Dockerfile.web", (
+        "ARG VITE_APP_BASE_PATH=/",
+        "ENV VITE_APP_BASE_PATH=${VITE_APP_BASE_PATH}",
+        "deployment/nginx/leopard-web.conf",
+    ))
+    checks += require(ROOT / "deployment/nginx/leopard-web.conf", (
+        "listen 8080",
+        "location /api/",
+        "location ^~ /leopard/api/",
+        "location ^~ /leopard/",
+        "try_files $uri $uri/ /index.html",
+    ))
     checks += require(ROOT / "backend/leopard_project/web/app.py", (
         "auto_publish_uploads",
         "/api/v1/admin/operations/status",

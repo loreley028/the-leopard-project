@@ -10,6 +10,7 @@ import {
   type MouseEvent,
   type ReactNode,
 } from "react";
+import { appPath, appRoute } from "../config/appBasePath";
 
 type LocationState = { pathname: string; search: string; state: unknown };
 type NavigateOptions = { replace?: boolean; state?: unknown };
@@ -30,7 +31,7 @@ function useRouter(): RouterContextValue {
 }
 
 export function BrowserRouter({ children }: { children: ReactNode }) {
-  const current = () => ({ pathname: window.location.pathname, search: window.location.search, state: window.history.state });
+  const current = () => ({ pathname: appRoute(window.location.pathname), search: window.location.search, state: window.history.state });
   const [location, setLocation] = useState<LocationState>(current);
   useEffect(() => {
     const onPopState = () => setLocation(current());
@@ -41,7 +42,7 @@ export function BrowserRouter({ children }: { children: ReactNode }) {
     ...location,
     navigate: (to, options = {}) => {
       const next = parseTarget(to, options.state ?? null);
-      window.history[options.replace ? "replaceState" : "pushState"](next.state, "", `${next.pathname}${next.search}`);
+      window.history[options.replace ? "replaceState" : "pushState"](next.state, "", appPath(`${next.pathname}${next.search}`));
       setLocation(next);
     },
   }), [location]);
@@ -65,7 +66,7 @@ export function Link({ to, state, onClick, ...props }: Omit<AnchorHTMLAttributes
     event.preventDefault();
     navigate(to, { state });
   };
-  return <a {...props} href={to} onClick={handleClick} />;
+  return <a {...props} href={appPath(to)} onClick={handleClick} />;
 }
 
 export function useNavigate() {

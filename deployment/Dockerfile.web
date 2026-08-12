@@ -1,0 +1,19 @@
+# Build the same frontend either at a dedicated-domain root (default) or at
+# the temporary IP /leopard/ subpath. Deployment must pass the intended value
+# explicitly; it is a build-time public URL contract, not a runtime secret.
+FROM node:22-alpine AS build
+WORKDIR /src
+
+ARG VITE_APP_BASE_PATH=/
+ENV VITE_APP_BASE_PATH=${VITE_APP_BASE_PATH}
+
+COPY frontend/package.json ./package.json
+COPY frontend/package-lock.json ./package-lock.json
+RUN npm ci
+COPY frontend/ ./
+RUN npm run build
+
+FROM nginx:1.27-alpine
+COPY deployment/nginx/leopard-web.conf /etc/nginx/nginx.conf
+COPY --from=build /src/dist/ /usr/share/nginx/html/
+EXPOSE 8080

@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useParams } from "../../routes/router";
-import { api } from "../../api/client";
+import { api, publicResourcePath } from "../../api/client";
 import { IslandButton } from "../../components/island/IslandButton";
 import { IslandCard } from "../../components/island/IslandCard";
 import { IslandDialog } from "../../components/island/IslandDialog";
@@ -87,7 +87,7 @@ export function AdminReviewPage() {
     </IslandCard>
     <IslandCard title="原始PDF">
       {previewLoaded ? <PdfPagePreview reportId={report.id} /> : <IslandButton className="secondary" onClick={() => setPreviewLoaded(true)}>加载逐页预览</IslandButton>}
-      <p><a href={report.pdf_download_url}>下载原始PDF</a></p>
+      <p><a href={publicResourcePath(report.pdf_download_url)}>下载原始PDF</a></p>
     </IslandCard>
     <IslandDialog open={withdrawOpen} title="撤回已发布报告" onClose={() => setWithdrawOpen(false)}>
       <div className="stack"><IslandField label="撤回原因" multiline value={withdrawReason} onChange={event => setWithdrawReason(event.target.value)} /><IslandButton disabled={withdrawReason.trim().length < 3} onClick={() => api.withdraw(report.id, withdrawReason).then(item => { refresh(item, "报告已撤回"); setWithdrawOpen(false); })}>确认撤回</IslandButton></div>

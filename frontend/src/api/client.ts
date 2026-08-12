@@ -1,17 +1,24 @@
 import type { EnhancedReport, Interpretation, IntradayStatus, PathMatrix, Principal, Report, Sector, SectorAssessment, SectorResearch, ViewerObservation, ViewerSecurityProxyInstrument } from "../types";
+import { apiPath, appPath } from "../config/appBasePath";
 
 export class ApiError extends Error {
   constructor(public code: string, message: string, public status: number) { super(message); }
 }
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(`/api/v1${path}`, { credentials: "include", ...init });
+  const response = await fetch(apiPath(path), { credentials: "include", ...init });
   if (!response.ok) {
     const payload = await response.json().catch(() => ({ error: { code: "request_failed", message: "请求失败" } }));
     throw new ApiError(payload.error?.code ?? "request_failed", payload.error?.message ?? "请求失败", response.status);
   }
   if (response.status === 204) return undefined as T;
   return response.json() as Promise<T>;
+}
+
+/** Maps API-provided origin-relative attachment URLs into the configured app namespace. */
+export function publicResourcePath(path: string | null | undefined): string | undefined {
+  if (!path || !path.startsWith("/")) return path ?? undefined;
+  return appPath(path);
 }
 
 type ViewerSecurityProxyInstrumentWire = Omit<ViewerSecurityProxyInstrument, "current" | "pre_close" | "change" | "pct_change" | "quote_datetime" | "recent_closes" | "ma5" | "ma10" | "ma20" | "distance_to_ma5_pct" | "distance_to_ma10_pct" | "distance_to_ma20_pct"> & {
