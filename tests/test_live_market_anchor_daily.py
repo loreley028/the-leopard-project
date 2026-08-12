@@ -153,6 +153,18 @@ def test_validation_matches_previous_report_to_next_actual_close_and_never_same_
     assert rows[0]["close_position"] == "close_above_defense_line"
 
 
+def test_validation_uses_parser_verified_primary_line_when_narrative_has_two_levels(tmp_path) -> None:
+    factory = sessions(tmp_path)
+    with factory() as session:
+        item = report(date(2026, 8, 10), market_path="核心线由3847.09上移至3864.27")
+        item.interpretation_meta_json = '{"defense_lines":{"primary_defense_line":3864.27}}'
+        session.add(item)
+        session.add(daily(date(2026, 8, 11), "3865"))
+        session.commit()
+        rows = recent_defense_line_validations(session)
+    assert rows[0]["defense_line_value"] == 3864.27
+
+
 def test_validation_skips_missing_defense_missing_close_and_uses_newest_report_for_one_trade_day(tmp_path) -> None:
     factory = sessions(tmp_path)
     with factory() as session:

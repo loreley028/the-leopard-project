@@ -89,6 +89,35 @@ def test_blocking_issue_and_published_review_are_explicit(tmp_path) -> None:
             service.resolve(report, issue["issue_key"], "2026-07-27", "admin", source="manual_override")
 
 
+def test_defense_conflict_review_exposes_semantic_options_and_pdf_evidence(tmp_path) -> None:
+    sessions = create_session_factory(f"sqlite:///{tmp_path / 'defense.sqlite3'}")
+    with sessions() as session:
+        report = Report(
+            title="defense", created_by="admin", status="needs_review", interpretation_status="needs_attention",
+            interpretation_meta_json=json.dumps({"quality_status": "blocking_parse_error", "attention_items": [{
+                "kind": "defense_line_conflict", "severity": "blocking", "field": "primary_defense_line",
+                "message": "核心攻防线存在相互冲突的高置信PDF证据，请选择采用的核心线。",
+                "suggested_value": 3878.83,
+                "candidates": [
+                    {"value": 3878.83, "role": "primary", "page": 1, "source_text": "核心成本线由3864.27继续上移至3878.83", "confidence": "high"},
+                    {"value": 3864.27, "role": "primary", "page": 2, "source_text": "核心攻防线为3864.27", "confidence": "high"},
+                ],
+            }]}),
+        )
+        session.add(report); session.commit()
+        issue = ReviewWorkflowService(session).payload(report, 66)["issues"][0]
+        assert issue["severity"] == "required"
+        assert issue["options"] == [3878.83, 3864.27]
+        assert issue["evidence"]["candidates"][0]["page"] == 1
+        assert "不会发布" in issue["evidence"]["impact"]
+        service = ReviewWorkflowService(session)
+        service.resolve(report, issue["issue_key"], 3864.27, "admin", source="manual_override")
+        metadata = json.loads(report.interpretation_meta_json)
+        assert metadata["defense_lines"]["primary_defense_line"] == 3864.27
+        assert metadata["defense_lines"]["conflict"] is False
+        assert metadata["defense_lines"]["manual_resolution"]["selected_primary_defense_line"] == 3864.27
+
+
 def test_legacy_manual_confirmation_is_backfilled_once(tmp_path) -> None:
     sessions = create_session_factory(f"sqlite:///{tmp_path / 'legacy.sqlite3'}")
     with sessions() as session:

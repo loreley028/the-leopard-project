@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import json
+import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -7,7 +10,8 @@ from starlette.testclient import TestClient
 
 from leopard_project.web.app import WebSettings, create_app
 from leopard_project.web.database import create_session_factory
-from leopard_project.web.services import parse_report_text
+from leopard_project.web.models import SectorPathHistoryEntry
+from leopard_project.web.services import extract_layout_text, extract_positioned_pages, extract_text_layer, parse_report_text
 
 
 def pseudo_pdf(text: str) -> bytes:
@@ -57,7 +61,8 @@ def test_v29_0810_contract_is_metadata_not_date_specific() -> None:
     assert fields["candidate_report_date"].isoformat() == "2026-08-10"
     assert metadata["template_version"] == "V2.9"
     assert metadata["history_freeze"]["through"] == "2026-08-09"
-    assert metadata["defense_lines"] == {"primary_defense_line": 3864.27, "secondary_defense_line": 3847.09}
+    assert metadata["defense_lines"]["primary_defense_line"] == 3864.27
+    assert metadata["defense_lines"]["secondary_defense_line"] == 3847.09
     assert metadata["matrix_statistics"] == {"display_rows": None, "active_objects": None}
 
 
@@ -70,7 +75,8 @@ def test_v29_0811_matrix_statistics_contract_is_not_hardcoded() -> None:
     metadata = fields["interpretation_meta"]
     assert fields["candidate_report_date"].isoformat() == "2026-08-11"
     assert metadata["history_freeze"]["through"] == "2026-08-10"
-    assert metadata["defense_lines"] == {"primary_defense_line": 3878.83, "secondary_defense_line": 3864.27}
+    assert metadata["defense_lines"]["primary_defense_line"] == 3878.83
+    assert metadata["defense_lines"]["secondary_defense_line"] == 3864.27
     assert metadata["matrix_statistics"] == {"display_rows": 74, "active_objects": 71}
 
 
@@ -79,6 +85,80 @@ def test_v28_and_v29_version_metadata_are_compatible() -> None:
         fields, *_ = parse_report_text(report_text("2026-08-11", version, "2026-08-10", "3878.83", "3864.27"), version)
         assert fields["interpretation_meta"]["template_version"] == version
         assert fields["interpretation_meta"]["history_freeze"]["through"] == "2026-08-10"
+
+
+def test_v29_semantic_defense_line_moves_are_not_first_number_heuristics() -> None:
+    text = "核心成本线由 3864.27 点继续上移至 3878.83 点。3878.83点成为第一层纪律线，3864.27点退居第二层地板。"
+    fields, *_ = parse_report_text(f"大盘猎豹 2026年8月11日直播总结 V2.9\n{text}", "semantic-line")
+    defense = fields["interpretation_meta"]["defense_lines"]
+    assert defense["primary_defense_line"] == 3878.83
+    assert defense["secondary_defense_line"] == 3864.27
+    assert len(defense["primary_evidence"]) >= 2 and defense["conflict"] is False
+
+
+def test_v29_defense_conflict_has_evidence_and_never_becomes_auto_review_free() -> None:
+    text = "核心线由 3864.27 点上移至 3878.83 点。核心攻防线提高到 3900 点。"
+    fields, *_ = parse_report_text(f"大盘猎豹 2026年8月11日直播总结 V2.9\n{text}", "conflicting-line")
+    attention = fields["interpretation_meta"]["attention_items"]
+    issue = next(item for item in attention if item["kind"] == "defense_line_conflict")
+    assert issue["severity"] == "blocking" and issue["candidates"]
+
+
+def test_real_v29_pdf_layout_has_74_display_rows_71_active_and_66_canonical_rows() -> None:
+    source = Path("/Users/cailei/Downloads/猎豹pef/大盘猎豹8月10日直播总结-V2.9版.pdf")
+    if not source.exists():
+        pytest.skip("user-provided V2.9 acceptance PDF is not present")
+    payload = source.read_bytes()
+    fields, *_ = parse_report_text(
+        extract_text_layer(payload), "real-v29", source.name, extract_layout_text(payload), extract_positioned_pages(payload),
+    )
+    matrix = fields["interpretation_meta"]["pdf_history_matrix"]
+    assert matrix["quality_status"] == "verified_structure"
+    assert (matrix["display_row_count"], matrix["active_object_count"], matrix["row_count"]) == (74, 71, 66)
+    assert all("blank" not in row["statuses"] for row in matrix["rows"])
+
+
+def test_real_v29_uploads_gap_import_then_appends_without_review(automatic_web) -> None:
+    first_pdf = Path("/Users/cailei/Downloads/猎豹pef/大盘猎豹8月10日直播总结-V2.9版.pdf")
+    second_pdf = Path("/Users/cailei/Downloads/猎豹pef/大盘猎豹8月11日直播总结-V2.9版.pdf")
+    if not first_pdf.exists() or not second_pdf.exists():
+        pytest.skip("user-provided V2.9 acceptance PDFs are not present")
+    client, settings = automatic_web
+    first = client.post("/api/v1/admin/reports/interpret", files={"file": (first_pdf.name, first_pdf.read_bytes(), "application/pdf")}).json()
+    second = client.post("/api/v1/admin/reports/interpret", files={"file": (second_pdf.name, second_pdf.read_bytes(), "application/pdf")}).json()
+    assert first["publication"] == second["publication"] == "published"
+    assert first["interpretation"]["review_workflow"]["summary"]["must_handle"] == 0
+    assert second["interpretation"]["review_workflow"]["summary"]["suggested_review"] == 0
+    assert first["interpretation"]["ingestion_summary"]["history_matrix"]["inserted_cells"] == 45 * 66
+    assert second["interpretation"]["ingestion_summary"]["history_matrix"]["inserted_cells"] == 66
+    assert second["interpretation"]["ingestion_summary"]["history_matrix"]["verified_same_cells"] == 45 * 66
+    assert second["interpretation"]["ingestion_summary"]["history_matrix"]["conflicts"] == 0
+    with create_session_factory(settings.database_url)() as session:
+        assert session.query(SectorPathHistoryEntry).count() == 46 * 66
+
+
+def test_v29_fidelity_validator_uses_the_authoritative_history_matrix() -> None:
+    source = Path("/Users/cailei/Downloads/猎豹pef/大盘猎豹8月10日直播总结-V2.9版.pdf")
+    if not source.exists():
+        pytest.skip("user-provided V2.9 acceptance PDF is not present")
+    result = subprocess.run(
+        [
+            sys.executable,
+            "scripts/validate_real_pdf_fidelity.py",
+            "--pdf",
+            str(source),
+        ],
+        env={**__import__("os").environ, "PYTHONPATH": "backend"},
+        capture_output=True,
+        check=False,
+        cwd=Path(__file__).parents[1],
+        text=True,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+    payload = json.loads(result.stdout)
+    assert payload["template_version"] == "V2.9"
+    assert payload["checks"]["assessment_row_count"] is True
+    assert payload["checks"]["all_assessments_verified"] is True
 
 
 def test_final_upload_publishes_automatically_and_duplicate_is_idempotent(automatic_web) -> None:

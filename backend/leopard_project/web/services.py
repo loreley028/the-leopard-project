@@ -315,20 +315,85 @@ def _labelled_int(text: str, labels: tuple[str, ...]) -> int | None:
     return int(match.group(1)) if match else None
 
 
-def _extract_defense_lines(text: str) -> dict[str, float | None]:
-    """Expose labelled report lines as metadata; never fabricate a market quote."""
-    labelled = re.findall(
-        r"(?:核心|主|第一|次|第二|副)?(?:攻防线|防线)[^0-9]{0,24}(\d{3,5}(?:[.]\d+)?)",
-        text,
-    )
-    values: list[float] = []
-    for raw in labelled:
-        value = float(raw)
-        if value > 0 and value not in values:
-            values.append(value)
+def _extract_defense_line_candidates(text: str, layout_text: str = "") -> list[dict[str, Any]]:
+    """Extract semantic defense-line evidence without inferring from bare numbers.
+
+    V2.9 deliberately moves the core line during the narrative.  A labelled
+    value is therefore not enough: ``A 上移至 B`` means B is primary while A
+    is the former/secondary line.  Each candidate retains its evidence so a
+    genuinely conflicting PDF can be reviewed meaningfully.
+    """
+
+    candidates: list[dict[str, Any]] = []
+
+    def add(match: re.Match[str], value_group: int, role: str, confidence: str, section: str) -> None:
+        value = float(match.group(value_group))
+        if value <= 0:
+            return
+        source_text = _compact(match.group(0))
+        page = None
+        if layout_text:
+            position = layout_text.find(source_text)
+            page = _source_page(layout_text, position) if position >= 0 else None
+        candidates.append({
+            "value": value,
+            "role": role,
+            "page": page,
+            "section": section,
+            "source_text": source_text,
+            "confidence": confidence,
+        })
+
+    number = r"(\d{3,5}(?:[.]\d+)?)"
+    # The two values must be recorded separately.  Do not reduce these to the
+    # first or last number in a paragraph.
+    for match in re.finditer(rf"(?:核心(?:攻防线|成本线|线))\s*(?:由)?\s*{number}\s*点?\s*(?:继续)?上移至\s*{number}\s*点?", text):
+        add(match, 2, "primary", "high", "core_line_moved")
+        add(match, 1, "secondary", "high", "core_line_moved")
+    for match in re.finditer(rf"{number}\s*点?\s*(?:成为|作为)第一层(?:纪律线|防线)", text):
+        add(match, 1, "primary", "high", "first_layer")
+    for match in re.finditer(rf"{number}\s*点?[^。；，]{0,24}(?:退居|作为)[^。；，]{0,16}第二层(?:地板|防线)", text):
+        add(match, 1, "secondary", "high", "second_layer")
+    # Explicit labels are useful corroboration, but a movement statement above
+    # remains the authority when it exists.
+    for match in re.finditer(rf"(?:核心|主)(?:攻防线|成本线|线)\s*(?:为|是|提高到|上移至|：)?\s*{number}\s*点?", text):
+        add(match, 1, "primary", "medium", "explicit_core_label")
+    for match in re.finditer(rf"核心攻防线\s*提高到\s*{number}\s*点?", text):
+        add(match, 1, "primary", "high", "explicit_core_label")
+    for match in re.finditer(rf"(?:第二层(?:地板|防线)|次(?:攻防线|防线))\s*(?:为|是|：)?\s*{number}\s*点?", text):
+        add(match, 1, "secondary", "medium", "explicit_secondary_label")
+    return candidates
+
+
+def _extract_defense_lines(text: str, layout_text: str = "") -> dict[str, Any]:
+    candidates = _extract_defense_line_candidates(text, layout_text)
+
+    def choose(role: str) -> tuple[float | None, list[dict[str, Any]], bool]:
+        relevant = [item for item in candidates if item["role"] == role]
+        high = [item for item in relevant if item["confidence"] == "high"]
+        authority = high or relevant
+        values = sorted({item["value"] for item in authority})
+        if not values:
+            return None, relevant, False
+        # Multiple high-confidence values are a real semantic conflict.  The
+        # caller presents their PDF evidence rather than asking for blind OK.
+        if len(values) == 1:
+            return values[0], relevant, False
+        # Preserve a deterministic recommendation for a real review card, but
+        # retain the conflict flag so it can never auto-publish.
+        counts = {value: sum(item["value"] == value for item in authority) for value in values}
+        suggested = max(values, key=lambda value: (counts[value], value))
+        return suggested, relevant, True
+
+    primary, primary_evidence, primary_conflict = choose("primary")
+    secondary, secondary_evidence, secondary_conflict = choose("secondary")
     return {
-        "primary_defense_line": values[0] if values else None,
-        "secondary_defense_line": values[1] if len(values) > 1 else None,
+        "primary_defense_line": primary,
+        "secondary_defense_line": secondary,
+        "candidates": candidates,
+        "conflict": primary_conflict or secondary_conflict,
+        "primary_evidence": primary_evidence,
+        "secondary_evidence": secondary_evidence,
     }
 
 
@@ -730,22 +795,34 @@ def _parse_layout_assessments(layout_text: str) -> list[dict[str, Any]]:
 
 
 def _parse_positioned_history_matrix(positioned_pages: list[dict[str, Any]]) -> dict[str, Any]:
-    dates: list[str] = []
-    rows: dict[str, dict[str, Any]] = {}
+    """Recover V2.9 matrix cells through row/column coordinates.
+
+    The native V2.9 layout has 74 display rows.  Eight of them are either
+    supplemental observation rows or a continuation of an immediately adjacent
+    canonical row.  We retain all 74 for evidence, then normalize only the 66
+    configured report topics for the frozen history ledger.
+    """
     bundle = load_seed_bundle()
+    sector_by_name = {_normalized_sector_token(item.sector_name): item for item in bundle.sectors}
+    registry = json.loads((CONFIG_DIR / "v29_history_matrix_registry_v1.json").read_text(encoding="utf-8"))
+    supplemental = {_normalized_sector_token(item) for item in registry["supplemental_display_rows"]}
+    continuation = {
+        _normalized_sector_token(display): _normalized_sector_token(canonical)
+        for display, canonical in registry.get("continuation_rows", {}).items()
+    }
+    display_rows: list[dict[str, Any]] = []
+    dates: list[str] = []
+
     for page in positioned_pages:
         page_number = int(page["page"])
         if page_number not in {3, 4, 5}:
             continue
         items = page["items"]
+        groups = _positioned_groups(items)
         header_dates: list[tuple[float, str]] = []
         sector_x: float | None = None
-        for group in _positioned_groups(items).values():
-            group_dates = [
-                (float(item["x"]), re.sub(r"\s+", "", item["text"]))
-                for item in group
-                if re.fullmatch(r"\d{1,2}\s*/\s*\d{2}", item["text"])
-            ]
+        for group in groups.values():
+            group_dates = [(float(item["x"]), re.sub(r"\s+", "", item["text"])) for item in group if re.fullmatch(r"\d{1,2}\s*/\s*\d{2}", item["text"])]
             if len(group_dates) >= 20:
                 header_dates = sorted(group_dates)
                 sector_item = next((item for item in group if item["text"] == "板块"), None)
@@ -758,42 +835,106 @@ def _parse_positioned_history_matrix(positioned_pages: list[dict[str, Any]]) -> 
             dates = page_dates
         first_date_x = header_dates[0][0]
         sector_boundary = (sector_x + first_date_x) / 2
-        centers = _positioned_sector_centers(items, sector_boundary)
-        for index, (center_y, sector) in enumerate(centers):
-            if index:
-                upper_y = (centers[index - 1][0] + center_y) / 2
-            elif index + 1 < len(centers):
-                upper_y = center_y + (center_y - centers[index + 1][0]) / 2
-            else:
-                upper_y = center_y + 12
-            if index + 1 < len(centers):
-                lower_y = (center_y + centers[index + 1][0]) / 2
-            elif index:
-                lower_y = center_y - (centers[index - 1][0] - center_y) / 2
-            else:
-                lower_y = center_y - 12
-            status_items = [
-                item for item in items
-                if lower_y < float(item["y"]) <= upper_y
-                and float(item["x"]) >= sector_boundary
-                and item["text"] in STATUS_TO_CODE
-            ]
-            status_items.sort(key=lambda item: float(item["x"]))
-            if len(status_items) != len(page_dates):
+        date_xs = [x for x, _ in header_dates]
+        y_rows: list[tuple[float, str]] = []
+        for y, group in sorted(groups.items(), reverse=True):
+            label = _compact("".join(item["text"] for item in group if float(item["x"]) < sector_boundary))
+            token = _normalized_sector_token(label)
+            if token in sector_by_name or token in supplemental:
+                y_rows.append((float(y), label))
+
+        for center_y, label in y_rows:
+            tokens: list[tuple[float, str]] = []
+            for item in items:
+                if abs(float(item["y"]) - center_y) <= 1.5 and item["text"] in STATUS_TO_CODE:
+                    tokens.append((float(item["x"]), STATUS_TO_CODE[item["text"]]))
+            tokens.sort()
+            statuses = ["blank"] * len(page_dates)
+            for x, status in tokens:
+                column = min(range(len(date_xs)), key=lambda index: abs(date_xs[index] - x))
+                if abs(date_xs[column] - x) <= 12:
+                    statuses[column] = status
+            # A display row is legitimate even when all matrix cells are
+            # blank; only group labels were filtered out above.
+            if not tokens:
                 continue
-            rows[sector.sector_key] = {
-                "sector_key": sector.sector_key,
+            token = _normalized_sector_token(label)
+            canonical = sector_by_name.get(token) or sector_by_name.get(continuation.get(token, ""))
+            display_rows.append({
+                "display_name": label,
+                "canonical_sector_key": canonical.sector_key if canonical else None,
+                "source_page": page_number,
+                "source_y": center_y,
+                "statuses": statuses,
+                "active": any(status != "blank" for status in statuses),
+            })
+
+    # Canonical display rows take precedence over supplemental observations.
+    # Continuation rows are merged by their actual x-derived BLANK gaps.  This
+    # is what preserves a V2.9 page break without copying a status across it.
+    normalized: dict[str, dict[str, Any]] = {}
+    for display in display_rows:
+        sector_key = display["canonical_sector_key"]
+        if sector_key is None:
+            continue
+        sector = next(item for item in bundle.sectors if item.sector_key == sector_key)
+        current = normalized.get(sector_key)
+        if current is None:
+            normalized[sector_key] = {
+                "sector_key": sector_key,
                 "sector_name": sector.sector_name,
                 "group_name": sector.category_level_1,
-                "source_page": page_number,
-                "statuses": [STATUS_TO_CODE[item["text"]] for item in status_items],
+                "source_page": display["source_page"],
+                "statuses": list(display["statuses"]),
+                "source_display_rows": [display["display_name"]],
             }
-    ordered = [rows[item.sector_key] for item in sorted(bundle.sectors, key=lambda item: item.overall_order) if item.sector_key in rows]
+            continue
+        current["source_display_rows"].append(display["display_name"])
+        # A canonical table row wins over a related supplemental observation.
+        # For the one intentionally split canonical row, only fill its BLANK
+        # tail; an overlapping value remains evidence of a bad PDF, not a
+        # silent rewrite.
+        is_supplemental = _normalized_sector_token(display["display_name"]) in supplemental
+        if is_supplemental:
+            for index, status in enumerate(display["statuses"]):
+                if status != "blank" and current["statuses"][index] == "blank":
+                    current["statuses"][index] = status
+            continue
+        for index, status in enumerate(display["statuses"]):
+            if status == "blank":
+                continue
+            if current["statuses"][index] == "blank":
+                current["statuses"][index] = status
+            elif current["statuses"][index] != status:
+                current.setdefault("merge_conflicts", []).append({"column": index, "left": current["statuses"][index], "right": status})
+
+    ordered = [normalized[item.sector_key] for item in sorted(bundle.sectors, key=lambda item: item.overall_order) if item.sector_key in normalized]
+    # A continuation row is a display row, but not an additional active
+    # business object. The five explicit supplemental observations are active
+    # alongside the 66 configured report topics: 66 + 5 = 71.
+    active_supplemental = {_normalized_sector_token(item) for item in registry["active_supplemental_display_rows"]}
+    active_objects = len(ordered) + sum(
+        1 for item in display_rows
+        if _normalized_sector_token(item["display_name"]) in active_supplemental and item["active"]
+    )
+    expected_display = int(registry["display_row_count"])
+    expected_active = int(registry["active_object_count"])
+    structural_ok = (
+        len(display_rows) == expected_display
+        and active_objects == expected_active
+        and len(ordered) == len(bundle.sectors)
+        and len(dates) >= 20
+        and not any(item.get("merge_conflicts") for item in ordered)
+    )
     return {
         "dates": dates,
         "rows": ordered,
+        "display_rows": display_rows,
+        "display_row_count": len(display_rows),
+        "active_object_count": active_objects,
+        "canonical_row_count": len(ordered),
         "row_count": len(ordered),
-        "quality_status": "verified_structure" if len(ordered) == 66 and len(dates) >= 20 else "needs_attention",
+        "quality_status": "verified_structure" if structural_ok else "needs_attention",
     }
 
 
@@ -1090,7 +1231,9 @@ def parse_report_text(
         and len(history_matrix.get("dates", [])) >= 35
         and "只新增7/27" in compact_document
     )
-    version_match = re.search(r"\bV\s*(\d+(?:[.]\d+)*)\b", text, re.I)
+    # Chinese version suffixes (for example ``V2.9版``) do not create an ASCII
+    # word boundary after the minor number.
+    version_match = re.search(r"V\s*(\d+(?:[.]\d+)*)", text, re.I)
     template_version = f"V{version_match.group(1)}" if version_match else ("V2.4" if v24_signature else "unknown")
     if template_version == "unknown" and "板块观点详细汇总" in text:
         attention.append({"kind": "unknown_template", "severity": "warning", "message": "未识别规范版本文字；已按结构兼容模式解析"})
@@ -1114,17 +1257,23 @@ def parse_report_text(
             "message": "板块观点详细汇总无法可靠恢复，已阻止发布",
             "validation_flags": ["no_reliable_assessment_rows"],
         })
-    for assessment in assessments:
-        if assessment.get("quality_status") == "verified_structure":
-            continue
-        attention.append({
-            "kind": "assessment_parse_quality",
-            "severity": "blocking" if assessment.get("quality_status") == "blocking_parse_error" else "warning",
-            "message": f"{assessment['sector_name']}表格行存在解析异常，需要核对原PDF",
-            "sector_key": assessment["sector_key"],
-            "source_page": assessment.get("source_page"),
-            "validation_flags": assessment.get("validation_flags", []),
-        })
+    # The V2.9 authoritative history matrix carries the status contract. The
+    # prose assessment table remains useful evidence, but its wrapped cells are
+    # not a reason to ask an administrator to blindly confirm a deterministic
+    # matrix status. Keep such parse diagnostics in metadata only. If the
+    # matrix is not verified, the existing fail-closed review path remains.
+    if history_matrix.get("quality_status") != "verified_structure":
+        for assessment in assessments:
+            if assessment.get("quality_status") == "verified_structure":
+                continue
+            attention.append({
+                "kind": "assessment_parse_quality",
+                "severity": "blocking" if assessment.get("quality_status") == "blocking_parse_error" else "warning",
+                "message": f"{assessment['sector_name']}表格行存在解析异常，需要核对原PDF",
+                "sector_key": assessment["sector_key"],
+                "source_page": assessment.get("source_page"),
+                "validation_flags": assessment.get("validation_flags", []),
+            })
     history_section_present = "板块历史路径图" in text
     if history_section_present and history_matrix.get("quality_status") != "verified_structure":
         recovered_rows = history_matrix.get("row_count", 0)
@@ -1133,6 +1282,26 @@ def parse_report_text(
             "severity": "warning" if recovered_rows >= 65 else "blocking",
             "message": f"历史路径矩阵仅可靠恢复{recovered_rows}/66个板块",
             "validation_flags": ["history_matrix_incomplete"],
+        })
+    defense_lines = _extract_defense_lines(text, layout_text)
+    if template_version == "V2.9" and defense_lines["conflict"]:
+        attention.append({
+            "kind": "defense_line_conflict",
+            "severity": "blocking",
+            "field": "primary_defense_line",
+            "message": "核心攻防线存在相互冲突的高置信PDF证据，请选择采用的核心线。",
+            "suggested_value": defense_lines["primary_defense_line"],
+            "candidates": defense_lines["candidates"],
+            "source_text_excerpt": "；".join(item["source_text"] for item in defense_lines["candidates"] if item["role"] == "primary")[:900],
+        })
+    elif template_version == "V2.9" and defense_lines["primary_defense_line"] is None:
+        attention.append({
+            "kind": "defense_line_missing",
+            "severity": "blocking",
+            "field": "primary_defense_line",
+            "message": "无法确定核心攻防线；系统只保留了候选与PDF原文，不会猜测或填零。",
+            "candidates": defense_lines["candidates"],
+            "source_text_excerpt": "；".join(item["source_text"] for item in defense_lines["candidates"])[:900],
         })
     parse_quality_status = (
         "blocking_parse_error"
@@ -1179,7 +1348,7 @@ def parse_report_text(
                 "display_rows": _labelled_int(text, ("display_rows", "显示行数", "展示行数")),
                 "active_objects": _labelled_int(text, ("active_objects", "有效对象", "活动对象")),
             },
-            "defense_lines": _extract_defense_lines(text),
+            "defense_lines": defense_lines,
             "quality_status": parse_quality_status,
             "quality_summary": {
                 "report_structure": parse_quality_status,
@@ -1454,6 +1623,25 @@ class ReportService:
             result = sync_path_history(self.repo.session, report, commit=False)
             if result.difference_count:
                 raise WebDomainError("frozen_history_conflict", "历史路径冲突；系统未自动发布", 409)
+            metadata = json.loads(report.interpretation_meta_json or "{}")
+            matrix = metadata.get("pdf_history_matrix") or {}
+            metadata["ingestion_summary"] = {
+                "publication": "published",
+                "report_date": report.report_date.isoformat() if report.report_date else None,
+                "template_version": report.template_version,
+                "defense_lines": metadata.get("defense_lines", {}),
+                "history_matrix": {
+                    "display_rows": matrix.get("display_row_count", matrix.get("row_count", 0)),
+                    "active_objects": matrix.get("active_object_count", 0),
+                    "canonical_rows": matrix.get("row_count", 0),
+                    "new_dates": [report.report_date.isoformat()] if report.report_date else [],
+                    "inserted_cells": result.inserted_count,
+                    "verified_same_cells": result.unchanged_count,
+                    "conflicts": result.difference_count,
+                },
+                "manual_review": "not_required",
+            }
+            report.interpretation_meta_json = json.dumps(metadata, ensure_ascii=False)
             self._promote_staged_pdf(report)
             self.repo.commit()
         except Exception:

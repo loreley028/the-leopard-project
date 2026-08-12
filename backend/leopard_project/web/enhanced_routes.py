@@ -109,7 +109,12 @@ def register_enhanced_routes(
             payload["active_holding_interval"] = service.holding_interval_for_sector(report, item.sector_key)
             assessments.append(payload)
         paths = [path_entry_payload(item) for item in service.path_entries(report.id)]
-        current_market_anchor = live_market_anchor.observe(market_path=report.market_path, core_view=report.core_view)
+        report_meta = json.loads(report.interpretation_meta_json or "{}")
+        current_market_anchor = live_market_anchor.observe(
+            market_path=report.market_path,
+            core_view=report.core_view,
+            parsed_primary=(report_meta.get("defense_lines") or {}).get("primary_defense_line"),
+        )
         groups: dict[str, list[dict]] = {}
         for item in assessments:
             groups.setdefault(item["current_path_status"], []).append(item)

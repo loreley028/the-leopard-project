@@ -75,8 +75,25 @@ def _structured_defense_line(value: str, source: str) -> DefenseLine | None:
     )
 
 
-def structure_leopard_defense_line(market_path: str, core_view: str) -> DefenseLine:
-    """Prefer a structured market path; safely fall back to the core view."""
+def structure_leopard_defense_line(
+    market_path: str,
+    core_view: str,
+    parsed_primary: object | None = None,
+) -> DefenseLine:
+    """Prefer a parser-verified primary line; safely fall back to prose."""
+    try:
+        primary = Decimal(str(parsed_primary)) if parsed_primary is not None else None
+    except Exception:
+        primary = None
+    if primary is not None and primary.is_finite() and primary > 0:
+        sentences = _sentences(f"{market_path}。{core_view}")
+        return DefenseLine(
+            primary,
+            "parsed_defense_line",
+            next((item for item in sentences if re.search(r"站上|收复|突破", item)), None),
+            next((item for item in sentences if re.search(r"跌破|失守|以下|下方", item)), None),
+            next((item for item in sentences if re.search(r"时间|宽度|量能|成交量|资金|持续", item)), None),
+        )
     return (
         _structured_defense_line(market_path, "market_path")
         or _structured_defense_line(core_view, "core_view")
@@ -182,8 +199,8 @@ class LiveShanghaiMarketAnchorService:
         )
         return result
 
-    def observe(self, *, market_path: str, core_view: str) -> dict:
-        defense = structure_leopard_defense_line(market_path, core_view)
+    def observe(self, *, market_path: str, core_view: str, parsed_primary: object | None = None) -> dict:
+        defense = structure_leopard_defense_line(market_path, core_view, parsed_primary)
         quote, cache_hit = self.cache.get_or_fetch(self._fetch_quote)
         return {
             **quote,

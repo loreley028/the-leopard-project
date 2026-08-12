@@ -105,6 +105,10 @@ def sync_path_history(session: Session, report: Report, *, commit: bool = True) 
     for sector_key, sector in valid_sectors.items():
         statuses = by_sector[sector_key]["statuses"]
         for path_date, status in zip(resolved_dates, statuses):
+            # BLANK is a structural empty cell in the authoritative PDF. It
+            # does not mean ``未提`` and must not manufacture a ledger state.
+            if status == "blank":
+                continue
             if status not in valid_statuses:
                 differences.append({"sector_key": sector_key, "report_date": path_date.isoformat(), "reason": "unknown_status", "new_status": status})
                 continue
@@ -148,7 +152,7 @@ def sync_path_history(session: Session, report: Report, *, commit: bool = True) 
             inserted += 1
 
     difference_count = len(differences)
-    status = "initialized" if not existing else "appended" if inserted else "unchanged"
+    status = "initialized" if not existing else "appended" if inserted else "verified_same"
     if difference_count:
         status = "needs_attention" if difference_count <= 10 else "blocking_difference"
     audit = session.scalar(select(PathHistoryImport).where(PathHistoryImport.source_report_id == report.id))
@@ -175,7 +179,7 @@ def ensure_latest_path_history(session: Session, through: date | None = None) ->
     if through is not None:
         query = query.where(Report.report_date <= through)
     reports = list(session.scalars(query.order_by(desc(Report.report_date))))
-    source = next((item for item in reports if len((json.loads(item.interpretation_meta_json or "{}").get("pdf_history_matrix") or {}).get("rows") or []) == 66), None)
+    source = next((item for item in reports if (json.loads(item.interpretation_meta_json or "{}").get("pdf_history_matrix") or {}).get("quality_status") == "verified_structure"), None)
     return sync_path_history(session, source) if source else None
 
 
@@ -198,6 +202,8 @@ def audit_frozen_path_history(session: Session, report: Report) -> list[dict[str
     differences: list[dict[str, Any]] = []
     for row in rows:
         for path_date, status in zip(resolved_dates, row.get("statuses") or []):
+            if status == "blank":
+                continue
             old = existing.get((row.get("sector_key"), path_date))
             if old is not None and old != status:
                 differences.append({

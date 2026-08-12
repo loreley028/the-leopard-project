@@ -19,18 +19,30 @@ def main() -> int:
     meta = fields["interpretation_meta"]
     records = {item["sector_name"]: item for item in meta["assessment_records"]}
     dates = meta["pdf_history_matrix"].get("dates", [])
-    expected_assessments = 29 if meta["template_version"] == "V2.4" else 33
-    expected_dates = 35 if meta["template_version"] == "V2.4" else 20
+    template_version = meta["template_version"]
+    # V2.9 makes the native 66-topic history matrix authoritative.  Its
+    # short prose assessment table is not a 33-row replacement for V2.3,
+    # so applying that legacy row-count gate would reject a sound upload.
+    expected_assessments = 29 if template_version == "V2.4" else 33 if template_version != "V2.9" else None
+    expected_dates = 35 if template_version == "V2.4" else 20
     status_counts = {
         status: sum(item["path_status"] == status for item in records.values())
         for status in ("hold", "turn_hold", "strong_watch", "watch", "weak_watch")
     }
     checks = {
         "report_structure_verified": meta["quality_status"] == "verified_structure",
-        "assessment_row_count": len(records) == expected_assessments,
+        "assessment_row_count": (
+            len(records) == expected_assessments
+            if expected_assessments is not None
+            else True
+        ),
         "history_rows_66": meta["quality_summary"]["history_matrix_rows"] == 66,
         "history_date_count": len(dates) >= expected_dates,
-        "all_assessments_verified": all(item["quality_status"] == "verified_structure" for item in records.values()),
+        "all_assessments_verified": (
+            all(item["quality_status"] == "verified_structure" for item in records.values())
+            if template_version != "V2.9"
+            else meta["pdf_history_matrix"].get("quality_status") == "verified_structure"
+        ),
         "no_blocking_attention": not any(item.get("severity") == "blocking" for item in meta["attention_items"]),
         "freeze_append_contract": (
             meta["history_freeze"].get("through") == "2026-07-26"

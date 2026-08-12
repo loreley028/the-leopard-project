@@ -384,6 +384,7 @@ class EnhancedReportService:
             "field_provenance": metadata.get("field_provenance", {}),
             "quality_status": metadata.get("quality_status", "needs_attention"),
             "quality_summary": metadata.get("quality_summary", {}),
+            "ingestion_summary": metadata.get("ingestion_summary"),
             "attention_items": metadata.get("attention_items", []),
             "mapping_summary": metadata.get("mapping_summary", {}),
             "status_counts": counts,

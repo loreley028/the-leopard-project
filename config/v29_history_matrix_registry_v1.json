@@ -1,0 +1,29 @@
+{
+  "schema_version": "1.0.0",
+  "template_version": "V2.9",
+  "display_row_count": 74,
+  "active_object_count": 71,
+  "description": "V2.9 board-history layout contract. The 66 configured report topics are canonical persistence identities. The supplemental display rows are native PDF rows retained for traceability and must never be guessed into a canonical topic.",
+  "supplemental_display_rows": [
+    "计算机设备",
+    "创新药",
+    "医药生物",
+    "电池",
+    "锂电池",
+    "光伏",
+    "储能",
+    "核电"
+  ],
+  "active_supplemental_display_rows": [
+    "电池",
+    "锂电池",
+    "光伏",
+    "储能",
+    "核电"
+  ],
+  "continuation_rows": {
+    "创新药": "创新药/医药",
+    "电池": "电池/锂电池",
+    "光伏": "光伏/储能"
+  }
+}

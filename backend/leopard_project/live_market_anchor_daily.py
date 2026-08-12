@@ -8,6 +8,7 @@ explicit defense line.  It has no scheduler, startup hook, or report write.
 from __future__ import annotations
 
 from dataclasses import dataclass
+import json
 from datetime import date, datetime, time, timedelta
 from decimal import Decimal, InvalidOperation
 from typing import Callable
@@ -187,7 +188,12 @@ def recent_defense_line_validations(session: Session, *, limit: int = 10) -> lis
     seen_trade_days: set[date] = set()
     for report in reports:
         assert report.report_date is not None
-        defense = structure_leopard_defense_line(report.market_path, report.core_view)
+        metadata = json.loads(report.interpretation_meta_json or "{}")
+        defense = structure_leopard_defense_line(
+            report.market_path,
+            report.core_view,
+            (metadata.get("defense_lines") or {}).get("primary_defense_line"),
+        )
         if defense.value is None:
             continue
         trading_date = next_controlled_cn_a_trading_day(report.report_date)

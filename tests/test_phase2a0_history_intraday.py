@@ -135,6 +135,31 @@ def test_full_pdf_restores_34_periods_independent_of_two_detailed_reports(tmp_pa
         assert len(broad["recent_path_entries"]) == 34
 
 
+def test_path_history_preserves_blank_as_no_insert_and_rejects_real_conflicts(tmp_path: Path) -> None:
+    sessions = create_session_factory(f"sqlite:///{tmp_path / 'blank-history.sqlite3'}")
+    bundle = load_seed_bundle()
+    with sessions() as session:
+        report = add_report(session, date(2026, 7, 26), full_matrix=False)
+        metadata = {"pdf_history_matrix": {"quality_status": "verified_structure", "dates": ["7/23", "7/26"], "rows": [
+            {"sector_key": sector.sector_key, "sector_name": sector.sector_name, "statuses": ["hold", "blank"]}
+            for sector in bundle.sectors
+        ]}}
+        report.interpretation_meta_json = json.dumps(metadata)
+        session.commit()
+        initial = sync_path_history(session, report)
+        assert initial.inserted_count == 66
+        assert session.scalar(select(func.count()).select_from(SectorPathHistoryEntry)) == 66
+        # Same authoritative cells become verified_same, while a changed cell
+        # is reported and is never overwritten.
+        metadata["pdf_history_matrix"]["rows"][0]["statuses"][0] = "avoid"
+        report.interpretation_meta_json = json.dumps(metadata)
+        session.commit()
+        conflict = sync_path_history(session, report)
+        assert conflict.difference_count == 1
+        persisted = session.scalar(select(SectorPathHistoryEntry).where(SectorPathHistoryEntry.sector_key == bundle.sectors[0].sector_key))
+        assert persisted and persisted.path_status == "hold"
+
+
 def daily_bar(sector_key: str, day: date, close: Decimal = Decimal("101")) -> DailyBar:
     provider = "synthetic_intraday_provider"
     provider_symbol = f"native-{sector_key}"

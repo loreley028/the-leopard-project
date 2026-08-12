@@ -60,6 +60,11 @@ def test_ambiguous_numbers_are_not_guessed() -> None:
     assert result.value is None and result.source is None
 
 
+def test_parser_verified_defense_line_is_preferred_over_ambiguous_narrative() -> None:
+    result = structure_leopard_defense_line("核心线由3847.09上移至3864.27", "", 3864.27)
+    assert (float(result.value), result.source) == (3864.27, "parsed_defense_line")
+
+
 def test_distance_and_objective_position_are_calculated_in_read_model() -> None:
     calls: list[str] = []
     above = _service(_record(), calls).observe(market_path="3844点以下继续防守", core_view="")

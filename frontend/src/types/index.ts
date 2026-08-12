@@ -92,6 +92,14 @@ export interface Interpretation {
   ocr_used: boolean;
   quality_status: "verified_structure" | "needs_attention" | "blocking_parse_error";
   quality_summary: Record<string, string | number>;
+  ingestion_summary?: {
+    publication: string;
+    report_date: string | null;
+    template_version: string;
+    defense_lines: { primary_defense_line?: number | null; secondary_defense_line?: number | null };
+    history_matrix: { display_rows: number; active_objects: number; canonical_rows: number; new_dates: string[]; inserted_cells: number; verified_same_cells: number; conflicts: number };
+    manual_review: string;
+  } | null;
   pdf_history_matrix: { dates: string[]; rows: Array<{ sector_key: string; sector_name: string; statuses: string[] }>; row_count?: number };
   review_workflow: ReviewWorkflow;
 }
@@ -106,7 +114,7 @@ export interface ReviewIssue {
   original_value: unknown;
   suggested_value: unknown;
   options: string[];
-  evidence: { page?: number | null; excerpt?: string | null; source_reference?: string; extraction_method?: string; confidence?: string; technical_codes?: string[] };
+  evidence: { page?: number | null; excerpt?: string | null; source_reference?: string; extraction_method?: string; confidence?: string; technical_codes?: string[]; candidates?: Array<{ value: number; role: string; page?: number | null; section?: string; source_text: string; confidence?: string }>; current_database_value?: unknown; impact?: string };
   resolved: boolean;
   final_value: unknown;
   resolution_source: "accepted_suggestion" | "manual_override" | "bulk_accept" | null;

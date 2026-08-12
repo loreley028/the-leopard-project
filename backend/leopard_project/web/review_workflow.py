@@ -64,7 +64,7 @@ class ReviewWorkflowService:
                     issue.explanation = attention.get("message") or issue.explanation
                     issue.evidence_json = _json(self._evidence(attention, assessment))
                 continue
-            options = list(path_statuses()) if assessment else [suggested] if suggested is not None else []
+            options = list(path_statuses()) if assessment else self._options(attention, suggested)
             issue = ReportReviewIssue(
                 report_id=report.id,
                 issue_key=key,
@@ -183,6 +183,28 @@ class ReviewWorkflowService:
             except ValueError as exc:
                 raise WebDomainError("invalid_report_date", "报告日期格式无效", 422) from exc
 
+        metadata = json.loads(report.interpretation_meta_json or "{}")
+        if issue.issue_type == "defense_line_conflict":
+            try:
+                selected_line = float(final_value)
+            except (TypeError, ValueError) as exc:
+                raise WebDomainError("invalid_defense_line", "核心攻防线必须是有效数值", 422) from exc
+            allowed_lines: set[float] = set()
+            for item in _value(issue.options_json) or []:
+                try:
+                    allowed_lines.add(float(item))
+                except (TypeError, ValueError):
+                    continue
+            if selected_line not in allowed_lines:
+                raise WebDomainError("invalid_defense_line", "只能选择PDF证据中列出的核心攻防线", 422)
+            defense = metadata.setdefault("defense_lines", {})
+            defense["primary_defense_line"] = selected_line
+            defense["conflict"] = False
+            defense["manual_resolution"] = {
+                "selected_primary_defense_line": selected_line,
+                "resolution_source": source,
+            }
+
         now = datetime.now(timezone.utc)
         issue.final_value_json = encoded
         issue.resolution_source = source
@@ -190,7 +212,6 @@ class ReviewWorkflowService:
         issue.resolved_by = actor
         issue.optional_note = note
         issue.updated_at = now
-        metadata = json.loads(report.interpretation_meta_json or "{}")
         metadata["attention_items"] = [
             item for item in metadata.get("attention_items", [])
             if _issue_key(item) != issue.issue_key
@@ -269,13 +290,35 @@ class ReviewWorkflowService:
 
     @staticmethod
     def _subject_label(item: dict[str, Any]) -> str:
-        labels = {"report_date": "报告日期", "history_rewrite": "历史路径", "unmapped_alias": "板块名称"}
+        labels = {
+            "report_date": "报告日期", "history_rewrite": "历史路径", "unmapped_alias": "板块名称",
+            "defense_line_conflict": "核心攻防线", "defense_line_missing": "核心攻防线",
+        }
         return labels.get(str(item.get("kind")), "报告内容")
+
+    @staticmethod
+    def _options(item: dict[str, Any], suggested: Any) -> list[Any]:
+        values: list[Any] = []
+        if suggested is not None:
+            values.append(suggested)
+        for candidate in item.get("candidates", []):
+            value = candidate.get("value")
+            if value is not None and value not in values:
+                values.append(value)
+        return values
 
     @staticmethod
     def _evidence(item: dict[str, Any], assessment: SectorAssessment | None) -> dict[str, Any]:
         if assessment is None:
-            return {"page": item.get("source_page"), "excerpt": item.get("source_text_excerpt") or item.get("message"), "technical_codes": item.get("validation_flags") or []}
+            candidates = item.get("candidates") or []
+            return {
+                "page": item.get("source_page") or (candidates[0].get("page") if candidates else None),
+                "excerpt": item.get("source_text_excerpt") or item.get("message"),
+                "candidates": candidates,
+                "current_database_value": item.get("current_database_value"),
+                "impact": item.get("impact") or "未确认前不会发布，也不会覆盖既有历史。",
+                "technical_codes": item.get("validation_flags") or [],
+            }
         return {
             "page": assessment.source_page,
             "excerpt": assessment.source_text_excerpt or assessment.source_text_reference,

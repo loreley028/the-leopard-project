@@ -14,6 +14,9 @@ const STATUS_LABELS: Record<string, string> = {
 };
 
 const valueLabel = (value: unknown) => typeof value === "string" ? (STATUS_LABELS[value] ?? value) : String(value ?? "未识别");
+const actionLabel = (issue: ReviewIssue, value: unknown) => issue.issue_type === "defense_line_conflict"
+  ? `采用${valueLabel(value)}为核心攻防线`
+  : `接受“${valueLabel(value)}”`;
 const resolvedTime = (value: string | null) => value ? new Intl.DateTimeFormat("zh-CN", {
   timeZone: "Asia/Shanghai", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit",
 }).format(new Date(value)) : "—";
@@ -40,12 +43,12 @@ function ReviewIssueCard({ issue, report, onSaved }: { issue: ReviewIssue; repor
       <div><dt>{issue.resolved ? "最终采用" : "系统建议"}</dt><dd><strong>{valueLabel(issue.resolved ? issue.final_value : issue.suggested_value)}</strong></dd></div>
     </dl>
     {issue.resolved ? <div className="resolved-note"><strong>确认记录已保留</strong><span>{issue.resolution_source === "manual_override" ? "人工选择" : issue.resolution_source === "bulk_accept" ? "批量接受建议" : "接受系统建议"} · {resolvedTime(issue.resolved_at)} · {issue.resolved_by}</span>{report.status !== "published" && <button type="button" onClick={() => setChoice(String(issue.final_value ?? issue.suggested_value ?? ""))}>重新编辑</button>}</div> : <div className="review-actions">
-      <IslandButton disabled={busy} onClick={() => void save(issue.suggested_value, "accepted_suggestion")}>接受“{valueLabel(issue.suggested_value)}”<small>建议</small></IslandButton>
+      <IslandButton disabled={busy} onClick={() => void save(issue.suggested_value, "accepted_suggestion")}>{actionLabel(issue, issue.suggested_value)}<small>建议</small></IslandButton>
       <label>改为<select value={choice} onChange={event => setChoice(event.target.value)}>{issue.options.map(option => <option key={option} value={option}>{valueLabel(option)}</option>)}</select></label>
       <IslandButton className="secondary" disabled={busy || choice === String(issue.suggested_value ?? "")} onClick={() => void save(choice, "manual_override")}>保存其他选择</IslandButton>
     </div>}
     <button className="evidence-toggle" type="button" aria-expanded={showEvidence} onClick={() => setShowEvidence(value => !value)}>{showEvidence ? "收起PDF原文" : "查看PDF原文"}</button>
-    {showEvidence && <div className="review-evidence"><div><h4>PDF证据</h4><p>{issue.evidence.excerpt || "系统未能定位更具体的原文片段。"}</p><p className="muted">当前系统识别：{valueLabel(issue.original_value)}</p></div>{issue.evidence.page && <PdfPagePreview reportId={report.id} initialPage={issue.evidence.page} />}</div>}
+    {showEvidence && <div className="review-evidence"><div><h4>PDF证据</h4><p>{issue.evidence.excerpt || "系统未能定位更具体的原文片段。"}</p>{issue.evidence.candidates?.map((candidate, index) => <p key={`${candidate.value}-${index}`}><strong>{candidate.role === "primary" ? "核心线候选" : "第二层候选"} {candidate.value}</strong>：第{candidate.page ?? "—"}页「{candidate.source_text}」</p>)}{issue.evidence.current_database_value !== undefined && <p>数据库当前值：{valueLabel(issue.evidence.current_database_value)}</p>}<p>会改变什么：{issue.evidence.impact ?? "采用值将用于本报告的大盘锚点与后续攻防验证。"}</p></div>{issue.evidence.page && <PdfPagePreview reportId={report.id} initialPage={issue.evidence.page} />}</div>}
     <details className="technical-details"><summary>查看技术详情</summary><dl><div><dt>页码</dt><dd>{issue.evidence.page ?? "未定位"}</dd></div><div><dt>解析方式</dt><dd>{issue.evidence.extraction_method ?? "本地规则"}</dd></div><div><dt>置信度</dt><dd>{issue.evidence.confidence ?? "未单列"}</dd></div><div><dt>异常代码</dt><dd>{issue.evidence.technical_codes?.join("、") || "无"}</dd></div></dl></details>
   </article>;
 }
@@ -73,6 +76,7 @@ export function AdminInterpretationPage() {
 
   if (!report || !interpretation) return <p role="status">{message || "正在读取解读结果…"}</p>;
   const workflow = interpretation.review_workflow;
+  const ingestion = interpretation.ingestion_summary;
   const unresolved = workflow.issues.filter(item => !item.resolved);
   const resolved = workflow.issues.filter(item => item.resolved);
   const lowDate = interpretation.report_date_confidence === "low" && !interpretation.report_date_confirmed_by_user;
@@ -99,6 +103,16 @@ export function AdminInterpretationPage() {
     <section className="review-primary-action" aria-live="polite">
       {workflow.workflow_status === "published" ? <><strong>全部疑问已处理，报告已发布</strong><Link to={`/reports/${report.id}`}>查看已发布报告</Link></> : workflow.summary.must_handle > 0 ? <><strong>还需处理 {workflow.summary.must_handle} 项</strong><a href="#review-issues">处理剩余问题</a></> : workflow.summary.suggested_review > 0 ? <><strong>系统已给出 {workflow.summary.suggested_review} 项建议</strong><IslandButton onClick={() => setShowBulkConfirm(true)}>接受全部系统建议</IslandButton><a href="#review-issues">逐项检查</a></> : <><strong>全部疑问已处理，报告可以发布</strong><IslandButton disabled={busy || lowDate} onClick={() => void publish()}>确认并发布</IslandButton></>}
     </section>
+    {ingestion && workflow.workflow_status === "published" && <section className="ingestion-summary"><IslandCard title="本次上传结果">
+      <p><strong>已发布：{ingestion.report_date ?? "—"}</strong> 版本：{ingestion.template_version}</p>
+      <dl className="review-decision-summary">
+        <div><dt>核心攻防线</dt><dd>{ingestion.defense_lines.primary_defense_line ?? "—"}</dd></div>
+        <div><dt>第二层</dt><dd>{ingestion.defense_lines.secondary_defense_line ?? "—"}</dd></div>
+        <div><dt>历史矩阵</dt><dd>{ingestion.history_matrix.display_rows}行 / {ingestion.history_matrix.active_objects}有效</dd></div>
+        <div><dt>历史写入</dt><dd>新增 {ingestion.history_matrix.inserted_cells}；一致 {ingestion.history_matrix.verified_same_cells}；冲突 {ingestion.history_matrix.conflicts}</dd></div>
+      </dl>
+      <p className="quality-success">人工确认：无需确认</p>
+    </IslandCard></section>}
     {showBulkConfirm && <div className="bulk-confirm" role="dialog" aria-modal="true" aria-labelledby="bulk-confirm-title"><h2 id="bulk-confirm-title">接受全部系统建议？</h2><p>将采用系统建议处理 {workflow.summary.suggested_review} 项提醒，不会修改已确认项目。</p><div className="form-actions"><IslandButton disabled={busy} onClick={() => void bulkAccept()}>确认接受</IslandButton><IslandButton className="secondary" onClick={() => setShowBulkConfirm(false)}>返回</IslandButton></div></div>}
 
     {lowDate && <IslandCard title="需要确认报告日期"><form className="form-actions" onSubmit={confirmDate}><IslandField label="报告日期" name="reportDate" type="date" defaultValue={report.report_date ?? report.detected_report_date ?? ""} /><IslandButton type="submit">确认日期</IslandButton></form></IslandCard>}
