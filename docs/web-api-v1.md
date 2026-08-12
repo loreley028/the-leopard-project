@@ -48,7 +48,7 @@ Duplicate upload is SHA-256 idempotent. Interpretation failure retains the store
 - `GET /runtime`: data mode and production-provider state.
 - `GET /admin/report-days?start=&end=`: dynamic date states.
 - `POST|DELETE /admin/report-days/{date}/skip`: confirm or cancel skip.
-- `POST /admin/reports`: multipart upload, JSON response only.
+- `POST /admin/reports`: multipart upload, JSON response only; strict valid final PDFs publish automatically, while warnings and conflicts fail closed.
 - `GET /reports/{id}/pdf/preview`: page-image preview metadata.
 - `GET /reports/{id}/pdf/preview/pages/{page_number}`: in-memory PNG page.
 - `GET /reports/{id}/pdf/download`: explicit attachment.
@@ -60,6 +60,7 @@ Additional Admin-only real-local endpoints:
 - `POST /admin/market/refresh`: explicitly confirmed low-rate historical diagnostic refresh.
 - `POST /admin/market/import`: CSV/XLSX preview or confirmed import.
 - `GET /market/status`: stored real-market and indicator counts.
+- `GET /admin/operations/status`: latest published report plus the latest stored Shanghai/registered-proxy EOD dates; read-only and never triggers a Provider.
 - `GET|POST /admin/specifications`: list or add versioned local specification backups.
 - `GET /admin/specifications/{id}` and `/file`: metadata and explicit attachment download.
 - `POST /admin/specifications/{id}/current`: select the current backup version without affecting parsing.

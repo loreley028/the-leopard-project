@@ -29,6 +29,8 @@ var/real-local/
 var/test/
 var/pr7-visual-preview/
 var/pr7-visual-preview-fixed/
+var/pr7-ui-review-preview/
+var/provider-research/
 var/*.db
 var/*.sqlite
 var/*.sqlite3

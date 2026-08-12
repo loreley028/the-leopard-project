@@ -10,12 +10,12 @@ Phase 2A-0 is a small internal research product for roughly ten read-only viewer
 
 Viewer can read the latest and historical published reports, open the published PDF, browse all 66 sectors and follow published opinion timelines. Viewer never sees drafts or withdrawn reports.
 
-Admin can upload a PDF, run local parsing, confirm the report date, edit controlled structured fields, resolve an unmapped term to an existing sector, mark ready, publish and withdraw. The formal sector catalog is not editable in the Web MVP.
+Admin can upload a final PDF and receive automatic local parsing, strict validation and publication when no review condition exists. Failed parsing, date conflicts, frozen-history conflicts and incomplete structures remain staged for review and never switch latest. Advanced review and withdrawal remain available; the formal sector catalog is not editable in the Web MVP.
 
 Viewer and Admin share one React application, one FastAPI backend and one SQLite repository. Phase 2A-0 is local only: no cloud deployment, public access, production database, production scheduler, external LLM, HSTECH integration or Phase 1B-2 observation. In `real_local`, one process-local five-minute research cache may refresh automatically during controlled A-share sessions; Viewer remains cache-only and no Provider is promoted.
 ## Upload-to-Interpretation acceptance scope
 
-For the current private noncommercial MVP, the repeated user job is: upload an already generated V2.3/V2.3.1/V2.4 live-summary PDF, inspect the automatically populated Web interpretation, and explicitly publish it. Raw transcripts, OCR, external LLM interpretation, production market collection and automatic publication are outside scope.
+For the current private noncommercial MVP, the repeated user job is: upload an already generated V2.3/V2.3.1/V2.4/V2.8/V2.9 live-summary PDF. The normal final-PDF route then auto-publishes only after strict validation. Raw transcripts, OCR and external LLM interpretation remain outside scope. The production operation is intentionally limited to the versioned Phase 2B-0 host timer for existing post-close captures; it does not restore dynamic selection or an in-process Scheduler.
 
 Archives and the 66-sector catalog remain entry layers. Automatic interpretation does not remove the original PDF or the advanced review capabilities, and it does not infer investment advice or judge whether a host was right.
 ## Daily-use product boundary

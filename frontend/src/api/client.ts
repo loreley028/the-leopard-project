@@ -98,12 +98,19 @@ export const api = {
   sectorResearch: (key: string, pathPeriods = 20, marketDays = 20) => request<SectorResearch>(`/sectors/${key}/research?path_periods=${pathPeriods}&market_days=${marketDays}`),
   viewerObservation: async (key: string) => normalizeViewerObservation(await request<ViewerObservationWire>(`/market-paths/${encodeURIComponent(key)}/viewer-observation`)),
   adminSummary: () => request<Record<string, number>>("/admin/summary"),
+  adminOperationsStatus: () => request<{
+    latest_published_report_date: string | null;
+    latest_live_market_anchor_eod_date: string | null;
+    latest_security_proxy_eod_date: string | null;
+    capture_mode: string;
+    capture_schedule: string;
+  }>("/admin/operations/status"),
   reportDays: (start: string, end: string) => request<Array<{ report_date: string; weekday: string; expected_status: string; state: string; skip_reason: string; reports: Report[] }>>(`/admin/report-days?start=${start}&end=${end}`),
   skipReportDay: (day: string, reason = "") => request(`/admin/report-days/${day}/skip`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ reason }) }),
   cancelReportDaySkip: (day: string) => request<void>(`/admin/report-days/${day}/skip`, { method: "DELETE" }),
   adminReports: () => request<Report[]>("/admin/reports"),
   adminReport: (id: string) => request<Report>(`/admin/reports/${id}`),
-  interpret: (file: File, reportDate?: string) => { const body = new FormData(); body.append("file", file); if (reportDate) body.append("report_date_hint", reportDate); return request<{ report: Report; interpretation: Interpretation; duplicate: boolean; interpretation_error: { code: string; message: string } | null; processing_steps: string[] }>("/admin/reports/interpret", { method: "POST", body }); },
+  interpret: (file: File, reportDate?: string) => { const body = new FormData(); body.append("file", file); if (reportDate) body.append("report_date_hint", reportDate); return request<{ report: Report; interpretation: Interpretation; duplicate: boolean; publication: "published" | "already_published" | "needs_review"; interpretation_error: { code: string; message: string } | null; processing_steps: string[] }>("/admin/reports/interpret", { method: "POST", body }); },
   upload: (file: File) => { const body = new FormData(); body.append("file", file); return request<{ report: Report; interpretation: Interpretation; duplicate: boolean }>("/admin/reports", { method: "POST", body }); },
   interpretation: (id: string) => request<{ report: Report; interpretation: Interpretation }>(`/admin/reports/${id}/interpretation`),
   interpretationStatus: (id: string) => request<{ report_id: string; status: string; attention_count: number; recoverable: boolean }>(`/admin/reports/${id}/interpretation-status`),

@@ -12,7 +12,7 @@ from pathlib import Path
 from uuid import uuid4
 from fastapi import Cookie, Depends, FastAPI, File, Form, Query, Request, Response, UploadFile
 from fastapi.responses import FileResponse, JSONResponse, Response
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session, sessionmaker
 
 from leopard_project.config import PROJECT_ROOT
@@ -20,7 +20,10 @@ from leopard_project.market_paths import load_market_path_registry, report_topic
 
 from .auth import AuthenticationError, Principal, SessionAuth
 from .database import create_session_factory
-from .models import Report, ReportDay, ReportStatus, SectorDailyBar, SectorResearchPreference, SpecificationDocument
+from .models import (
+    LiveMarketAnchorDaily, Report, ReportDay, ReportStatus, SecurityProxyDaily,
+    SectorDailyBar, SectorResearchPreference, SpecificationDocument,
+)
 from .schedule import ReportSchedulePolicy
 from .repository import ReportRepository
 from .schemas import LoginRequest, PrincipalResponse, PublishConfirmationRequest, ReportPatch, ResolveTermRequest, ReviewIssueResolutionRequest, WithdrawRequest
@@ -90,6 +93,7 @@ class WebSettings:
     live_market_anchor_enabled: bool = False
     live_market_anchor_cache_ttl_seconds: int = 300
     live_market_anchor_error_cache_ttl_seconds: int = 30
+    auto_publish_uploads: bool = False
 
     @classmethod
     def from_env(cls) -> "WebSettings":
@@ -112,13 +116,18 @@ class WebSettings:
             viewer_password=os.environ["LEOPARD_VIEWER_PASSWORD"],
             cookie_secure=os.getenv("LEOPARD_COOKIE_SECURE", "false").lower() == "true",
             data_mode=data_mode,
-            market_automation_enabled=os.getenv("LEOPARD_MARKET_AUTOMATION_ENABLED", "true" if data_mode == "real_local" else "false").lower() == "true",
+            # Phase 2B uses a single host timer for post-close persistence.
+            # Do not resurrect the legacy in-process backfill/scheduler by default.
+            market_automation_enabled=os.getenv("LEOPARD_MARKET_AUTOMATION_ENABLED", "false").lower() == "true",
             security_proxy_viewer_enabled=os.getenv("SECURITY_PROXY_VIEWER_ENABLED", "false").lower() == "true",
             security_proxy_cache_ttl_seconds=int(os.getenv("SECURITY_PROXY_CACHE_TTL_SECONDS", "300")),
             security_proxy_error_cache_ttl_seconds=int(os.getenv("SECURITY_PROXY_ERROR_CACHE_TTL_SECONDS", "30")),
             live_market_anchor_enabled=os.getenv("LEOPARD_LIVE_MARKET_ANCHOR_ENABLED", "false").lower() == "true",
             live_market_anchor_cache_ttl_seconds=int(os.getenv("LEOPARD_LIVE_MARKET_ANCHOR_CACHE_TTL_SECONDS", "300")),
             live_market_anchor_error_cache_ttl_seconds=int(os.getenv("LEOPARD_LIVE_MARKET_ANCHOR_ERROR_CACHE_TTL_SECONDS", "30")),
+            auto_publish_uploads=os.getenv(
+                "LEOPARD_AUTO_PUBLISH_UPLOADS", "true" if data_mode == "real_local" else "false",
+            ).lower() == "true",
         )
 
 
@@ -477,7 +486,17 @@ def create_app(settings: WebSettings | None = None, session_factory: sessionmake
                     session.commit()
                 EnhancedReportService(session).parse_structured_text(report, current.username)
                 report = repo.by_id(report.id) or report
+                if settings.auto_publish_uploads:
+                    service.reject_same_date_conflict(report)
+                    # The daily Admin route is intentionally fail-closed: any
+                    # warning or blocking condition leaves the report out of
+                    # publication and returns the ordinary review payload.
+                    service.publish_strict(report, current.username)
+                    report = repo.by_id(report.id) or report
             except WebDomainError as exc:
+                if exc.code == "report_date_conflict":
+                    service.mark_staged_conflict(report, current.username)
+                    raise
                 interpretation_error = {"code": exc.code, "message": str(exc)}
                 report = repo.by_id(report.id) or report
         else:
@@ -489,6 +508,9 @@ def create_app(settings: WebSettings | None = None, session_factory: sessionmake
             "report": report_payload(report, admin=True),
             "interpretation": interpretation,
             "duplicate": duplicate,
+            "publication": "already_published" if duplicate and report.status == ReportStatus.PUBLISHED.value else (
+                "published" if report.status == ReportStatus.PUBLISHED.value else "needs_review"
+            ),
             "interpretation_error": interpretation_error,
             "processing_steps": [
                 "正在校验PDF",
@@ -698,6 +720,21 @@ def create_app(settings: WebSettings | None = None, session_factory: sessionmake
             "published": sum(item.status == "published" for item in reports),
             "parse_failed": sum(item.status == "parse_failed" for item in reports),
             "unmapped_terms": sum(term.status == "unresolved" for item in reports for term in item.unmapped_terms),
+        }
+
+    @app.get("/api/v1/admin/operations/status")
+    def admin_operations_status(current: Principal = Depends(admin), session: Session = Depends(db_session)) -> dict:
+        """Small, read-only daily-operation status; it never triggers a capture."""
+        latest_report = session.scalar(select(Report).where(
+            Report.status == ReportStatus.PUBLISHED.value,
+            Report.is_current.is_(True),
+        ).order_by(Report.report_date.desc(), Report.published_at.desc()))
+        return {
+            "latest_published_report_date": latest_report.report_date.isoformat() if latest_report and latest_report.report_date else None,
+            "latest_live_market_anchor_eod_date": session.scalar(select(func.max(LiveMarketAnchorDaily.trading_date))),
+            "latest_security_proxy_eod_date": session.scalar(select(func.max(SecurityProxyDaily.trading_date))),
+            "capture_mode": "host_systemd_timer",
+            "capture_schedule": "Mon-Fri 15:20 Asia/Shanghai; controlled calendar may skip",
         }
 
     specification_dir = settings.upload_dir.parent / "specifications"

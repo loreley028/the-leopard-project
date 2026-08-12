@@ -27,6 +27,6 @@ Phase 2A-0 的普通用户主流程只有：
 周五、周六没有报告属于正常节奏，不产生缺报告告警。
 ## Upload response and revisions
 
-`POST /api/v1/admin/reports` returns JSON and navigates to the interpretation result. Preview metadata uses `GET /reports/{id}/pdf/preview`, with per-page PNGs under `/pdf/preview/pages/{page}`; explicit download alone uses `/pdf/download`. Identical SHA-256 returns the existing report. A different file for the same `report_date` creates the next revision and does not replace the current Viewer report until publication.
+`POST /api/v1/admin/reports` returns JSON and normally performs automatic publication after deterministic extraction and strict validation. Preview metadata uses `GET /reports/{id}/pdf/preview`, with per-page PNGs under `/pdf/preview/pages/{page}`; explicit download alone uses `/pdf/download`. Identical SHA-256 returns the existing published report as `already_published`. A different file for an already-published `report_date` is blocked and retained as an auditable candidate; it never replaces the current Viewer report or frozen history silently.
 
 The frontend does not mount a PDF iframe or request the original PDF during page load, refresh or section navigation. It requests server-rendered page images only after the user clicks the preview control; the attachment endpoint is reached only through the explicit download link. This separation avoids browser PDF preferences turning ordinary page visits into downloads.

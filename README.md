@@ -5,7 +5,7 @@ Phase 2A-0验收修订以PDF忠实还原为最低要求：管理端默认只处�
 The Leopard Project is the dynamic enhanced edition of the 大盘猎豹直播总结. The PDF remains the evidence and business mainline; each enhanced Web report is the product body, while the archive and 66-sector catalog are entry layers. Its primary workflow is:
 
 ```text
-Admin selects PDF → uploads and automatically interprets locally → checks the populated result → confirms publication → Viewer reads the enhanced report and longitudinal sector research
+Admin uploads a final PDF → the server interprets and strictly validates locally → valid reports publish automatically → Viewer reads the enhanced report and longitudinal sector research
 ```
 
 Market snapshots and MA/return/volume metrics are secondary research context, not the product. Historical report snapshots are immutable; sector latest market state may change only after an explicit Admin refresh. Phase 2A-0 does not deploy, schedule collection, approve a production Provider, call an external LLM, or connect to Alibaba Cloud.
@@ -76,7 +76,9 @@ See [product scope](docs/product-mvp-scope.md), [upload workflow](docs/pdf-uploa
 
 Daily use runs with `LEOPARD_DATA_MODE=real_local`, `var/real-local/leopard_project.sqlite3`, and `var/real-local/uploads/`. This mode refuses fixture reports or fixture market bars. The root page is the latest complete published report; Admin is organized by live date. Friday and Saturday are normal no-report days that can be skipped or changed to upload.
 
-Supported templates are V2.3, V2.3.1 and V2.4. Upload returns JSON; PDF navigation does not request the file, preview uses server-rendered in-memory page images, and only the explicit download endpoint returns the original PDF as an attachment. `report_date`, `market_as_of_date`, latest complete EOD date and current intraday date are distinct. In `real_local`, the server can run a controlled five-minute intraday cache and gap-only EOD backfill; Admin can pause/resume or trigger a refresh. No production market provider exists. Specification backups are versioned separately and never influence parsing.
+Supported templates include V2.3, V2.3.1, V2.4, V2.8 and V2.9. Upload returns JSON; PDF navigation does not request the file, preview uses server-rendered in-memory page images, and only the explicit download endpoint returns the original PDF as an attachment. `report_date`, `market_as_of_date`, latest complete EOD date and current intraday date are distinct. In `real_local`, the server can run a controlled five-minute intraday cache and gap-only EOD backfill; Admin can pause/resume or trigger a refresh. No production market provider exists. Specification backups are versioned separately and never influence parsing.
+
+For the Phase 2B-0 release path, a final PDF is stored in private staging, parsed and strictly checked, then automatically published only when all gates pass. The daily operational runbook is [Phase 2B cloud operations](docs/phase-2b-cloud-operations.md); it uses a lightweight host timer for the two existing post-close capture CLIs and requires a real HTTPS domain and certificate before any public cutover.
 
 ## Phase 2A-0 data lanes
 

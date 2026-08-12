@@ -1,0 +1,11 @@
+[Unit]
+Description=Run The Leopard Project daily capture after CN-A close
+
+[Timer]
+OnCalendar=Mon..Fri *-*-* 15:20:00 Asia/Shanghai
+Persistent=true
+Unit=leopard-daily-market-capture.service
+AccuracySec=1min
+
+[Install]
+WantedBy=timers.target

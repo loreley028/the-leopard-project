@@ -97,7 +97,7 @@ def test_upload_triggers_complete_interpretation_without_second_parse_request(in
     assert interpretation["market_data_status"] == "not_bound"
     assert interpretation["quality_status"] == "verified_structure"
     assert interpretation["quality_summary"]["assessment_blocking"] == 0
-    assert len(list(settings.upload_dir.glob("*.pdf"))) == 1
+    assert len(list(settings.upload_dir.rglob("*.pdf"))) == 1
 
 
 def test_duplicate_upload_is_idempotent_and_keeps_one_report(interpretation_web) -> None:
@@ -109,7 +109,7 @@ def test_duplicate_upload_is_idempotent_and_keeps_one_report(interpretation_web)
     assert second["duplicate"] is True
     assert second["report"]["id"] == first["report"]["id"]
     assert len(client.get("/api/v1/admin/reports").json()) == 1
-    assert len(list(settings.upload_dir.glob("*.pdf"))) == 1
+    assert len(list(settings.upload_dir.rglob("*.pdf"))) == 1
 
 
 def test_same_date_different_file_creates_a_revision_without_overwrite(interpretation_web) -> None:
@@ -129,7 +129,7 @@ def test_same_date_different_file_creates_a_revision_without_overwrite(interpret
     assert second["replaces_report_id"] == first["id"]
     assert first["id"] != second["id"]
     assert len(client.get("/api/v1/admin/reports").json()) == 2
-    assert len(list(settings.upload_dir.glob("*.pdf"))) == 2
+    assert len(list(settings.upload_dir.rglob("*.pdf"))) == 2
 
 
 def test_date_detection_confidence_and_conflict_rules() -> None:

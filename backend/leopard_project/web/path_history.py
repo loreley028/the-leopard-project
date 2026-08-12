@@ -60,7 +60,7 @@ class PathHistorySyncResult:
     differences: list[dict[str, Any]]
 
 
-def sync_path_history(session: Session, report: Report) -> PathHistorySyncResult:
+def sync_path_history(session: Session, report: Report, *, commit: bool = True) -> PathHistorySyncResult:
     metadata = json.loads(report.interpretation_meta_json or "{}")
     matrix = metadata.get("pdf_history_matrix") or {}
     raw_dates = list(matrix.get("dates") or [])
@@ -165,7 +165,8 @@ def sync_path_history(session: Session, report: Report) -> PathHistorySyncResult
             status=status,
             differences_json=json.dumps(differences, ensure_ascii=False),
         ))
-    session.commit()
+    if commit:
+        session.commit()
     return PathHistorySyncResult(len(resolved_dates), len(rows), inserted, unchanged, difference_count, status, differences)
 
 

@@ -141,7 +141,7 @@ def test_admin_upload_duplicate_and_safe_storage(web) -> None:
     assert first.status_code == 201 and first.json()["duplicate"] is False
     second = upload(client)
     assert second.status_code == 201 and second.json()["duplicate"] is True
-    files = list(settings.upload_dir.glob("*.pdf"))
+    files = list(settings.upload_dir.rglob("*.pdf"))
     assert len(files) == 1
     assert files[0].name != "fixture.pdf"
 
@@ -342,7 +342,7 @@ def test_parse_failed_retains_original_file(web) -> None:
     assert parsed.status_code == 422
     report = client.get(f"/api/v1/admin/reports/{report_id}").json()
     assert report["status"] == "parse_failed"
-    assert list(settings.upload_dir.glob("*.pdf"))
+    assert list(settings.upload_dir.rglob("*.pdf"))
 
 
 def test_cookie_is_http_only_and_strict(web) -> None:

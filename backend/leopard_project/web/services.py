@@ -166,9 +166,27 @@ def _date_matches(value: str) -> list[date]:
 
 def detect_report_date(text: str, filename: str) -> dict[str, Any]:
     title_region = "\n".join(text.splitlines()[:20])
+    # Newer templates deliberately include a prior frozen-history date near
+    # the title. A declared live-summary heading is the report-date authority;
+    # the frozen date is metadata, not a competing report date.
+    declared_heading = re.search(
+        r"大盘猎豹[^\n]*?20\d{2}\s*年\s*\d{1,2}\s*月\s*\d{1,2}\s*日\s*直播总结[^\n]*",
+        title_region,
+    )
+    filename_dates = _date_matches(filename)
+    if declared_heading:
+        declared_dates = _date_matches(declared_heading.group(0))
+        if len(set(declared_dates)) == 1:
+            chosen = declared_dates[0]
+            conflict = bool(filename_dates and chosen not in filename_dates)
+            return {
+                "value": chosen,
+                "source": "pdf_title" if not conflict else "date_conflict",
+                "confidence": "high" if not conflict else "low",
+                "conflict": conflict,
+            }
     title_dates = _date_matches(title_region)
     body_dates = _date_matches(text)
-    filename_dates = _date_matches(filename)
     unique_title = sorted(set(title_dates))
     if len(unique_title) == 1:
         chosen = unique_title[0]
@@ -288,6 +306,30 @@ def _main_fields(text: str) -> tuple[dict[str, str], dict[str, dict[str, Any]]]:
             "manually_modified": False,
         }
     return fields, provenance
+
+
+def _labelled_int(text: str, labels: tuple[str, ...]) -> int | None:
+    """Read an explicitly labelled matrix statistic without inferring a value."""
+    escaped = "|".join(re.escape(label) for label in labels)
+    match = re.search(rf"(?:{escaped})\s*[：:=]\s*(\d+)", text, re.I)
+    return int(match.group(1)) if match else None
+
+
+def _extract_defense_lines(text: str) -> dict[str, float | None]:
+    """Expose labelled report lines as metadata; never fabricate a market quote."""
+    labelled = re.findall(
+        r"(?:核心|主|第一|次|第二|副)?(?:攻防线|防线)[^0-9]{0,24}(\d{3,5}(?:[.]\d+)?)",
+        text,
+    )
+    values: list[float] = []
+    for raw in labelled:
+        value = float(raw)
+        if value > 0 and value not in values:
+            values.append(value)
+    return {
+        "primary_defense_line": values[0] if values else None,
+        "secondary_defense_line": values[1] if len(values) > 1 else None,
+    }
 
 
 def _split_basis_condition(value: str) -> tuple[str, str]:
@@ -1048,12 +1090,8 @@ def parse_report_text(
         and len(history_matrix.get("dates", [])) >= 35
         and "只新增7/27" in compact_document
     )
-    template_version = (
-        "V2.4" if re.search(r"V\s*2[.]4", text, re.I) or v24_signature
-        else "V2.3.1" if re.search(r"V\s*2[.]3[.]1", text, re.I)
-        else "V2.3" if re.search(r"V\s*2[.]3", text, re.I)
-        else "unknown"
-    )
+    version_match = re.search(r"\bV\s*(\d+(?:[.]\d+)*)\b", text, re.I)
+    template_version = f"V{version_match.group(1)}" if version_match else ("V2.4" if v24_signature else "unknown")
     if template_version == "unknown" and "板块观点详细汇总" in text:
         attention.append({"kind": "unknown_template", "severity": "warning", "message": "未识别规范版本文字；已按结构兼容模式解析"})
     if date_result["confidence"] == "low":
@@ -1103,12 +1141,16 @@ def parse_report_text(
         if any(item.get("kind") == "assessment_parse_quality" for item in attention)
         else "verified_structure"
     )
-    freeze_match = re.search(r"历史(?:观点)?冻结至\s*(\d{1,2})\s*/\s*(\d{1,2})", compact_document)
-    append_match = re.search(r"只新增\s*(\d{1,2})\s*/\s*(\d{1,2})", compact_document)
+    freeze_match = re.search(
+        r"历史(?:观点|路径)?冻结至\s*(?:(20\d{2})\s*[-年/.]\s*)?(\d{1,2})\s*[-月/.]\s*(\d{1,2})",
+        compact_document,
+    )
+    append_match = re.search(r"(?:只|仅)新增\s*(\d{1,2})\s*/\s*(\d{1,2})", compact_document)
     report_year = date_result["value"].year if date_result["value"] else None
+    freeze_year = int(freeze_match.group(1)) if freeze_match and freeze_match.group(1) else report_year
     freeze_through = (
-        date(report_year, int(freeze_match.group(1)), int(freeze_match.group(2))).isoformat()
-        if freeze_match and report_year else None
+        date(freeze_year, int(freeze_match.group(2)), int(freeze_match.group(3))).isoformat()
+        if freeze_match and freeze_year else None
     )
     appended_date = (
         date(report_year, int(append_match.group(1)), int(append_match.group(2))).isoformat()
@@ -1133,6 +1175,11 @@ def parse_report_text(
             "attention_items": attention,
             "assessment_records": assessments,
             "pdf_history_matrix": history_matrix,
+            "matrix_statistics": {
+                "display_rows": _labelled_int(text, ("display_rows", "显示行数", "展示行数")),
+                "active_objects": _labelled_int(text, ("active_objects", "有效对象", "活动对象")),
+            },
+            "defense_lines": _extract_defense_lines(text),
             "quality_status": parse_quality_status,
             "quality_summary": {
                 "report_structure": parse_quality_status,
@@ -1178,8 +1225,12 @@ class ReportService:
         existing = self.repo.by_sha256(digest)
         if existing:
             return existing, True
-        self.upload_dir.mkdir(parents=True, exist_ok=True)
-        storage_name = f"{uuid4().hex}.pdf"
+        # An uploaded final PDF is private staging material until every parse
+        # and history check has passed.  Published reports are promoted only
+        # as part of the final publication transaction below.
+        staging_dir = self.upload_dir / ".staging"
+        staging_dir.mkdir(parents=True, exist_ok=True)
+        storage_name = f".staging/{uuid4().hex}.pdf"
         (self.upload_dir / storage_name).write_bytes(payload)
         report = Report(created_by=actor, interpretation_status="uploading")
         report_file = ReportFile(
@@ -1335,7 +1386,15 @@ class ReportService:
         self.repo.commit()
         return report
 
-    def publish(self, report: Report, actor: str, *, confirm_warnings: bool = False, warning_note: str = "") -> Report:
+    def publish(
+        self,
+        report: Report,
+        actor: str,
+        *,
+        confirm_warnings: bool = False,
+        warning_note: str = "",
+        commit: bool = True,
+    ) -> Report:
         if report.status == ReportStatus.PUBLISHED.value:
             return report
         warnings = self._validate_publishable(report)
@@ -1355,8 +1414,106 @@ class ReportService:
         self.repo.audit(actor, "report_published", "report", report.id, {
             "warnings_confirmed": bool(warnings), "warning_note": warning_note, "warnings": warnings,
         })
-        self.repo.commit()
+        if commit:
+            original_storage_name = report.file.storage_filename if report.file else None
+            try:
+                self._promote_staged_pdf(report)
+                self.repo.commit()
+            except Exception:
+                self.repo.session.rollback()
+                self._restore_staged_pdf(report, original_storage_name)
+                raise
         return report
+
+    def publish_strict(self, report: Report, actor: str) -> Report:
+        """Publish a final uploaded PDF only when it has no review residue."""
+        warnings = self._validate_publishable(report)
+        if warnings:
+            raise WebDomainError(
+                "automatic_publish_requires_review",
+                "存在需人工检查的解析项，报告未自动发布",
+                409,
+            )
+        from .path_history import audit_frozen_path_history, sync_path_history
+        differences = audit_frozen_path_history(self.repo.session, report)
+        if differences:
+            raise WebDomainError(
+                "frozen_history_conflict",
+                "PDF历史路径与已冻结记录冲突；系统未自动发布",
+                409,
+            )
+        original_storage_name = report.file.storage_filename if report.file else None
+        try:
+            self.publish(
+                report,
+                actor,
+                confirm_warnings=True,
+                warning_note="automatic_strict_upload",
+                commit=False,
+            )
+            result = sync_path_history(self.repo.session, report, commit=False)
+            if result.difference_count:
+                raise WebDomainError("frozen_history_conflict", "历史路径冲突；系统未自动发布", 409)
+            self._promote_staged_pdf(report)
+            self.repo.commit()
+        except Exception:
+            self.repo.session.rollback()
+            self._restore_staged_pdf(report, original_storage_name)
+            raise
+        return self.repo.by_id(report.id) or report
+
+    def _promote_staged_pdf(self, report: Report) -> None:
+        """Move a validated upload into the published store without overwriting."""
+        if not report.file or not report.file.storage_filename.startswith(".staging/"):
+            return
+        source = self.upload_dir / report.file.storage_filename
+        published_dir = self.upload_dir / "published"
+        published_dir.mkdir(parents=True, exist_ok=True)
+        destination_name = f"published/{Path(report.file.storage_filename).name}"
+        destination = self.upload_dir / destination_name
+        if not source.exists():
+            raise WebDomainError("source_pdf_unavailable", "原始PDF不可访问", 409)
+        if destination.exists():
+            raise WebDomainError("published_pdf_collision", "发布PDF目标已存在，系统未覆盖文件", 409)
+        source.replace(destination)
+        report.file.storage_filename = destination_name
+
+    def _restore_staged_pdf(self, report: Report, original_storage_name: str | None) -> None:
+        """Best-effort compensation when the database publication cannot commit."""
+        if not report.file or not original_storage_name or not original_storage_name.startswith(".staging/"):
+            return
+        published_path = self.upload_dir / report.file.storage_filename
+        staged_path = self.upload_dir / original_storage_name
+        if published_path.exists() and not staged_path.exists():
+            staged_path.parent.mkdir(parents=True, exist_ok=True)
+            published_path.replace(staged_path)
+        report.file.storage_filename = original_storage_name
+
+    def reject_same_date_conflict(self, report: Report) -> None:
+        """Do not silently replace a published daily report with another file."""
+        if not report.report_date:
+            return
+        conflicting = [
+            item for item in self.repo.reports_on(report.report_date, exclude_id=report.id)
+            if item.file and report.file and item.file.sha256 != report.file.sha256
+        ]
+        if conflicting:
+            raise WebDomainError(
+                "report_date_conflict",
+                "同一报告日期已存在不同PDF；系统不会自动覆盖已归档内容",
+                409,
+            )
+
+    def mark_staged_conflict(self, report: Report, actor: str) -> None:
+        """Retain the candidate PDF for audit, but keep it outside published data."""
+        if report.status == ReportStatus.PUBLISHED.value:
+            return
+        if report.status != ReportStatus.BLOCKED.value:
+            self.transition(report, ReportStatus.BLOCKED)
+        report.interpretation_status = "needs_attention"
+        report.parse_note = "同一报告日期存在不同PDF；候选文件已保留，未发布且未修改历史。"
+        self.repo.audit(actor, "report_upload_conflict_blocked", "report", report.id)
+        self.repo.commit()
 
     def _market_date_candidate(self, report_date: date | None) -> date | None:
         if report_date is None:

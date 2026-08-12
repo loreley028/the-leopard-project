@@ -33,7 +33,11 @@ def main() -> int:
         "date_auto_policy": schedule["automatic_report_date_detection"] is True
         and schedule["report_date_requires_confirmation"] is False
         and schedule["report_date_confirmation_required_for"] == ["low", "conflict"],
-        "one_primary_upload_action": "上传并解读" in upload_page and "本地解析" not in upload_page and "增强解析" not in upload_page,
+        "one_primary_upload_action": "上传并自动发布" in upload_page
+        and "auto_publish_uploads" in app
+        and "publish_strict" in app
+        and "本地解析" not in upload_page
+        and "增强解析" not in upload_page,
         "result_page_has_one_publish_action": result_page.count("确认并发布") == 1,
         "advanced_default_collapsed": "<details" in result_page and "查看全部66个板块路径" in result_page and "高级技术信息" in result_page,
         "market_not_blocking": "行情辅助数据缺失不影响确认与发布" in result_page,

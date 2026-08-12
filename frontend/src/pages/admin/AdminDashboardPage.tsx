@@ -19,9 +19,12 @@ function reportDayRange() {
 
 export function AdminDashboardPage() {
   const [days, setDays] = useState<ReportDay[]>([]);
+  const [operations, setOperations] = useState<Awaited<ReturnType<typeof api.adminOperationsStatus>> | null>(null);
   const load = useCallback(() => {
     const [start, end] = reportDayRange();
-    return api.reportDays(start, end).then(setDays);
+    return Promise.all([api.reportDays(start, end), api.adminOperationsStatus()]).then(([nextDays, nextOperations]) => {
+      setDays(nextDays); setOperations(nextOperations);
+    });
   }, []);
   useEffect(() => { void load(); }, [load]);
   const skip = async (day: string) => { await api.skipReportDay(day); await load(); };
@@ -32,6 +35,15 @@ export function AdminDashboardPage() {
       <div className="table-wrap"><table><thead><tr><th>日期</th><th>星期</th><th>状态</th><th>文件 / 版本</th><th>操作</th></tr></thead><tbody>
         {days.map(day => <tr key={day.report_date}><td>{day.report_date}</td><td>{day.weekday}</td><td>{STATE[day.state] ?? day.state}</td><td>{day.reports[0] ? `${day.reports[0].original_filename ?? day.reports[0].title} · V${day.reports[0].revision_number ?? 1}` : "—"}</td><td><Link to={`/admin/reports/new?report_date=${day.report_date}`}>{day.state === "normally_no_report" || day.state === "skipped" ? "改为上传" : "上传PDF"}</Link>{" · "}{day.state === "skipped" ? <button type="button" onClick={() => void cancel(day.report_date)}>取消跳过</button> : <button type="button" onClick={() => void skip(day.report_date)}>确认跳过</button>}{day.reports[0] && <>{" · "}<Link to={`/admin/reports/${day.reports[0].id}/interpretation`}>查看解读</Link></>}</td></tr>)}
       </tbody></table></div>
+    </IslandCard>
+    <IslandCard title="每日运行状态">
+      <div className="dashboard-grid compact-operation-status">
+        <div><span>最新发布报告</span><strong>{operations?.latest_published_report_date ?? "暂无已发布报告"}</strong></div>
+        <div><span>最新上证 EOD</span><strong>{operations?.latest_live_market_anchor_eod_date ?? "尚未采集"}</strong></div>
+        <div><span>最新代理证券 EOD</span><strong>{operations?.latest_security_proxy_eod_date ?? "尚未采集"}</strong></div>
+      </div>
+      <p className="muted">{operations?.capture_schedule ?? "正在读取每日采集状态…"}</p>
+      <button type="button" onClick={() => void load()}>重新检查状态</button>
     </IslandCard>
     <p><Link to="/admin/reports">查看全部版本历史</Link></p>
   </div>;
