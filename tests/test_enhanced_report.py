@@ -77,9 +77,42 @@ def test_metrics_use_complete_eod_and_prior_volume_window() -> None:
     assert metrics["ma10"] == Decimal("115.5")
     assert metrics["ma20"] == Decimal("110.5")
     assert metrics["return_5d"] == Decimal("4.347826086956521739130434800")
+    assert metrics["return_10d"] == Decimal("9.090909090909090909090909100")
+    assert metrics["return_10d"] != sum(bar.daily_pct_change for bar in bars[-10:])
     assert metrics["volume_ratio_5d"] == Decimal("2")
     bars[-1].eod_status = "intraday_snapshot"
     assert calculate_market_metrics(bars)["ma20"] == Decimal("109.5")
+
+
+def test_recent_complete_days_returns_latest_ten_controlled_dates_in_ascending_order(enhanced_web) -> None:
+    _, sessions = enhanced_web
+    controlled_dates = [
+        date(2026, 7, 20), date(2026, 7, 21), date(2026, 7, 22), date(2026, 7, 23),
+        date(2026, 7, 24), date(2026, 7, 27), date(2026, 7, 28), date(2026, 7, 29),
+        date(2026, 7, 30), date(2026, 7, 31), date(2026, 8, 3), date(2026, 8, 4),
+    ]
+    with sessions() as session:
+        for index, trade_date in enumerate(controlled_dates):
+            session.add(SectorDailyBar(
+                sector_key="semiconductor", trade_date=trade_date,
+                close=Decimal("100") + index, pre_close=Decimal("99") + index,
+                daily_pct_change=Decimal("1") if index % 3 == 0 else Decimal("-1") if index % 3 == 1 else Decimal("0"),
+                volume=Decimal("100"), amount=None, eod_status="complete_eod",
+                data_source="fixture", provider_role="research_provider",
+                fetched_at=datetime(2026, 8, 4, tzinfo=timezone.utc), source_response_hash=f"{index:064d}",
+            ))
+        session.add(SectorDailyBar(
+            sector_key="semiconductor", trade_date=date(2026, 8, 5), close=Decimal("999"),
+            pre_close=Decimal("998"), daily_pct_change=Decimal("1"), volume=Decimal("100"), amount=None,
+            eod_status="intraday_snapshot", data_source="fixture", provider_role="research_provider",
+            fetched_at=datetime(2026, 8, 5, tzinfo=timezone.utc), source_response_hash="f" * 64,
+        ))
+        session.commit()
+        recent = EnhancedReportService(session).recent_complete_days("semiconductor")
+    assert [item["trade_date"] for item in recent] == [item.isoformat() for item in controlled_dates[-10:]]
+    assert len(recent) == 10
+    assert "2026-07-25" not in {item["trade_date"] for item in recent}
+    assert "2026-08-01" not in {item["trade_date"] for item in recent}
 
 
 def test_market_date_contract_sunday_and_fail_closed(enhanced_web) -> None:

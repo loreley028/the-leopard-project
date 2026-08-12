@@ -389,7 +389,7 @@ def register_enhanced_routes(
         latest_market = None if unsupported else service.latest_market(market_key)
         recent_days = [] if unsupported else service.recent_complete_days(market_key)
         if latest_market is not None:
-            latest_market["recent_5_trading_days"] = recent_days
+            latest_market["recent_10_trading_days"] = recent_days
         intraday_snapshot = None if unsupported else service.latest_intraday(market_key)
         runtime_status = intraday.status()
         latest_intraday_result = latest_intraday_item_status(session, market_key)
@@ -421,7 +421,7 @@ def register_enhanced_routes(
             "latest_explicit_view": latest_explicit,
             "current_latest_market": latest_market,
             "latest_complete_market": latest_market,
-            "recent_5_trading_days": recent_days,
+            "recent_10_trading_days": recent_days,
             "intraday_snapshot": intraday_snapshot,
             "intraday_status": resolved_intraday_status,
             "intraday_session": runtime_status,

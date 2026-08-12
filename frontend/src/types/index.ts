@@ -144,7 +144,7 @@ export interface Sector {
   intraday_snapshot?: IntradaySnapshot | null;
   intraday_status?: string;
   intraday_last_attempt_at?: string | null;
-  recent_5_trading_days?: RecentTradingDay[];
+  recent_10_trading_days?: RecentTradingDay[];
   timeline?: Array<{ report_id: string; report_date: string; report_title: string; summary: string }>;
   recent_path?: Array<PathEntry & { report_id: string; report_date: string }>;
   recent_mention_count?: number;
@@ -226,7 +226,7 @@ export interface MarketSnapshot {
   fetched_at: string;
   source_response_hash: string;
   snapshot_hash?: string;
-  recent_5_trading_days?: RecentTradingDay[];
+  recent_10_trading_days?: RecentTradingDay[];
 }
 
 export interface RecentTradingDay {
@@ -430,7 +430,7 @@ export interface SectorResearch {
   latest_explicit_view: { report_id: string; report_date: string; path: PathEntry; assessment: SectorAssessment; report_snapshot: MarketSnapshot | null } | null;
   current_latest_market: MarketSnapshot | null;
   latest_complete_market?: MarketSnapshot | null;
-  recent_5_trading_days?: RecentTradingDay[];
+  recent_10_trading_days?: RecentTradingDay[];
   intraday_snapshot?: IntradaySnapshot | null;
   intraday_status?: string;
   intraday_session?: IntradayStatus;

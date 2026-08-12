@@ -193,7 +193,7 @@ def sector_payloads(repo: ReportRepository) -> list[dict]:
         )
         recent_days = [] if unsupported else enhanced.recent_complete_days(market_key)
         if market is not None:
-            market["recent_5_trading_days"] = recent_days
+            market["recent_10_trading_days"] = recent_days
         output.append({
             "sector_key": market_key,
             "sector_name": market_path.display_name,
@@ -219,7 +219,7 @@ def sector_payloads(repo: ReportRepository) -> list[dict]:
             "intraday_snapshot": snapshot,
             "intraday_status": intraday_status,
             "intraday_last_attempt_at": _display_short_time(latest_run.started_at) if latest_run else None,
-            "recent_5_trading_days": recent_days,
+            "recent_10_trading_days": recent_days,
             "recent_path": recent_path,
             "recent_mention_count": recent_mention_count,
             "attention_level": attention_level,

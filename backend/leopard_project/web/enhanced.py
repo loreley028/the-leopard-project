@@ -622,7 +622,7 @@ class EnhancedReportService:
         indicator = self.session.scalar(select(SectorIndicatorSnapshot).where(SectorIndicatorSnapshot.daily_bar_id == bar.id)) if bar else None
         return market_payload(bar, indicator)
 
-    def recent_complete_days(self, sector_key: str, count: int = 5) -> list[dict[str, Any]]:
+    def recent_complete_days(self, sector_key: str, count: int = 10) -> list[dict[str, Any]]:
         rows = list(self.session.scalars(select(SectorDailyBar).where(
             SectorDailyBar.sector_key == sector_key,
             SectorDailyBar.eod_status == "complete_eod",
