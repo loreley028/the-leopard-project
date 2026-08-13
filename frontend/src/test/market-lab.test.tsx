@@ -49,4 +49,18 @@ describe("Market Lab", () => {
     expect(calls).toEqual(["/api/v1/market/shanghai", "/api/v1/market/proxies/all"]);
     expect(calls.join(" ")).not.toContain("report");
   });
+
+  it("keeps completed moving averages visible when the live quote is unavailable", async () => {
+    const unavailable = {
+      ...shanghai,
+      live: { ...shanghai.live, status: "unavailable", current: null, pct_change: null, quote_datetime: null, freshness: "unavailable", error_code: "stale_quote" },
+      coverage: { available_days: 20, first_date: "2026-07-17", latest_date: "2026-08-13", missing_dates: [] },
+      indicators: { ma5: 3942.87, ma10: 3895.74, ma20: 3862.24, distance_to_ma5_pct: null, distance_to_ma10_pct: null, distance_to_ma20_pct: null },
+    };
+    vi.stubGlobal("fetch", vi.fn((input: RequestInfo | URL) => Promise.resolve(new Response(JSON.stringify(String(input).includes("/market/shanghai") ? unavailable : proxies), { status: 200, headers: { "Content-Type": "application/json" } }))));
+    render(<MemoryRouter initialEntries={["/market-lab"]}><AuthProvider initialPrincipal={null}><App /></AuthProvider></MemoryRouter>);
+    expect(await screen.findByText("3,942.87")).toBeVisible();
+    expect(screen.getAllByText("实时行情暂不可用").length).toBeGreaterThanOrEqual(3);
+    expect(screen.getAllByText("历史不足").length).toBeGreaterThan(0);
+  });
 });

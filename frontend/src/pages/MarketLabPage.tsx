@@ -9,7 +9,7 @@ const tone = (value: number | null | undefined) => value == null || value === 0 
 function Indicators({ value }: { value: MarketCoreIndicators }) {
   return <dl className="market-lab-indicators">
     {[["MA5", value.ma5, value.distance_to_ma5_pct], ["MA10", value.ma10, value.distance_to_ma10_pct], ["MA20", value.ma20, value.distance_to_ma20_pct]].map(([label, average, distance]) => <div key={String(label)}>
-      <dt>{label}</dt><dd>{typeof average === "number" ? formatSecurityPrice(average) : "—"}</dd><dd className={tone(typeof distance === "number" ? distance : null)}>{typeof distance === "number" ? formatPct(distance) : "历史不足"}</dd>
+      <dt>{label}</dt><dd>{typeof average === "number" ? formatSecurityPrice(average) : "—"}</dd><dd className={tone(typeof distance === "number" ? distance : null)}>{typeof distance === "number" ? formatPct(distance) : typeof average === "number" ? "实时行情暂不可用" : "历史不足"}</dd>
     </div>)}
   </dl>;
 }

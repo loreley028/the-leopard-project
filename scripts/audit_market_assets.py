@@ -24,8 +24,8 @@ def classify(table: str, provenance: set[str]) -> tuple[str, str]:
     values = {item.lower() for item in provenance if item}
     if any("fixture" in item or "demo" in item for item in values):
         return "UNUSABLE", "fixture or demo provenance cannot be user market history"
-    if table in {"live_market_anchor_daily", "security_proxy_daily"} and values == {"tencent_standard_security_quote"}:
-        return "CURRENT_OBJECTIVE", "symbol/date/provider are explicit Tencent completed-market records"
+    if table in {"live_market_anchor_daily", "security_proxy_daily"} and values and values <= {"tencent_standard_security_quote", "sina_public_daily_http"}:
+        return "CURRENT_OBJECTIVE", "symbol/date/provider are explicit completed-market records with source provenance"
     if table == "sector_daily_bars" and values and all(item.startswith("ths_public_validation") for item in values):
         return "LEGACY_HISTORICAL", "diagnostic THS validation bars; not Shanghai or security-level Market Core history"
     return "AUDIT_ONLY", "provenance requires an explicit product decision before use"
