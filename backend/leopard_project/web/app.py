@@ -38,6 +38,7 @@ from .enhanced import EnhancedReportService
 from .intraday import intraday_policy, resolve_intraday_data_status
 from .security_proxy_viewer import OfficialBoardAvailability, SecurityProxyViewerCache, SecurityProxyViewerService
 from .live_market_anchor import LiveMarketAnchorCache, LiveShanghaiMarketAnchorService
+from .market_core import MarketCoreReadService
 from leopard_project.providers.tencent_standard_quote import TencentStandardSecurityQuoteProvider
 from leopard_project.security_proxy_observation import SecurityProxyObservationService
 
@@ -158,6 +159,15 @@ def create_app(settings: WebSettings | None = None, session_factory: sessionmake
             error_ttl_seconds=settings.live_market_anchor_error_cache_ttl_seconds,
         ),
     )
+    app.state.market_core = MarketCoreReadService(
+        provider=TencentStandardSecurityQuoteProvider(),
+        live_anchor=app.state.live_market_anchor,
+        enabled=settings.security_proxy_viewer_enabled and settings.live_market_anchor_enabled,
+        cache=SecurityProxyViewerCache(
+            ttl_seconds=settings.security_proxy_cache_ttl_seconds,
+            error_ttl_seconds=settings.security_proxy_error_cache_ttl_seconds,
+        ),
+    )
 
     def stop_market_automation() -> None:
         intraday.shutdown()
@@ -230,6 +240,23 @@ def create_app(settings: WebSettings | None = None, session_factory: sessionmake
     @app.get("/api/v1/runtime")
     def runtime(current: Principal = Depends(principal)) -> dict:
         return {"data_mode": settings.data_mode, "production_primary": None, "fixture_seeded": False, "security_proxy_viewer_enabled": settings.security_proxy_viewer_enabled}
+
+    @app.get("/api/v1/market/shanghai")
+    def standalone_shanghai_market(
+        current: Principal | None = Depends(optional_principal), session: Session = Depends(db_session), limit: int = Query(default=20, ge=1, le=20),
+    ) -> dict:
+        """Objective Shanghai facts only; no report or PDF input is accepted."""
+        return app.state.market_core.shanghai(session, limit=limit)
+
+    @app.get("/api/v1/market/proxies/{proxy_set}")
+    def standalone_proxy_market(
+        proxy_set: str, current: Principal | None = Depends(optional_principal), session: Session = Depends(db_session), limit: int = Query(default=20, ge=1, le=20),
+    ) -> dict:
+        """Fixed server-side proxy set only; callers never select symbols."""
+        try:
+            return app.state.market_core.proxies(session, proxy_set=proxy_set, limit=limit)
+        except KeyError as exc:
+            raise WebDomainError("market_proxy_set_not_found", "Fixed proxy set not found", 404) from exc
 
     def official_board_availability(session: Session, market_path_key: str) -> OfficialBoardAvailability:
         if not any(item.market_path_key == market_path_key for item in load_market_path_registry().market_paths):

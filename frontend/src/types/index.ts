@@ -3,6 +3,84 @@ export type ReportStatus = "uploaded" | "parsing" | "needs_review" | "blocked" |
 
 export interface Principal { username: string; role: Role }
 
+export interface MarketCoreHistoryRow {
+  trading_date: string;
+  close: number;
+  pct_change: number | null;
+  quote_datetime: string | null;
+  captured_at: string | null;
+  source: string | null;
+  data_mode: "completed_eod";
+}
+
+export interface MarketCoreLiveQuote {
+  status: "available" | "unavailable";
+  current: number | null;
+  pre_close: number | null;
+  pct_change: number | null;
+  quote_datetime: string | null;
+  server_received_at: string | null;
+  freshness: "fresh" | "stale" | "unavailable";
+  provider: string | null;
+  error_code: string | null;
+}
+
+export interface MarketCoreCoverage {
+  available_days: number;
+  first_date: string | null;
+  latest_date: string | null;
+  missing_dates: string[];
+}
+
+export interface MarketCoreIndicators {
+  ma5: number | null;
+  ma10: number | null;
+  ma20: number | null;
+  distance_to_ma5_pct: number | null;
+  distance_to_ma10_pct: number | null;
+  distance_to_ma20_pct: number | null;
+}
+
+export interface MarketCoreShanghai {
+  market_core: "standalone_objective";
+  symbol: string;
+  name: string;
+  live: MarketCoreLiveQuote;
+  latest_completed: MarketCoreHistoryRow | null;
+  history: MarketCoreHistoryRow[];
+  coverage: MarketCoreCoverage;
+  indicators: MarketCoreIndicators;
+}
+
+export interface MarketCoreProxyInstrument {
+  symbol: string;
+  name: string;
+  role: "etf" | "leader";
+  coverage_type: string;
+  live: MarketCoreLiveQuote;
+  latest_completed: MarketCoreHistoryRow | null;
+  history: MarketCoreHistoryRow[];
+  coverage: MarketCoreCoverage;
+  indicators: MarketCoreIndicators;
+}
+
+export interface MarketCoreProxyGroup {
+  proxy_set: string;
+  display_name: string;
+  status: "available" | "unavailable";
+  instruments: MarketCoreProxyInstrument[];
+}
+
+export interface MarketCoreProxies {
+  market_core: "standalone_objective";
+  proxy_set: string;
+  provider: string;
+  provider_role: string;
+  cache_hit: boolean;
+  provider_request_count: number;
+  groups: MarketCoreProxyGroup[];
+}
+
 export interface SectorMention {
   sector_key: string;
   sector_name: string;

@@ -11,7 +11,7 @@ import re
 import threading
 import time
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timezone
 from decimal import Decimal
 from typing import Callable
 
@@ -132,7 +132,7 @@ class LiveShanghaiMarketAnchorService:
         provider: TencentStandardSecurityQuoteProvider,
         enabled: bool = False,
         cache: LiveMarketAnchorCache | None = None,
-        now: Callable[[], datetime] = datetime.now,
+        now: Callable[[], datetime] = lambda: datetime.now(timezone.utc),
     ) -> None:
         self.provider, self.enabled, self.cache, self.now = provider, enabled, cache or LiveMarketAnchorCache(), now
 
@@ -179,10 +179,23 @@ class LiveShanghaiMarketAnchorService:
             "pct_change": float(quote.pct_change),
             # This is always Tencent's quote time, never the cache time.
             "quote_datetime": quote.quote_datetime.isoformat(),
+            # This is set at the server when Tencent's response is accepted.
+            # It deliberately remains distinct from the upstream quote time.
+            "server_received_at": self.now().isoformat(),
             "provider": self.provider.provider_key,
             "provider_role": self.provider.provider_role,
             "error_code": None,
         }
+
+    def observe_objective(self) -> dict:
+        """Return a cached objective Shanghai quote without report context.
+
+        The Market Core calls this method directly.  Report-specific defense
+        interpretation remains opt-in through :meth:`enrich_with_defense` and
+        can never gate fetching, freshness, or completed-history reads.
+        """
+        quote, cache_hit = self.cache.get_or_fetch(self._fetch_quote)
+        return {**quote, "cache_hit": cache_hit}
 
     @staticmethod
     def _position_payload(quote: dict, defense: DefenseLine) -> dict:
@@ -236,13 +249,13 @@ class LiveShanghaiMarketAnchorService:
         )
 
     def observe(self, *, market_path: str, core_view: str, parsed_primary: object | None = None) -> dict:
-        quote, cache_hit = self.cache.get_or_fetch(self._fetch_quote)
+        objective = self.observe_objective()
         return {
             **self.enrich_with_defense(
-                quote,
+                objective,
                 market_path=market_path,
                 core_view=core_view,
                 parsed_primary=parsed_primary,
             ),
-            "cache_hit": cache_hit,
+            "cache_hit": objective["cache_hit"],
         }

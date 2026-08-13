@@ -20,6 +20,29 @@ button, a, input, textarea, [tabindex] { outline-offset: 4px; }
 .hero-island { min-height: 190px; border-radius: 52% 48% 46% 54%; background: radial-gradient(ellipse at 50% 80%, #dfbf7e 0 29%, transparent 30%), radial-gradient(ellipse at 48% 56%, #87ad77 0 39%, transparent 40%), linear-gradient(#8bcad2 0 63%, #77b9c5 64%); box-shadow: inset 0 -12px 30px rgb(255 255 255 / 25%); }
 .grid { display: grid; gap: var(--space-4); grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); }
 .stack { display: grid; gap: var(--space-4); }
+.market-lab-page { display: grid; gap: var(--space-5); }
+.market-lab-page > header { max-width: 70rem; }
+.market-lab-live { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: .4rem 1rem; align-items: end; }
+.market-lab-live h3, .market-lab-live p { margin: 0; }
+.market-lab-live > div:last-of-type { display: grid; justify-items: end; gap: .15rem; font-size: 1.2rem; }
+.market-lab-live > p { grid-column: span 1; color: var(--text-muted); font-size: .78rem; }
+.market-lab-live .notice { grid-column: 1 / -1; }
+.market-lab-coverage { margin: .8rem 0; color: var(--text-muted); font-size: .82rem; }
+.market-lab-indicators { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .45rem; margin: .8rem 0; }
+.market-lab-indicators div { display: grid; gap: .15rem; padding: .55rem; border-radius: 10px; background: rgb(233 239 220 / 55%); }
+.market-lab-indicators dt { color: var(--text-muted); font-size: .75rem; }
+.market-lab-indicators dd { margin: 0; font-weight: 800; }
+.market-lab-history { display: grid; gap: .3rem; margin-top: .8rem; }
+.market-lab-history-row { display: grid; grid-template-columns: .9fr .9fr .75fr minmax(9rem, 1fr); gap: .45rem; align-items: baseline; padding: .45rem .55rem; border-radius: 8px; background: rgb(255 250 240 / 70%); font-size: .8rem; }
+.market-lab-history-row small { color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.market-lab-history-header { padding: 0 .55rem; background: transparent; color: var(--text-muted); font-size: .7rem; font-weight: 800; }
+.market-lab-proxy-groups { display: grid; gap: 1rem; }
+.market-lab-group { display: grid; gap: .7rem; }
+.market-lab-group > h3 { margin: 0; }
+.market-lab-group > div { display: grid; grid-template-columns: repeat(auto-fit, minmax(290px, 1fr)); gap: .8rem; }
+.market-lab-proxy { display: grid; gap: .45rem; min-width: 0; padding: 1rem; border: 1px solid var(--border-soft); border-radius: 14px; background: rgb(255 250 240 / 72%); }
+.market-lab-proxy > p { margin: 0; }
+.market-lab-role { color: var(--text-muted); font-size: .78rem; font-weight: 800; }
 .eyebrow { font-size: var(--font-xs); font-weight: 800; letter-spacing: .12em; text-transform: uppercase; color: var(--text-muted); }
 .muted { color: var(--text-muted); }
 .notice { padding: .85rem 1rem; border-left: 4px solid var(--status-warning); background: #fff5d8; border-radius: 8px; }

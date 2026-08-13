@@ -1,0 +1,145 @@
+from __future__ import annotations
+
+from datetime import date, datetime, timedelta, timezone
+from decimal import Decimal
+
+from starlette.testclient import TestClient
+from sqlalchemy import text
+
+from leopard_project.providers.tencent_standard_quote import StandardSecurityQuote, TencentQuoteBatch
+from leopard_project.live_market_anchor_daily import capture_live_market_anchor_daily
+from leopard_project.security_proxy_daily import capture_fixed_security_proxy_daily, fixed_proxy_symbols
+from leopard_project.security_proxy_observation import SecurityProxyObservationService
+from leopard_project.web.app import WebSettings, create_app
+from leopard_project.web.database import create_session_factory
+from leopard_project.web.live_market_anchor import LiveShanghaiMarketAnchorService
+from leopard_project.web.market_core import MarketCoreReadService
+from leopard_project.web.models import LiveMarketAnchorDaily, SecurityProxyDaily
+
+
+NOW = datetime(2026, 8, 13, 6, 0, tzinfo=timezone.utc)
+
+
+class StubProvider:
+    provider_key = "tencent_standard_security_quote"
+    provider_role = "diagnostic_provider"
+    max_batch_size = 20
+
+    def __init__(self, quote_datetime: datetime = NOW.astimezone(timezone(timedelta(hours=8)))) -> None:
+        self.calls: list[tuple[str, ...]] = []
+        self.quote_datetime = quote_datetime
+
+    def fetch_batch(self, symbols, *, allow_network=False):
+        requested = tuple(symbols)
+        self.calls.append(requested)
+        quotes = tuple(StandardSecurityQuote(
+            requested_symbol=symbol, name=f"名称{symbol}", symbol=symbol[2:],
+            current=Decimal("10.20"), pre_close=Decimal("10.00"),
+            quote_datetime=self.quote_datetime, change=Decimal("0.20"), pct_change=Decimal("2.00"),
+            response_field_count=88, payload_sha256="a" * 64,
+        ) for symbol in requested)
+        return TencentQuoteBatch(quotes, {}, 1)
+
+
+def _settings(tmp_path) -> WebSettings:
+    return WebSettings(
+        database_url=f"sqlite:///{tmp_path / 'zero-report.sqlite3'}", upload_dir=tmp_path / "uploads",
+        session_secret="market-core-test-session-secret-is-long-enough", admin_username="admin", admin_password="admin-password",
+        viewer_username="viewer", viewer_password="viewer-password",
+        security_proxy_viewer_enabled=True, live_market_anchor_enabled=True,
+    )
+
+
+def _anchor(provider: StubProvider) -> LiveShanghaiMarketAnchorService:
+    return LiveShanghaiMarketAnchorService(provider=provider, enabled=True, now=lambda: NOW)
+
+
+def _seed_completed(session, count: int = 1) -> None:
+    for offset in range(count):
+        day = date(2026, 7, 20) + timedelta(days=offset)
+        session.add(LiveMarketAnchorDaily(
+            symbol="sh000001", trading_date=day, close=Decimal(3900 + offset), pre_close=Decimal(3899 + offset), pct_change=Decimal("0.03"),
+            high=None, low=None, quote_datetime=NOW, fetched_at=NOW, source="tencent_standard_security_quote",
+        ))
+        session.add(SecurityProxyDaily(
+            symbol="sh515880", trading_date=day, close=Decimal(10 + offset),
+            quote_datetime=NOW, fetched_at=NOW, source="tencent_standard_security_quote",
+        ))
+    session.commit()
+
+
+def test_market_core_is_report_independent_and_reports_actual_history_coverage(tmp_path) -> None:
+    sessions = create_session_factory(_settings(tmp_path).database_url)
+    with sessions() as session:
+        _seed_completed(session)
+        assert session.execute(text("SELECT count(*) FROM reports")).scalar_one() == 0
+        service = MarketCoreReadService(provider=StubProvider(), live_anchor=_anchor(StubProvider()), enabled=False, now=lambda: NOW)
+        shanghai = service.shanghai(session)
+        proxies = service.proxies(session, proxy_set="cpo")
+    assert shanghai["coverage"] == {"available_days": 1, "first_date": "2026-07-20", "latest_date": "2026-07-20", "missing_dates": []}
+    assert shanghai["indicators"]["ma5"] is None and shanghai["history"][0]["trading_date"] == "2026-07-20"
+    etf = proxies["groups"][0]["instruments"][0]
+    assert etf["coverage"]["available_days"] == 1 and etf["indicators"]["ma20"] is None
+    assert all("report" not in key for key in shanghai) and all("report" not in key for key in proxies)
+
+
+def test_market_core_uses_fixed_server_side_cpo_symbols_and_batches_at_twenty(tmp_path) -> None:
+    sessions = create_session_factory(_settings(tmp_path).database_url)
+    provider = StubProvider()
+    with sessions() as session:
+        _seed_completed(session, 5)
+        service = MarketCoreReadService(provider=provider, live_anchor=_anchor(provider), enabled=True, now=lambda: NOW)
+        result = service.proxies(session, proxy_set="cpo")
+        cached = service.proxies(session, proxy_set="cpo")
+    assert provider.calls == [("sh515880", "sz300308", "sz300502", "sz300394")]
+    assert result["provider_request_count"] == 1 and cached["cache_hit"] is True and cached["provider_request_count"] == 0
+    assert [item["symbol"] for item in result["groups"][0]["instruments"]] == ["sh515880", "sz300308", "sz300502", "sz300394"]
+    assert all(item["live"]["status"] == "available" for item in result["groups"][0]["instruments"])
+
+
+def test_market_core_ma_uses_completed_eod_only_and_requires_full_windows(tmp_path) -> None:
+    sessions = create_session_factory(_settings(tmp_path).database_url)
+    with sessions() as session:
+        _seed_completed(session, 20)
+        service = MarketCoreReadService(provider=StubProvider(), live_anchor=_anchor(StubProvider()), enabled=False, now=lambda: NOW)
+        result = service.proxies(session, proxy_set="cpo")
+    etf = result["groups"][0]["instruments"][0]
+    assert etf["history"][-1]["close"] == 29.0
+    assert etf["indicators"]["ma5"] == 27.0
+    assert etf["indicators"]["ma10"] == 24.5
+    assert etf["indicators"]["ma20"] == 19.5
+    assert etf["live"]["current"] is None and etf["indicators"]["distance_to_ma5_pct"] is None
+
+
+def test_zero_report_fastapi_market_endpoints_are_anonymous_and_have_no_report_id(tmp_path) -> None:
+    settings = _settings(tmp_path)
+    sessions = create_session_factory(settings.database_url)
+    with sessions() as session:
+        _seed_completed(session)
+    app = create_app(settings, sessions)
+    provider = StubProvider()
+    app.state.live_market_anchor = _anchor(provider)
+    app.state.market_core = MarketCoreReadService(provider=provider, live_anchor=app.state.live_market_anchor, enabled=True, now=lambda: NOW)
+    with TestClient(app) as client:
+        shanghai = client.get("/api/v1/market/shanghai")
+        proxies = client.get("/api/v1/market/proxies/cpo")
+    assert shanghai.status_code == 200 and proxies.status_code == 200
+    assert shanghai.json()["coverage"]["available_days"] == 1
+    assert len(proxies.json()["groups"][0]["instruments"]) == 4
+
+
+def test_zero_report_eod_collectors_plan_shanghai_and_all_fixed_proxies_without_report_gate(tmp_path) -> None:
+    sessions = create_session_factory(_settings(tmp_path).database_url)
+    closed = datetime(2026, 8, 12, 15, 20, tzinfo=timezone(timedelta(hours=8)))
+    provider = StubProvider(closed)
+    with sessions() as session:
+        anchor = capture_live_market_anchor_daily(
+            session, target_trading_date=date(2026, 8, 12), provider=provider, now=lambda: closed, enable_provider=True,
+        )
+        proxies = capture_fixed_security_proxy_daily(
+            session, target_trading_date=date(2026, 8, 12), provider=provider, now=lambda: closed, enable_provider=True,
+        )
+        assert session.execute(text("SELECT COUNT(*) FROM reports")).scalar_one() == 0
+    assert anchor.requested_count == 1 and anchor.inserted_count == 1
+    assert proxies.candidate_count == len(fixed_proxy_symbols()) == 23
+    assert proxies.inserted_count == 23 and proxies.provider_batch_count == 2
