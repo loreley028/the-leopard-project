@@ -5,7 +5,7 @@ import { IslandCard } from "../components/island/IslandCard";
 import { IslandPathMatrix } from "../components/island/IslandPathMatrix";
 import { IslandStatusBadge } from "../components/island/IslandStatusBadge";
 import { PdfPagePreview } from "../components/PdfPagePreview";
-import type { DefenseLineValidation, EnhancedReport, LiveMarketAnchor, MarketSnapshot, PathMatrix, SectorAssessment } from "../types";
+import type { DefenseLineValidation, EnhancedReport, LiveMarketAnchor, MarketSnapshot, PathMatrix, ReportDefense, SectorAssessment } from "../types";
 import { formatPct } from "../utils/format";
 import { judgementDetail, pdfGroup } from "../utils/judgement";
 
@@ -16,7 +16,7 @@ const ratio = (value: number | null | undefined) => value == null ? "—" : `${v
 
 const point = (value: number | null | undefined) => value == null ? "—" : value.toLocaleString("zh-CN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const signedPoint = (value: number | null | undefined) => value == null ? "—" : `${value > 0 ? "+" : ""}${point(value)}`;
-const positionLabel: Record<NonNullable<LiveMarketAnchor["defense_position"]>, string> = {
+const positionLabel: Record<NonNullable<ReportDefense["defense_position"]>, string> = {
   above_defense_line: "攻防线上方",
   below_defense_line: "攻防线下方",
   at_defense_line: "攻防线附近 / 等于攻防线",
@@ -27,7 +27,7 @@ const validationPositionLabel: Record<DefenseLineValidation["close_position"], s
   close_at_defense_line: "收盘与线相等",
 };
 const signedTone = (value: number | null | undefined) => value == null || value === 0 ? "a-share-neutral" : value > 0 ? "a-share-positive" : "a-share-negative";
-const positionTone = (position: LiveMarketAnchor["defense_position"] | DefenseLineValidation["close_position"] | null) => (
+const positionTone = (position: ReportDefense["defense_position"] | DefenseLineValidation["close_position"] | null) => (
   position === "above_defense_line" || position === "close_above_defense_line" ? "a-share-positive"
     : position === "below_defense_line" || position === "close_below_defense_line" ? "a-share-negative" : "a-share-neutral"
 );
