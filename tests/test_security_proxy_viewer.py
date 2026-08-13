@@ -3,6 +3,8 @@ from __future__ import annotations
 from datetime import date, datetime
 from decimal import Decimal
 
+import pytest
+
 from leopard_project.security_proxy_observation import SecurityProxyObservationService
 from leopard_project.providers.tencent_standard_quote import TencentStandardSecurityQuoteProvider
 from leopard_project.web.security_proxy_viewer import OfficialBoardAvailability, SecurityProxyViewerCache, SecurityProxyViewerService
@@ -79,7 +81,11 @@ def test_proxy_viewer_adds_recent_history_and_metrics_without_using_current_in_m
         for index in range(11, 21)
     ]
     assert instrument["ma5"] == 19 and instrument["ma10"] == 16.5 and instrument["ma20"] == 11.5
-    assert instrument["distance_to_ma5_pct"] is None
+    # Stale/live-unavailable quotes use the last captured completed close for
+    # display only; the MA itself still uses completed daily history.
+    assert instrument["data_mode"] == "completed_eod"
+    assert instrument["quote_status"] == "completed_eod"
+    assert instrument["distance_to_ma5_pct"] == pytest.approx(10.526315789473685)
 
 
 def test_proxy_trend_distance_is_fact_only_and_history_is_optional() -> None:
@@ -90,3 +96,22 @@ def test_proxy_trend_distance_is_fact_only_and_history_is_optional() -> None:
     assert payload["ma5"] == 3 and payload["distance_to_ma5_pct"] == 100
     empty = SecurityProxyViewerService._trend_payload((), Decimal("6"))
     assert empty == {"recent_closes": [], "ma5": None, "ma10": None, "ma20": None, "distance_to_ma5_pct": None, "distance_to_ma10_pct": None, "distance_to_ma20_pct": None}
+
+
+def test_stale_live_quote_falls_back_to_completed_eod_without_zero_fill(tmp_path) -> None:
+    sessions = create_session_factory(f"sqlite:///{tmp_path / 'viewer.sqlite3'}")
+    with sessions() as session:
+        session.add_all([
+            SecurityProxyDaily(symbol="sh515880", trading_date=date(2026, 8, 10), close=Decimal("10"), fetched_at=datetime(2026, 8, 10, 15, 20), source="fixture"),
+            SecurityProxyDaily(symbol="sh515880", trading_date=date(2026, 8, 11), close=Decimal("11"), fetched_at=datetime(2026, 8, 11, 15, 20), source="fixture"),
+        ])
+        session.commit()
+        result = SecurityProxyViewerService(
+            observation_service=StubObservationService(), enabled=True,
+            now=lambda: datetime(2026, 8, 5, 18, 0),
+        ).observe(unavailable(), session=session)
+    item = result["security_proxy"]["instruments"][0]
+    assert item["data_mode"] == "completed_eod"
+    assert item["quote_status"] == "completed_eod"
+    assert Decimal(item["current"]) == Decimal("11")
+    assert Decimal(item["pct_change"]) == Decimal("10")

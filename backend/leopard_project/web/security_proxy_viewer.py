@@ -4,7 +4,8 @@ from __future__ import annotations
 import threading
 import time
 from dataclasses import asdict, dataclass
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
+from decimal import Decimal
 from typing import Callable, Iterable
 
 from sqlalchemy.orm import Session
@@ -65,16 +66,57 @@ class SecurityProxyViewerService:
         observations, cache_hit = self.cache.get_or_fetch(key, lambda: self.observation_service.observe([availability.market_path_key], enable_provider=True))
         observation = observations[0]
         histories = get_security_proxy_daily_histories(session, (item.symbol for item in observation.instruments)) if session else {}
-        instruments = [{
-            "symbol": item.symbol, "security_name": item.security_name, "proxy_role": item.proxy_role,
-            "coverage_type": item.coverage_type, "current": str(item.current) if item.current is not None else None,
-            "pre_close": str(item.pre_close) if item.pre_close is not None else None, "change": str(item.change) if item.change is not None else None,
-            "pct_change": str(item.pct_change) if item.pct_change is not None else None,
-            "quote_datetime": item.quote_datetime.isoformat() if item.quote_datetime else None,
-            "quote_status": item.quote_status, "error_class": item.error_class,
-            **self._trend_payload(histories.get(item.symbol, ()), item.current),
-        } for item in observation.instruments]
+        instruments = [self._instrument_payload(item, histories.get(item.symbol, ())) for item in observation.instruments]
         return {**base, "viewer_source_mode": "security_proxy", "fallback_reason": availability.reason or availability.status, "disclosure": DISCLAIMER, "security_proxy": {"display_label": "代理观察", "status": observation.status, "recommended_display_mode": observation.recommended_display_mode, "instruments": instruments, "cache_hit": cache_hit, "quote_datetime": observation.quote_datetime.isoformat() if observation.quote_datetime else None}}
+
+    @staticmethod
+    def _completed_eod_payload(item: object, history: tuple[object, ...]) -> dict | None:
+        """Use an already captured close only when the live quote is unusable.
+
+        The resulting value is explicitly labelled ``completed_eod``.  It is
+        not a live substitute and it never causes a provider call or a write.
+        """
+        if not history:
+            return None
+        latest = history[-1]
+        close = Decimal(str(latest.close))
+        previous = Decimal(str(history[-2].close)) if len(history) > 1 else None
+        change = close - previous if previous is not None else None
+        pct_change = ((close / previous) - Decimal("1")) * Decimal("100") if previous and previous > 0 else None
+        quote_datetime = getattr(latest, "quote_datetime", None) or getattr(latest, "fetched_at", None)
+        return {
+            "current": str(close), "pre_close": str(previous) if previous is not None else None,
+            "change": str(change) if change is not None else None,
+            "pct_change": str(pct_change) if pct_change is not None else None,
+            "quote_datetime": quote_datetime.isoformat() if quote_datetime else None,
+            "quote_status": "completed_eod", "error_class": None, "data_mode": "completed_eod",
+        }
+
+    def _instrument_payload(self, item: object, history: tuple[object, ...]) -> dict:
+        quote_time = getattr(item, "quote_datetime", None)
+        now = self.now()
+        if now.tzinfo is None:
+            now = now.replace(tzinfo=timezone.utc)
+        fresh_quote = isinstance(quote_time, datetime) and quote_time.tzinfo is not None and now.astimezone(timezone.utc) - quote_time.astimezone(timezone.utc) <= timedelta(minutes=15)
+        live_available = getattr(item, "quote_status") == "available" and getattr(item, "current") is not None and fresh_quote
+        quote = {
+            "current": str(item.current) if live_available else None,
+            "pre_close": str(item.pre_close) if live_available and item.pre_close is not None else None,
+            "change": str(item.change) if live_available and item.change is not None else None,
+            "pct_change": str(item.pct_change) if live_available and item.pct_change is not None else None,
+            "quote_datetime": item.quote_datetime.isoformat() if live_available and item.quote_datetime else None,
+            "quote_status": "available" if live_available else "unavailable",
+            "error_class": item.error_class if live_available else ("stale_quote" if getattr(item, "quote_status") == "available" else item.error_class),
+            "data_mode": "live" if live_available else "unavailable",
+        }
+        if not live_available:
+            quote.update(self._completed_eod_payload(item, history) or {})
+        current = Decimal(str(quote["current"])) if quote["current"] is not None else None
+        return {
+            "symbol": item.symbol, "security_name": item.security_name, "proxy_role": item.proxy_role,
+            "coverage_type": item.coverage_type, **quote,
+            **self._trend_payload(history, current),
+        }
 
     @staticmethod
     def _trend_payload(history: Iterable[object], current: object) -> dict:

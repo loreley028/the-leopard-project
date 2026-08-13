@@ -395,7 +395,7 @@ button, a, input, textarea, [tabindex] { outline-offset: 4px; }
 .proxy-observation-item h4 { margin: 0; color: var(--text-muted); font-size: .75rem; font-weight: 600; }
 .security-proxy-sparkline { display: block; width: 100%; height: 4.25rem; overflow: visible; }
 .proxy-history-empty { margin: .15rem 0; color: var(--text-muted); font-size: .82rem; }
-.proxy-recent-closes { display: grid; grid-template-columns: repeat(10, minmax(0, 1fr)); gap: .25rem; }
+.proxy-recent-closes { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: .25rem; }
 .proxy-recent-closes span { display: grid; min-width: 0; gap: .1rem; padding: .25rem .15rem; border-radius: 6px; background: rgb(255 255 255 / 70%); }
 .proxy-recent-closes time { color: var(--text-muted); font-size: .66rem; }
 .proxy-recent-closes b { overflow: hidden; font-size: .72rem; font-variant-numeric: tabular-nums; text-overflow: ellipsis; }
@@ -424,7 +424,7 @@ button, a, input, textarea, [tabindex] { outline-offset: 4px; }
   .sector-table-wrap { width: 100%; overflow-x: auto; }
   .recent-five-detail { grid-template-columns: 1fr; }
   .proxy-observation-list { grid-template-columns: 1fr; }
-  .proxy-recent-closes { grid-template-columns: repeat(5, minmax(0, 1fr)); gap: .35rem; }
+  .proxy-recent-closes { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .35rem; }
   .market-system-strip { display: grid; grid-template-columns: 1fr 1fr; }
   .review-stepper, .review-summary, .review-decision-summary, .review-evidence, .technical-details dl { grid-template-columns: 1fr; }
   .review-primary-action, .review-actions { align-items: stretch; flex-direction: column; }

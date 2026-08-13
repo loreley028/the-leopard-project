@@ -186,6 +186,9 @@ def market_payload(bar: SectorDailyBar | None, indicator: SectorIndicatorSnapsho
         "provider_role": bar.provider_role,
         "fetched_at": bar.fetched_at.isoformat(),
         "source_response_hash": bar.source_response_hash,
+        # Historical validation imports remain readable, but they are not a
+        # claim that the displayed value is a current official board quote.
+        "market_data_mode": "legacy_historical_validation" if bar.data_source.startswith("ths_public_validation") else "completed_eod",
     }
     if indicator:
         payload.update({
@@ -250,8 +253,10 @@ class EnhancedReportService:
                 explicitly_mentioned=mention is not None,
                 recent_path_summary="本期首次记录" if mention else "本期未明确提及",
                 current_judgement=summary,
-                main_basis="等待管理员复核" if mention else "",
-                observation_condition="等待管理员复核" if mention else "",
+                # Publication is not held hostage by auxiliary market work.
+                # A best-effort mention has no invented basis or condition.
+                main_basis="",
+                observation_condition="",
                 source_text_reference=mention.source_text if mention else "",
                 extraction_method="mention_fallback" if mention else "unavailable",
                 confidence="medium" if mention else "low",

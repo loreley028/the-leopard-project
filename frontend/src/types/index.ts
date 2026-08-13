@@ -31,6 +31,7 @@ export interface Report {
   market_path: string;
   risk_warning: string;
   focus_sectors: string[];
+  explicit_assessment_count?: number;
   created_at: string;
   created_at_display?: string;
   published_at: string | null;
@@ -233,6 +234,7 @@ export interface MarketSnapshot {
   provider_role: string;
   fetched_at: string;
   source_response_hash: string;
+  market_data_mode?: "completed_eod" | "legacy_historical_validation";
   snapshot_hash?: string;
   recent_10_trading_days?: RecentTradingDay[];
 }
@@ -269,7 +271,8 @@ export interface IntradaySnapshot {
 export interface ViewerSecurityProxyInstrument {
   symbol: string; security_name: string; proxy_role: "etf" | "leader"; coverage_type: string;
   current: number | null; pre_close: number | null; change: number | null; pct_change: number | null;
-  quote_datetime: string | null; quote_status: "available" | "unavailable"; error_class: string | null;
+  quote_datetime: string | null; quote_status: "available" | "completed_eod" | "unavailable"; error_class: string | null;
+  data_mode?: "live" | "completed_eod" | "unavailable";
   recent_closes: ViewerSecurityProxyRecentClose[];
   ma5: number | null; ma10: number | null; ma20: number | null;
   distance_to_ma5_pct: number | null; distance_to_ma10_pct: number | null; distance_to_ma20_pct: number | null;
@@ -372,7 +375,7 @@ export interface EnhancedReport {
   sector_assessments: SectorAssessment[];
   status_groups: Array<{ status: PathStatus; count: number; items: SectorAssessment[] }>;
   market_snapshots: MarketSnapshot[];
-  live_market_anchor: LiveMarketAnchor;
+  report_defense: ReportDefense;
   recent_defense_line_validations: DefenseLineValidation[];
   comparison: { previous_report_id: string | null; previous_report_date?: string; status_changes: Array<{ sector_key: string; sector_name: string; from: PathStatus; to: PathStatus }>; counts: Record<string, number> };
   market_data_attached: boolean;
@@ -392,8 +395,9 @@ export interface DefenseLineValidation {
 }
 
 export interface LiveMarketAnchor {
-  market_context: "live_market_anchor";
+  market_context: "objective_market_anchor";
   market_context_note: string;
+  data_mode: "live" | "completed_eod" | "unavailable";
   quote_status: "available" | "unavailable";
   symbol: "sh000001";
   index_name: string;
@@ -405,7 +409,12 @@ export interface LiveMarketAnchor {
   provider: string;
   provider_role: string;
   error_code: string | null;
-  cache_hit: boolean;
+  captured_at: string | null;
+  trading_date: string | null;
+  value: number | null;
+}
+
+export interface ReportDefense {
   defense_line_value: number | null;
   defense_line_source: "market_path" | "core_view" | null;
   stand_above_condition: string | null;
@@ -414,6 +423,7 @@ export interface LiveMarketAnchor {
   distance_points: number | null;
   distance_pct: number | null;
   defense_position: "above_defense_line" | "below_defense_line" | "at_defense_line" | null;
+  market_context_note: string;
 }
 
 export interface PathMatrix {

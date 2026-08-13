@@ -149,16 +149,14 @@ def register_enhanced_routes(
             "error_code": live["error_code"], "index_name": "上证指数", "symbol": "sh000001",
         }
 
-    def attach_report_defense(anchor: dict, report: Report) -> dict:
+    def report_defense_payload(report: Report) -> dict:
         metadata = json.loads(report.interpretation_meta_json or "{}")
-        defense = live_market_anchor.enrich_with_defense(
-            anchor,
+        defense = live_market_anchor.defense_payload(
             market_path=report.market_path,
             core_view=report.core_view,
             parsed_primary=(metadata.get("defense_lines") or {}).get("primary_defense_line"),
         )
         return {
-            **anchor,
             **{
                 key: defense[key]
                 for key in (
@@ -167,7 +165,7 @@ def register_enhanced_routes(
                     "distance_pct", "defense_position",
                 )
             },
-            "market_context_note": "当前或最近完整上证数据与本报告攻防线分别读取；前者不代表报告日期的历史指数。",
+            "market_context_note": "报告攻防线仅来自本报告；当前或最近完整上证数据由独立市场锚点读取。",
         }
 
     @app.get("/api/v1/path-statuses", response_model=ApiObjectResponse)
@@ -185,8 +183,7 @@ def register_enhanced_routes(
             payload["active_holding_interval"] = service.holding_interval_for_sector(report, item.sector_key)
             assessments.append(payload)
         paths = [path_entry_payload(item) for item in service.path_entries(report.id)]
-        objective_anchor = objective_market_anchor(session)
-        current_market_anchor = attach_report_defense(objective_anchor, report)
+        report_defense = report_defense_payload(report)
         groups: dict[str, list[dict]] = {}
         for item in assessments:
             groups.setdefault(item["current_path_status"], []).append(item)
@@ -196,8 +193,7 @@ def register_enhanced_routes(
             "sector_assessments": assessments,
             "status_groups": [{"status": key, "count": len(value), "items": value} for key, value in groups.items()],
             "market_snapshots": list(snapshots.values()),
-            "live_market_anchor": current_market_anchor,
-            "market_anchor": objective_anchor,
+            "report_defense": report_defense,
             "recent_defense_line_validations": recent_defense_line_validations(session),
             "comparison": service.comparison(report),
             # Compatibility only.  The Viewer must never treat this legacy

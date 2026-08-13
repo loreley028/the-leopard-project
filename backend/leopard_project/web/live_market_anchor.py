@@ -220,6 +220,21 @@ class LiveShanghaiMarketAnchorService:
             "market_context_note": "当前市场辅助：实时上证指数用于对照本报告攻防线，不代表报告日期的历史指数。",
         }
 
+    def defense_payload(
+        self,
+        *,
+        market_path: str,
+        core_view: str,
+        parsed_primary: object | None = None,
+    ) -> dict:
+        """Return report interpretation only, without reading a market quote."""
+        return self.enrich_with_defense(
+            self._unavailable("not_requested"),
+            market_path=market_path,
+            core_view=core_view,
+            parsed_primary=parsed_primary,
+        )
+
     def observe(self, *, market_path: str, core_view: str, parsed_primary: object | None = None) -> dict:
         quote, cache_hit = self.cache.get_or_fetch(self._fetch_quote)
         return {

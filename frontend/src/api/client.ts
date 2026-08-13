@@ -1,4 +1,4 @@
-import type { EnhancedReport, Interpretation, IntradayStatus, PathMatrix, Principal, Report, Sector, SectorAssessment, SectorResearch, ViewerObservation, ViewerSecurityProxyInstrument } from "../types";
+import type { EnhancedReport, Interpretation, IntradayStatus, LiveMarketAnchor, PathMatrix, Principal, Report, Sector, SectorAssessment, SectorResearch, ViewerObservation, ViewerSecurityProxyInstrument } from "../types";
 import { apiPath, appPath } from "../config/appBasePath";
 
 export class ApiError extends Error {
@@ -21,7 +21,7 @@ export function publicResourcePath(path: string | null | undefined): string | un
   return appPath(path);
 }
 
-type ViewerSecurityProxyInstrumentWire = Omit<ViewerSecurityProxyInstrument, "current" | "pre_close" | "change" | "pct_change" | "quote_datetime" | "recent_closes" | "ma5" | "ma10" | "ma20" | "distance_to_ma5_pct" | "distance_to_ma10_pct" | "distance_to_ma20_pct"> & {
+type ViewerSecurityProxyInstrumentWire = Omit<ViewerSecurityProxyInstrument, "current" | "pre_close" | "change" | "pct_change" | "quote_datetime" | "recent_closes" | "ma5" | "ma10" | "ma20" | "distance_to_ma5_pct" | "distance_to_ma10_pct" | "distance_to_ma20_pct" | "data_mode"> & {
   current?: unknown;
   pre_close?: unknown;
   change?: unknown;
@@ -34,6 +34,7 @@ type ViewerSecurityProxyInstrumentWire = Omit<ViewerSecurityProxyInstrument, "cu
   distance_to_ma5_pct?: unknown;
   distance_to_ma10_pct?: unknown;
   distance_to_ma20_pct?: unknown;
+  data_mode?: unknown;
 };
 
 type ViewerObservationWire = Omit<ViewerObservation, "security_proxy"> & {
@@ -71,6 +72,7 @@ function normalizeViewerSecurityProxyInstrument(value: ViewerSecurityProxyInstru
     change: parseFiniteNumber(value.change),
     pct_change: parseFiniteNumber(value.pct_change),
     quote_datetime: typeof value.quote_datetime === "string" ? value.quote_datetime : null,
+    data_mode: value.data_mode === "live" || value.data_mode === "completed_eod" || value.data_mode === "unavailable" ? value.data_mode : "unavailable",
     recent_closes,
     ma5: parseFiniteNumber(value.ma5), ma10: parseFiniteNumber(value.ma10), ma20: parseFiniteNumber(value.ma20),
     distance_to_ma5_pct: parseFiniteNumber(value.distance_to_ma5_pct),
@@ -98,6 +100,7 @@ export const api = {
   latestReport: () => request<Report>("/reports/latest"),
   report: (id: string) => request<Report>(`/reports/${id}`),
   enhancedReport: (id: string) => request<EnhancedReport>(`/reports/${id}/enhanced`),
+  marketAnchor: () => request<LiveMarketAnchor>("/market/anchor"),
   pathMatrix: (id: string, period = "20") => request<PathMatrix>(`/reports/${id}/path-matrix?periods=${encodeURIComponent(period)}`),
   reportAssessments: (id: string) => request<SectorAssessment[]>(`/reports/${id}/sector-assessments`),
   sectors: (includeLowAttention = false, lowAttentionOnly = false) => request<Sector[]>(`/sectors?include_low_attention=${includeLowAttention}&low_attention_only=${lowAttentionOnly}`),

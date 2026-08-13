@@ -32,11 +32,14 @@ const positionTone = (position: LiveMarketAnchor["defense_position"] | DefenseLi
     : position === "below_defense_line" || position === "close_below_defense_line" ? "a-share-negative" : "a-share-neutral"
 );
 
-function ReportOverview({ enhanced }: { enhanced: EnhancedReport }) {
+function ReportOverview({ enhanced, anchor }: { enhanced: EnhancedReport; anchor: LiveMarketAnchor | null }) {
   const { report } = enhanced;
-  const anchor = enhanced.live_market_anchor;
-  const quoteAvailable = anchor.quote_status === "available";
-  const defenseSource = anchor.defense_line_source === "market_path" ? "大盘路径" : anchor.defense_line_source === "core_view" ? "核心判断安全回退" : null;
+  const defense = enhanced.report_defense;
+  const quoteAvailable = anchor?.quote_status === "available";
+  const defenseSource = defense.defense_line_source === "market_path" ? "大盘路径" : defense.defense_line_source === "core_view" ? "核心判断安全回退" : null;
+  const distancePoints = quoteAvailable && anchor.current != null && defense.defense_line_value != null ? anchor.current - defense.defense_line_value : null;
+  const distancePct = distancePoints != null && defense.defense_line_value ? distancePoints / defense.defense_line_value * 100 : null;
+  const defensePosition = distancePoints == null ? null : distancePoints > 0 ? "above_defense_line" : distancePoints < 0 ? "below_defense_line" : "at_defense_line";
   const validations = enhanced.recent_defense_line_validations;
   return <div className="report-overview-grid">
     <IslandCard title="核心观点">
@@ -44,21 +47,21 @@ function ReportOverview({ enhanced }: { enhanced: EnhancedReport }) {
         <section><p className="eyebrow">猎豹核心判断</p><p className="core-view-summary">{report.core_view}</p></section>
         <section className="market-anchor-panel" aria-label="大盘观察 / 市场锚点">
           <div className="market-anchor-title"><p className="eyebrow">大盘观察 / 市场锚点</p><span>当前市场辅助</span></div>
-          <p className="market-context-note">{anchor.market_context_note}</p>
+          <p className="market-context-note">{anchor?.market_context_note ?? "市场锚点暂不可用；报告攻防线仍按报告原文展示。"}</p>
           {quoteAvailable ? <div className="market-anchor-metrics">
             <div><span>上个交易日收盘</span><strong>{point(anchor.pre_close)}</strong></div>
-            <div><span>今日上证指数</span><strong>{point(anchor.current)}</strong><em className={signedTone(anchor.pct_change)}>{pct(anchor.pct_change)}</em></div>
-            <div><span>今日攻防线</span><strong>{anchor.defense_line_value == null ? "报告未单列" : point(anchor.defense_line_value)}</strong></div>
-            <div><span>距攻防线</span><strong className={signedTone(anchor.distance_points)}>{anchor.distance_points == null ? "—" : signedPoint(anchor.distance_points)}</strong><em className={signedTone(anchor.distance_pct)}>{pct(anchor.distance_pct)}</em></div>
+            <div><span>{anchor.data_mode === "live" ? "当前上证指数" : "最近完整收盘"}</span><strong>{point(anchor.current)}</strong><em className={signedTone(anchor.pct_change)}>{pct(anchor.pct_change)}</em></div>
+            <div><span>今日攻防线</span><strong>{defense.defense_line_value == null ? "报告未单列" : point(defense.defense_line_value)}</strong></div>
+            <div><span>距攻防线</span><strong className={signedTone(distancePoints)}>{signedPoint(distancePoints)}</strong><em className={signedTone(distancePct)}>{pct(distancePct)}</em></div>
           </div> : <p className="market-anchor-unavailable">上证指数行情暂不可用；攻防点位不会被当作指数点位。</p>}
-          <div className="market-anchor-position"><span>当前位置</span><strong className={positionTone(anchor.defense_position)}>{anchor.defense_position ? positionLabel[anchor.defense_position] : "—"}</strong>{quoteAvailable && <em>行情时间 {anchor.quote_datetime ?? "—"}</em>}</div>
+          <div className="market-anchor-position"><span>当前位置</span><strong className={positionTone(defensePosition)}>{defensePosition ? positionLabel[defensePosition] : "—"}</strong>{quoteAvailable && <em>{anchor.data_mode === "live" ? "行情时间" : "收盘时间"} {anchor.quote_datetime ?? "—"}</em>}</div>
         </section>
         <section className="defense-line-panel" aria-label="猎豹攻防线">
-          <div className="defense-level"><span>猎豹攻防点</span><strong>{anchor.defense_line_value == null ? "报告未单列" : point(anchor.defense_line_value)}</strong></div>
+          <div className="defense-level"><span>猎豹攻防点</span><strong>{defense.defense_line_value == null ? "报告未单列" : point(defense.defense_line_value)}</strong></div>
           <dl>
-            <div><dt>站上条件</dt><dd>{anchor.stand_above_condition ?? "报告未单列站上后的确认条件。"}</dd></div>
-            <div><dt>跌破条件</dt><dd>{anchor.break_below_condition ?? "报告未单列跌破后的应对条件。"}</dd></div>
-            <div><dt>验证条件</dt><dd>{anchor.validation_conditions ?? "继续按报告原文观察时间、宽度、量能或资金确认。"}</dd></div>
+            <div><dt>站上条件</dt><dd>{defense.stand_above_condition ?? "报告未单列站上后的确认条件。"}</dd></div>
+            <div><dt>跌破条件</dt><dd>{defense.break_below_condition ?? "报告未单列跌破后的应对条件。"}</dd></div>
+            <div><dt>验证条件</dt><dd>{defense.validation_conditions ?? "继续按报告原文观察时间、宽度、量能或资金确认。"}</dd></div>
           </dl>
           <p className="defense-source">攻防线来源：{defenseSource ?? "报告未单列"}。报告观点与当前市场辅助按各自日期语义展示。</p>
         </section>
@@ -114,10 +117,12 @@ export function ReportDetailPage({ latest = false }: { latest?: boolean }) {
   const reportId = latest ? latestReportId : routeReportId;
   const [period, setPeriod] = useState("20");
   const [enhanced, setEnhanced] = useState<EnhancedReport | null>();
+  const [marketAnchor, setMarketAnchor] = useState<LiveMarketAnchor | null>(null);
   const [matrix, setMatrix] = useState<PathMatrix | null>(null);
   const [previewLoaded, setPreviewLoaded] = useState(false);
   useEffect(() => { if (latest) api.latestReport().then(item => setLatestReportId(item.id)).catch(() => setEnhanced(null)); }, [latest]);
   useEffect(() => { if (reportId) api.enhancedReport(reportId).then(setEnhanced).catch(() => setEnhanced(null)); }, [reportId]);
+  useEffect(() => { api.marketAnchor().then(setMarketAnchor).catch(() => setMarketAnchor(null)); }, []);
   useEffect(() => { if (reportId) api.pathMatrix(reportId, period).then(setMatrix).catch(() => setMatrix(null)); }, [reportId, period]);
   const grouped = useMemo(() => {
     const result = new Map<string, SectorAssessment[]>();
@@ -134,13 +139,11 @@ export function ReportDetailPage({ latest = false }: { latest?: boolean }) {
   const unmentioned = enhanced.sector_assessments.length - mentioned.length;
   return <article className="page enhanced-report">
     {!latest && <nav className="breadcrumbs" aria-label="面包屑"><Link to={origin === "报告库" ? "/reports" : "/"}>{origin}</Link><span>/</span><span>{report.report_date}</span></nav>}
-    <header className="report-header"><div><IslandStatusBadge status={report.status} /><p className="eyebrow">直播总结动态加强版 · {chineseDate(report.report_date)}</p><h1>{report.title}</h1></div><div className="date-contract"><span>报告日期<strong>{report.report_date}</strong></span><span>目标交易日<strong>{report.target_trade_date ?? "待确认"}</strong></span><span>行情截止日期<strong>{report.market_as_of_date ?? "行情未附加"}</strong></span></div></header>
-    {!enhanced.market_data_attached && <p className="notice report-market-notice">行情辅助数据尚未附加。</p>}
-    <nav className="report-tabs" aria-label="增强报告章节"><a href="#overview">报告概览</a><a href="#path">历史路径</a><a href="#assessments">板块观点</a><a href="#market">行情辅助</a><a href="#source">原始PDF</a></nav>
-    <section id="overview"><h2>报告概览</h2><ReportOverview enhanced={enhanced} /></section>
+    <header className="report-header"><div><IslandStatusBadge status={report.status} /><p className="eyebrow">直播总结动态加强版 · {chineseDate(report.report_date)}</p><h1>{report.title}</h1></div><div className="date-contract"><span>报告日期<strong>{report.report_date}</strong></span><span>报告核心观点<strong>攻防线与板块观点</strong></span></div></header>
+    <nav className="report-tabs" aria-label="增强报告章节"><a href="#overview">报告概览</a><a href="#path">历史路径</a><a href="#assessments">板块观点</a><a href="#source">原始PDF</a></nav>
+    <section id="overview"><h2>报告概览</h2><ReportOverview enhanced={enhanced} anchor={marketAnchor} /></section>
     <section id="path"><h2>历史路径矩阵</h2>{matrix ? <IslandPathMatrix matrix={matrix} period={period} onPeriodChange={setPeriod} /> : <p>路径矩阵加载中…</p>}</section>
     <section id="assessments"><h2>{chineseDate(report.report_date)}板块观点详细汇总</h2><p className="muted">按原PDF分组展示五列主体；路径历史来自矩阵，详细观点历史来自已上传PDF，两者分别保存。</p>{GROUP_ORDER.map(group => grouped.get(group)?.length ? <AssessmentTable key={group} title={group} items={grouped.get(group)!} /> : null)}<details className="advanced-review"><summary>本期未提及 {unmentioned} 个板块</summary><p>“未提”只表示本期PDF没有明确观点，不代表既有观点失效。</p></details></section>
-    <section id="market"><h2>行情辅助</h2><p className="notice">{enhanced.market_data_attached ? `已固化 ${enhanced.market_snapshots.length}/65 个支持板块；发布快照不会被后续刷新覆盖。` : "尚未绑定真实行情；不会使用演示行情填充。"}</p></section>
     <section id="source"><h2>原始PDF</h2>{previewLoaded ? <PdfPagePreview reportId={report.id} /> : <div className="pdf-preview-placeholder"><p>打开或刷新报告不会请求PDF；点击后仅加载内存渲染的逐页图片，不会写入下载目录。</p><button type="button" onClick={() => setPreviewLoaded(true)}>加载逐页预览</button></div>}<p><a href={publicResourcePath(report.pdf_download_url)}>下载原始PDF</a></p><p>{enhanced.data_notice} 来源追溯由Admin保留，Viewer正文不重复展示原文摘录。</p></section>
   </article>;
 }
