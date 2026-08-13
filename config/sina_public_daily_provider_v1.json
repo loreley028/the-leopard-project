@@ -1,0 +1,12 @@
+{
+  "provider": "sina_public_daily_http",
+  "role": "validated_historical_provider",
+  "enabled": false,
+  "endpoint_template": "https://money.finance.sina.com.cn/quotes_service/api/json_v2.php/CN_MarketData.getKLineData?symbol={symbol}&scale=240&ma=no&datalen={days}",
+  "supported_symbol_pattern": "^(?:sh|sz)\\d{6}$",
+  "maximum_days": 60,
+  "timeout_seconds": 10,
+  "price_adjustment_policy": "unadjusted_daily_bar",
+  "authentication": "none",
+  "request_policy": "one request per fixed symbol; no retry; no cookies, token, referer, special user-agent, or raw response persistence"
+}
