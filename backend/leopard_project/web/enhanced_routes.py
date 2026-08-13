@@ -152,6 +152,34 @@ def register_enhanced_routes(
             "error_code": live["error_code"], "index_name": "上证指数", "symbol": "sh000001",
         }
 
+    def completed_market_anchor_history(session: Session, *, limit: int = 10) -> dict:
+        """Read the independently captured Shanghai closes, never report data.
+
+        The current quote remains a separate live fact.  This history contains
+        only completed EOD records actually present in the database and is
+        deliberately not padded to a requested display length.
+        """
+        rows = list(reversed(session.scalars(select(LiveMarketAnchorDaily).where(
+            LiveMarketAnchorDaily.symbol == "sh000001",
+        ).order_by(desc(LiveMarketAnchorDaily.trading_date)).limit(limit)).all()))
+        return {
+            "market_context": "objective_market_anchor_history",
+            "index_name": "上证指数",
+            "symbol": "sh000001",
+            "max_days": limit,
+            "completed_days": len(rows),
+            "items": [{
+                "trading_date": item.trading_date.isoformat(),
+                "close": float(item.close),
+                "pre_close": float(item.pre_close),
+                "change": float(item.close - item.pre_close),
+                "pct_change": float(item.pct_change),
+                "data_mode": "completed_eod",
+                "quote_datetime": item.quote_datetime.isoformat(),
+                "source": item.source,
+            } for item in rows],
+        }
+
     def report_defense_payload(report: Report) -> dict:
         metadata = json.loads(report.interpretation_meta_json or "{}")
         defense = live_market_anchor.defense_payload(
@@ -534,6 +562,10 @@ def register_enhanced_routes(
     @app.get("/api/v1/market/anchor", response_model=ApiObjectResponse)
     def market_anchor(current: Principal | None = Depends(optional_principal), session: Session = Depends(db_session)) -> dict:
         return objective_market_anchor(session)
+
+    @app.get("/api/v1/market/anchor/history", response_model=ApiObjectResponse)
+    def market_anchor_history(current: Principal | None = Depends(optional_principal), session: Session = Depends(db_session)) -> dict:
+        return completed_market_anchor_history(session)
 
     @app.post("/api/v1/admin/reports/{report_id}/enhance/parse", response_model=ApiObjectResponse)
     def enhance_parse(report_id: str, current: Principal = Depends(admin), session: Session = Depends(db_session)) -> dict:

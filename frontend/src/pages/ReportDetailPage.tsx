@@ -5,7 +5,7 @@ import { IslandCard } from "../components/island/IslandCard";
 import { IslandPathMatrix } from "../components/island/IslandPathMatrix";
 import { IslandStatusBadge } from "../components/island/IslandStatusBadge";
 import { PdfPagePreview } from "../components/PdfPagePreview";
-import type { DefenseLineValidation, EnhancedReport, LiveMarketAnchor, MarketSnapshot, PathMatrix, ReportDefense, SectorAssessment } from "../types";
+import type { DefenseLineValidation, EnhancedReport, LiveMarketAnchor, LiveMarketAnchorHistory, MarketSnapshot, PathMatrix, ReportDefense, SectorAssessment } from "../types";
 import { formatPct } from "../utils/format";
 import { judgementDetail, pdfGroup } from "../utils/judgement";
 
@@ -32,7 +32,7 @@ const positionTone = (position: ReportDefense["defense_position"] | DefenseLineV
     : position === "below_defense_line" || position === "close_below_defense_line" ? "a-share-negative" : "a-share-neutral"
 );
 
-function ReportOverview({ enhanced, anchor }: { enhanced: EnhancedReport; anchor: LiveMarketAnchor | null }) {
+function ReportOverview({ enhanced, anchor, history }: { enhanced: EnhancedReport; anchor: LiveMarketAnchor | null; history: LiveMarketAnchorHistory | null }) {
   const { report } = enhanced;
   const defense = enhanced.report_defense;
   const quoteAvailable = anchor?.quote_status === "available";
@@ -55,6 +55,22 @@ function ReportOverview({ enhanced, anchor }: { enhanced: EnhancedReport; anchor
             <div><span>距攻防线</span><strong className={signedTone(distancePoints)}>{signedPoint(distancePoints)}</strong><em className={signedTone(distancePct)}>{pct(distancePct)}</em></div>
           </div> : <p className="market-anchor-unavailable">上证指数行情暂不可用；攻防点位不会被当作指数点位。</p>}
           <div className="market-anchor-position"><span>当前位置</span><strong className={positionTone(defensePosition)}>{defensePosition ? positionLabel[defensePosition] : "—"}</strong>{quoteAvailable && <em>{anchor.data_mode === "live" ? "行情时间" : "收盘时间"} {anchor.quote_datetime ?? "—"}</em>}</div>
+        </section>
+        <section className="market-history-panel" aria-label="最近交易日上证行情">
+          <div className="market-anchor-title"><p className="eyebrow">最近交易日上证行情</p><span>最多展示 10 个完整交易日</span></div>
+          {quoteAvailable && anchor.data_mode === "live" && <p className="market-history-live">今日实时：{anchor.trading_date?.slice(5) ?? "—"} {point(anchor.current)} <em className={signedTone(anchor.pct_change)}>{pct(anchor.pct_change)}</em></p>}
+          <div className="market-history-table" role="table" aria-label="上证完整收盘行情">
+            <div className="market-history-row market-history-header" role="row"><span>交易日</span><span>上证收盘</span><span>日涨跌</span><span>数据模式</span><span>数据时间</span></div>
+            {history?.items.map(item => <div className="market-history-row" role="row" key={item.trading_date}>
+              <div role="cell"><small>交易日</small><strong>{item.trading_date.slice(5)}</strong></div>
+              <div role="cell"><small>上证收盘</small><strong>{point(item.close)}</strong></div>
+              <div role="cell"><small>日涨跌</small><strong className={signedTone(item.pct_change)}>{pct(item.pct_change)}</strong></div>
+              <div role="cell"><small>数据模式</small><strong>完整收盘</strong></div>
+              <div role="cell"><small>数据时间</small><strong>{item.quote_datetime.slice(0, 16).replace("T", " ")}</strong></div>
+            </div>)}
+          </div>
+          {!history?.items.length && <p className="market-history-empty">完整收盘记录将在交易日收盘后自然积累。</p>}
+          <p className="market-history-count">当前已积累 {history?.completed_days ?? 0} 个完整交易日。</p>
         </section>
         <section className="defense-line-panel" aria-label="猎豹攻防线">
           <div className="defense-level"><span>猎豹攻防点</span><strong>{defense.defense_line_value == null ? "报告未单列" : point(defense.defense_line_value)}</strong></div>
@@ -118,11 +134,13 @@ export function ReportDetailPage({ latest = false }: { latest?: boolean }) {
   const [period, setPeriod] = useState("20");
   const [enhanced, setEnhanced] = useState<EnhancedReport | null>();
   const [marketAnchor, setMarketAnchor] = useState<LiveMarketAnchor | null>(null);
+  const [marketAnchorHistory, setMarketAnchorHistory] = useState<LiveMarketAnchorHistory | null>(null);
   const [matrix, setMatrix] = useState<PathMatrix | null>(null);
   const [previewLoaded, setPreviewLoaded] = useState(false);
   useEffect(() => { if (latest) api.latestReport().then(item => setLatestReportId(item.id)).catch(() => setEnhanced(null)); }, [latest]);
   useEffect(() => { if (reportId) api.enhancedReport(reportId).then(setEnhanced).catch(() => setEnhanced(null)); }, [reportId]);
   useEffect(() => { api.marketAnchor().then(setMarketAnchor).catch(() => setMarketAnchor(null)); }, []);
+  useEffect(() => { api.marketAnchorHistory().then(setMarketAnchorHistory).catch(() => setMarketAnchorHistory(null)); }, []);
   useEffect(() => { if (reportId) api.pathMatrix(reportId, period).then(setMatrix).catch(() => setMatrix(null)); }, [reportId, period]);
   const grouped = useMemo(() => {
     const result = new Map<string, SectorAssessment[]>();
@@ -141,7 +159,7 @@ export function ReportDetailPage({ latest = false }: { latest?: boolean }) {
     {!latest && <nav className="breadcrumbs" aria-label="面包屑"><Link to={origin === "报告库" ? "/reports" : "/"}>{origin}</Link><span>/</span><span>{report.report_date}</span></nav>}
     <header className="report-header"><div><IslandStatusBadge status={report.status} /><p className="eyebrow">直播总结动态加强版 · {chineseDate(report.report_date)}</p><h1>{report.title}</h1></div><div className="date-contract"><span>报告日期<strong>{report.report_date}</strong></span><span>报告核心观点<strong>攻防线与板块观点</strong></span></div></header>
     <nav className="report-tabs" aria-label="增强报告章节"><a href="#overview">报告概览</a><a href="#path">历史路径</a><a href="#assessments">板块观点</a><a href="#source">原始PDF</a></nav>
-    <section id="overview"><h2>报告概览</h2><ReportOverview enhanced={enhanced} anchor={marketAnchor} /></section>
+    <section id="overview"><h2>报告概览</h2><ReportOverview enhanced={enhanced} anchor={marketAnchor} history={marketAnchorHistory} /></section>
     <section id="path"><h2>历史路径矩阵</h2>{matrix ? <IslandPathMatrix matrix={matrix} period={period} onPeriodChange={setPeriod} /> : <p>路径矩阵加载中…</p>}</section>
     <section id="assessments"><h2>{chineseDate(report.report_date)}板块观点详细汇总</h2><p className="muted">按原PDF分组展示五列主体；路径历史来自矩阵，详细观点历史来自已上传PDF，两者分别保存。</p>{GROUP_ORDER.map(group => grouped.get(group)?.length ? <AssessmentTable key={group} title={group} items={grouped.get(group)!} /> : null)}<details className="advanced-review"><summary>本期未提及 {unmentioned} 个板块</summary><p>“未提”只表示本期PDF没有明确观点，不代表既有观点失效。</p></details></section>
     <section id="source"><h2>原始PDF</h2>{previewLoaded ? <PdfPagePreview reportId={report.id} /> : <div className="pdf-preview-placeholder"><p>打开或刷新报告不会请求PDF；点击后仅加载内存渲染的逐页图片，不会写入下载目录。</p><button type="button" onClick={() => setPreviewLoaded(true)}>加载逐页预览</button></div>}<p><a href={publicResourcePath(report.pdf_download_url)}>下载原始PDF</a></p><p>{enhanced.data_notice} 来源追溯由Admin保留，Viewer正文不重复展示原文摘录。</p></section>

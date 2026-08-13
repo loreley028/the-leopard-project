@@ -92,6 +92,7 @@ class WebSettings:
     live_market_anchor_enabled: bool = False
     live_market_anchor_cache_ttl_seconds: int = 300
     live_market_anchor_error_cache_ttl_seconds: int = 30
+    build_commit: str = "unknown"
     auto_publish_uploads: bool = False
 
     @classmethod
@@ -124,6 +125,7 @@ class WebSettings:
             live_market_anchor_enabled=os.getenv("LEOPARD_LIVE_MARKET_ANCHOR_ENABLED", "false").lower() == "true",
             live_market_anchor_cache_ttl_seconds=int(os.getenv("LEOPARD_LIVE_MARKET_ANCHOR_CACHE_TTL_SECONDS", "300")),
             live_market_anchor_error_cache_ttl_seconds=int(os.getenv("LEOPARD_LIVE_MARKET_ANCHOR_ERROR_CACHE_TTL_SECONDS", "30")),
+            build_commit=os.getenv("LEOPARD_BUILD_COMMIT", "unknown"),
             auto_publish_uploads=os.getenv(
                 "LEOPARD_AUTO_PUBLISH_UPLOADS", "true" if data_mode == "real_local" else "false",
             ).lower() == "true",
@@ -727,7 +729,15 @@ def create_app(settings: WebSettings | None = None, session_factory: sessionmake
             Report.status == ReportStatus.PUBLISHED.value,
             Report.is_current.is_(True),
         ).order_by(Report.report_date.desc(), Report.published_at.desc()))
+        snapshot_dates = [
+            latest_report.report_date if latest_report and latest_report.report_date else None,
+            session.scalar(select(func.max(LiveMarketAnchorDaily.trading_date))),
+            session.scalar(select(func.max(SecurityProxyDaily.trading_date))),
+        ]
+        data_snapshot_date = max((item for item in snapshot_dates if item is not None), default=None)
         return {
+            "build_commit": settings.build_commit,
+            "data_snapshot_date": data_snapshot_date.isoformat() if data_snapshot_date else None,
             "latest_published_report_date": latest_report.report_date.isoformat() if latest_report and latest_report.report_date else None,
             "latest_live_market_anchor_eod_date": session.scalar(select(func.max(LiveMarketAnchorDaily.trading_date))),
             "latest_security_proxy_eod_date": session.scalar(select(func.max(SecurityProxyDaily.trading_date))),

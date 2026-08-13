@@ -820,6 +820,18 @@ def path_entry_payload(item: SectorPathEntry) -> dict[str, Any]:
 
 
 def assessment_payload(item: SectorAssessment, market: dict[str, Any] | None = None) -> dict[str, Any]:
+    # Older published reports can contain an internal workflow placeholder in
+    # fields that are rendered to ordinary readers.  It is neither a report
+    # fact nor a useful instruction for a Viewer.  Keep the underlying record
+    # intact for Admin audit, but make the read model honest about the missing
+    # structured evidence.
+    pending_review_markers = {"等待管理员复核", "等待人工复核", "pending_review"}
+    main_basis = item.main_basis.strip() if item.main_basis else ""
+    observation_condition = item.observation_condition.strip() if item.observation_condition else ""
+    if main_basis in pending_review_markers:
+        main_basis = "本期报告未提供可结构化展示的独立依据"
+    if observation_condition in pending_review_markers:
+        observation_condition = ""
     return {
         "id": item.id,
         "sector_key": item.sector_key,
@@ -829,8 +841,8 @@ def assessment_payload(item: SectorAssessment, market: dict[str, Any] | None = N
         "explicitly_mentioned": item.explicitly_mentioned,
         "recent_path_summary": item.recent_path_summary,
         "current_judgement": item.current_judgement,
-        "main_basis": item.main_basis,
-        "observation_condition": item.observation_condition,
+        "main_basis": main_basis,
+        "observation_condition": observation_condition,
         "source_section": item.source_section,
         "source_text_reference": item.source_text_reference,
         "extraction_method": item.extraction_method,

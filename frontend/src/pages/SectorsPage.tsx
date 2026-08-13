@@ -52,7 +52,13 @@ export function SectorsPage() {
     const schedule = () => { timer = window.setTimeout(() => void load(), Math.min(240_000, 45_000 * 2 ** failures)); };
     const load = async () => {
       window.clearTimeout(timer);
-      try { const [items, status, me] = await Promise.all([api.sectors(true), api.intradayStatus(), api.me()]); if (!disposed) { setSectors(items); setIntraday(status); setPrincipal(me); failures = 0; } }
+      try {
+        // Anonymous Viewer reads are intentional.  A 401 from the optional
+        // identity endpoint must not discard the already-public sector and
+        // market-status responses.
+        const [items, status, me] = await Promise.all([api.sectors(true), api.intradayStatus(), api.me().catch(() => null)]);
+        if (!disposed) { setSectors(items); setIntraday(status); setPrincipal(me ?? undefined); failures = 0; }
+      }
       catch { failures = Math.min(3, failures + 1); }
       finally { if (!disposed && document.visibilityState === "visible") schedule(); }
     };

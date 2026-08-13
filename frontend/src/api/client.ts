@@ -1,4 +1,4 @@
-import type { EnhancedReport, Interpretation, IntradayStatus, LiveMarketAnchor, PathMatrix, Principal, Report, Sector, SectorAssessment, SectorResearch, ViewerObservation, ViewerSecurityProxyInstrument } from "../types";
+import type { EnhancedReport, Interpretation, IntradayStatus, LiveMarketAnchor, LiveMarketAnchorHistory, PathMatrix, Principal, Report, Sector, SectorAssessment, SectorResearch, ViewerObservation, ViewerSecurityProxyInstrument } from "../types";
 import { apiPath, appPath } from "../config/appBasePath";
 
 export class ApiError extends Error {
@@ -101,6 +101,7 @@ export const api = {
   report: (id: string) => request<Report>(`/reports/${id}`),
   enhancedReport: (id: string) => request<EnhancedReport>(`/reports/${id}/enhanced`),
   marketAnchor: () => request<LiveMarketAnchor>("/market/anchor"),
+  marketAnchorHistory: () => request<LiveMarketAnchorHistory>("/market/anchor/history"),
   pathMatrix: (id: string, period = "20") => request<PathMatrix>(`/reports/${id}/path-matrix?periods=${encodeURIComponent(period)}`),
   reportAssessments: (id: string) => request<SectorAssessment[]>(`/reports/${id}/sector-assessments`),
   sectors: (includeLowAttention = false, lowAttentionOnly = false) => request<Sector[]>(`/sectors?include_low_attention=${includeLowAttention}&low_attention_only=${lowAttentionOnly}`),
@@ -109,6 +110,8 @@ export const api = {
   viewerObservation: async (key: string) => normalizeViewerObservation(await request<ViewerObservationWire>(`/market-paths/${encodeURIComponent(key)}/viewer-observation`)),
   adminSummary: () => request<Record<string, number>>("/admin/summary"),
   adminOperationsStatus: () => request<{
+    build_commit: string;
+    data_snapshot_date: string | null;
     latest_published_report_date: string | null;
     latest_live_market_anchor_eod_date: string | null;
     latest_security_proxy_eod_date: string | null;

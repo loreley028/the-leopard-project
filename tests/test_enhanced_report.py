@@ -7,11 +7,12 @@ from pathlib import Path
 
 import pytest
 from starlette.testclient import TestClient
+from sqlalchemy import select
 
 from leopard_project.web.app import WebSettings, create_app
 from leopard_project.web.database import create_session_factory
 from leopard_project.web.enhanced import EnhancedReportService, calculate_market_metrics, validate_path_status
-from leopard_project.web.models import Report, ReportFile, ReportStatus, SectorDailyBar
+from leopard_project.web.models import Report, ReportFile, ReportStatus, SectorAssessment, SectorDailyBar
 from leopard_project.web.services import WebDomainError
 
 
@@ -113,6 +114,28 @@ def test_recent_complete_days_returns_latest_ten_controlled_dates_in_ascending_o
     assert len(recent) == 10
     assert "2026-07-25" not in {item["trade_date"] for item in recent}
     assert "2026-08-01" not in {item["trade_date"] for item in recent}
+
+
+def test_viewer_assessment_hides_legacy_pending_review_placeholder(enhanced_web) -> None:
+    client, sessions = enhanced_web
+    login(client)
+    report_id = create_report(client)
+    assert client.post(f"/api/v1/admin/reports/{report_id}/enhance/parse").status_code == 200
+    assert client.post(f"/api/v1/admin/reports/{report_id}/enhanced-ready").status_code == 200
+    assert client.post(f"/api/v1/admin/reports/{report_id}/publish").status_code == 200
+    with sessions() as session:
+        assessment = session.scalar(select(SectorAssessment).where(
+            SectorAssessment.report_id == report_id, SectorAssessment.sector_key == "chemicals",
+        ))
+        assert assessment is not None
+        assessment.explicitly_mentioned = True
+        assessment.main_basis = "等待管理员复核"
+        assessment.observation_condition = "等待管理员复核"
+        session.commit()
+    payload = client.get(f"/api/v1/reports/{report_id}/enhanced").json()
+    assessment = next(item for item in payload["sector_assessments"] if item["sector_key"] == "chemicals")
+    assert assessment["main_basis"] == "本期报告未提供可结构化展示的独立依据"
+    assert assessment["observation_condition"] == ""
 
 
 def test_market_date_contract_sunday_and_fail_closed(enhanced_web) -> None:

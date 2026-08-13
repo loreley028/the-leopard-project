@@ -96,3 +96,49 @@ def test_stale_anchor_quote_uses_completed_eod_instead_of_live_label(tmp_path) -
         payload = client.get("/api/v1/market/anchor").json()
     assert payload["data_mode"] == "completed_eod"
     assert payload["current"] == 3946.68
+
+
+def test_market_anchor_history_returns_only_actual_completed_days_in_ascending_order(tmp_path) -> None:
+    settings = _settings(tmp_path)
+    sessions = create_session_factory(settings.database_url)
+    with sessions() as session:
+        trading_days = [
+            date(2026, 7, 27), date(2026, 7, 28), date(2026, 7, 29), date(2026, 7, 30),
+            date(2026, 7, 31), date(2026, 8, 3), date(2026, 8, 4), date(2026, 8, 5),
+            date(2026, 8, 6), date(2026, 8, 7), date(2026, 8, 10), date(2026, 8, 11),
+        ]
+        for offset, day in enumerate(trading_days):
+            session.add(LiveMarketAnchorDaily(
+                symbol="sh000001", trading_date=day, close=Decimal(3900 + offset),
+                pre_close=Decimal(3899 + offset), pct_change=Decimal("0.03"), high=None, low=None,
+                quote_datetime=datetime(2026, 8, 12, 15, 20, tzinfo=timezone.utc),
+                fetched_at=datetime(2026, 8, 12, 15, 20, tzinfo=timezone.utc),
+                source="tencent_standard_security_quote",
+            ))
+        session.commit()
+    with TestClient(create_app(settings, sessions)) as client:
+        payload = client.get("/api/v1/market/anchor/history").json()
+    assert payload["completed_days"] == 10
+    assert [item["trading_date"] for item in payload["items"]] == [item.isoformat() for item in trading_days[-10:]]
+    assert all(item["data_mode"] == "completed_eod" for item in payload["items"])
+
+
+def test_market_anchor_history_does_not_pad_missing_real_days(tmp_path) -> None:
+    settings = _settings(tmp_path)
+    sessions = create_session_factory(settings.database_url)
+    with sessions() as session:
+        session.add(LiveMarketAnchorDaily(
+            symbol="sh000001", trading_date=date(2026, 8, 12), close=Decimal("3946.68"),
+            pre_close=Decimal("3934.09"), pct_change=Decimal("0.32"), high=None, low=None,
+            quote_datetime=datetime(2026, 8, 12, 15, 20, tzinfo=timezone.utc),
+            fetched_at=datetime(2026, 8, 12, 15, 20, tzinfo=timezone.utc), source="tencent_standard_security_quote",
+        ))
+        session.commit()
+    with TestClient(create_app(settings, sessions)) as client:
+        payload = client.get("/api/v1/market/anchor/history").json()
+    assert payload["completed_days"] == 1
+    assert payload["items"] == [{
+        "trading_date": "2026-08-12", "close": 3946.68, "pre_close": 3934.09,
+        "change": 12.59, "pct_change": 0.32, "data_mode": "completed_eod",
+        "quote_datetime": payload["items"][0]["quote_datetime"], "source": "tencent_standard_security_quote",
+    }]

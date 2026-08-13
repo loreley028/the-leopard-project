@@ -38,6 +38,8 @@ export function AdminDashboardPage() {
     </IslandCard>
     <IslandCard title="每日运行状态">
       <div className="dashboard-grid compact-operation-status">
+        <div><span>BUILD_COMMIT</span><strong>{operations?.build_commit ?? "读取中"}</strong></div>
+        <div><span>DATA_SNAPSHOT_DATE</span><strong>{operations?.data_snapshot_date ?? "尚无数据快照"}</strong></div>
         <div><span>最新发布报告</span><strong>{operations?.latest_published_report_date ?? "暂无已发布报告"}</strong></div>
         <div><span>最新上证 EOD</span><strong>{operations?.latest_live_market_anchor_eod_date ?? "尚未采集"}</strong></div>
         <div><span>最新代理证券 EOD</span><strong>{operations?.latest_security_proxy_eod_date ?? "尚未采集"}</strong></div>

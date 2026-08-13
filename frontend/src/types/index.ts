@@ -414,6 +414,26 @@ export interface LiveMarketAnchor {
   value: number | null;
 }
 
+export interface LiveMarketAnchorHistoryItem {
+  trading_date: string;
+  close: number;
+  pre_close: number;
+  change: number;
+  pct_change: number;
+  data_mode: "completed_eod";
+  quote_datetime: string;
+  source: string;
+}
+
+export interface LiveMarketAnchorHistory {
+  market_context: "objective_market_anchor_history";
+  index_name: string;
+  symbol: "sh000001";
+  max_days: number;
+  completed_days: number;
+  items: LiveMarketAnchorHistoryItem[];
+}
+
 export interface ReportDefense {
   defense_line_value: number | null;
   defense_line_source: "market_path" | "core_view" | null;
