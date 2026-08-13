@@ -52,7 +52,7 @@ def test_repair_dry_run_is_non_mutating_and_apply_uses_exact_date_only(tmp_path)
         exact = next(row for row in rows if row.entry_id == "exact")
         missing = next(row for row in rows if row.entry_id == "missing")
         assert exact.after_market_as_of_date == "2026-08-07"
-        assert exact.after_frozen_daily_pct_change == 1.25
+        assert Decimal(exact.after_frozen_daily_pct_change or "0") == Decimal("1.25")
         assert missing.after_market_as_of_date is None and missing.after_market_data_status == "unavailable"
         assert session.get(SectorPathHistoryEntry, "missing").market_as_of_date == date(2026, 7, 28)
         output = tmp_path / "repair.csv"

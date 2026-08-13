@@ -11,6 +11,7 @@ import csv
 import json
 from dataclasses import asdict, dataclass
 from datetime import date
+from decimal import Decimal
 from pathlib import Path
 
 from sqlalchemy import func, select
@@ -27,10 +28,10 @@ class RepairRow:
     path_report_date: str
     requested_market_date: str
     before_market_as_of_date: str | None
-    before_frozen_daily_pct_change: float | None
+    before_frozen_daily_pct_change: str | None
     before_market_data_status: str
     after_market_as_of_date: str | None
-    after_frozen_daily_pct_change: float | None
+    after_frozen_daily_pct_change: str | None
     after_market_data_status: str
     reason: str
 
@@ -64,17 +65,19 @@ def planned_repairs(session: Session) -> list[RepairRow]:
         if bar is None:
             after_date, after_pct, after_status, reason = None, None, "unavailable", "exact_bar_missing"
         else:
-            after_date, after_pct, after_status, reason = bar.trade_date, float(bar.daily_pct_change), "attached", "exact_bar_attached"
+            after_date, after_pct, after_status, reason = bar.trade_date, Decimal(bar.daily_pct_change), "attached", "exact_bar_attached"
         before_date = entry.market_as_of_date.isoformat() if entry.market_as_of_date else None
+        before_pct = Decimal(entry.frozen_daily_pct_change) if entry.frozen_daily_pct_change is not None else None
         if (
             before_date != (after_date.isoformat() if after_date else None)
-            or entry.frozen_daily_pct_change != after_pct
+            or before_pct != after_pct
             or entry.market_data_status != after_status
         ):
             rows.append(RepairRow(
                 entry.id, entry.sector_key, entry.path_report_date.isoformat(), requested.isoformat(), before_date,
-                float(entry.frozen_daily_pct_change) if entry.frozen_daily_pct_change is not None else None,
-                entry.market_data_status, after_date.isoformat() if after_date else None, after_pct, after_status, reason,
+                str(before_pct) if before_pct is not None else None,
+                entry.market_data_status, after_date.isoformat() if after_date else None,
+                str(after_pct) if after_pct is not None else None, after_status, reason,
             ))
     return rows
 
@@ -108,7 +111,7 @@ def apply_repairs(session: Session, rows: list[RepairRow]) -> None:
     for row in rows:
         entry = by_id[row.entry_id]
         entry.market_as_of_date = date.fromisoformat(row.after_market_as_of_date) if row.after_market_as_of_date else None
-        entry.frozen_daily_pct_change = row.after_frozen_daily_pct_change
+        entry.frozen_daily_pct_change = Decimal(row.after_frozen_daily_pct_change) if row.after_frozen_daily_pct_change is not None else None
         entry.market_data_status = row.after_market_data_status
     session.commit()
 
