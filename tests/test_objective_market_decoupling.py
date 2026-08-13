@@ -17,7 +17,7 @@ def _settings(tmp_path) -> WebSettings:
     return WebSettings(
         database_url=f"sqlite:///{tmp_path / 'market.sqlite3'}",
         upload_dir=tmp_path / "uploads",
-        session_secret="objective-market-test-session-secret-32",
+        session_secret="fixture-value-for-objective-market-tests",
         admin_username="admin", admin_password="admin-password",
         viewer_username="viewer", viewer_password="viewer-password",
     )
