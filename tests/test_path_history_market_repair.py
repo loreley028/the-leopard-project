@@ -5,7 +5,7 @@ from decimal import Decimal
 
 from leopard_project.web.database import create_session_factory
 from leopard_project.web.models import Report, SectorDailyBar, SectorPathHistoryEntry
-from scripts.repair_path_history_market_fields import apply_repairs, planned_repairs, write_csv
+from scripts.repair_path_history_market_fields import apply_repairs, planned_repairs, repair_summary, write_csv
 
 
 def _report(identifier: str, report_date: date, market_date: date | None = None) -> Report:
@@ -58,6 +58,15 @@ def test_repair_dry_run_is_non_mutating_and_apply_uses_exact_date_only(tmp_path)
         output = tmp_path / "repair.csv"
         write_csv(output, rows)
         assert output.read_text(encoding="utf-8").splitlines()[0].startswith("entry_id,")
+        assert repair_summary(session, rows) == {
+            "total_rows": 2,
+            "unchanged": 0,
+            "corrected_exact_date": 1,
+            "cleared_invalid_fallback": 1,
+            "already_unavailable": 0,
+            "conflicts_errors": 0,
+            "pending": 2,
+        }
         apply_repairs(session, rows)
         assert session.get(SectorPathHistoryEntry, "exact").market_as_of_date == date(2026, 8, 7)
         repaired_missing = session.get(SectorPathHistoryEntry, "missing")
@@ -65,3 +74,12 @@ def test_repair_dry_run_is_non_mutating_and_apply_uses_exact_date_only(tmp_path)
         assert repaired_missing.frozen_daily_pct_change is None
         assert repaired_missing.market_data_status == "unavailable"
         assert planned_repairs(session) == []
+        assert repair_summary(session, []) == {
+            "total_rows": 2,
+            "unchanged": 2,
+            "corrected_exact_date": 0,
+            "cleared_invalid_fallback": 0,
+            "already_unavailable": 1,
+            "conflicts_errors": 0,
+            "pending": 0,
+        }

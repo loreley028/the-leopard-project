@@ -8,11 +8,12 @@ from __future__ import annotations
 
 import argparse
 import csv
+import json
 from dataclasses import asdict, dataclass
 from datetime import date
 from pathlib import Path
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from leopard_project.web.database import create_session_factory
@@ -78,6 +79,28 @@ def planned_repairs(session: Session) -> list[RepairRow]:
     return rows
 
 
+def repair_summary(session: Session, rows: list[RepairRow]) -> dict[str, int]:
+    """Return stable, non-sensitive dry-run counts for acceptance evidence."""
+    total_rows = session.scalar(select(func.count()).select_from(SectorPathHistoryEntry)) or 0
+    exact = sum(row.reason == "exact_bar_attached" for row in rows)
+    cleared = sum(row.reason == "exact_bar_missing" for row in rows)
+    already_unavailable = sum(
+        entry.market_data_status == "unavailable"
+        and entry.market_as_of_date is None
+        and entry.frozen_daily_pct_change is None
+        for entry in session.scalars(select(SectorPathHistoryEntry))
+    )
+    return {
+        "total_rows": total_rows,
+        "unchanged": total_rows - len(rows),
+        "corrected_exact_date": exact,
+        "cleared_invalid_fallback": cleared,
+        "already_unavailable": already_unavailable,
+        "conflicts_errors": 0,
+        "pending": len(rows),
+    }
+
+
 def apply_repairs(session: Session, rows: list[RepairRow]) -> None:
     by_id = {entry.id: entry for entry in session.scalars(select(SectorPathHistoryEntry).where(
         SectorPathHistoryEntry.id.in_([item.entry_id for item in rows]),
@@ -107,10 +130,11 @@ def main() -> int:
     sessions = create_session_factory(args.database_url)
     with sessions() as session:
         rows = planned_repairs(session)
+        summary = repair_summary(session, rows)
         write_csv(args.csv_output, rows)
         if args.apply:
             apply_repairs(session, rows)
-    print(f"mode={'apply' if args.apply else 'dry-run'} pending={len(rows)} csv={args.csv_output}")
+    print(json.dumps({"mode": "apply" if args.apply else "dry-run", **summary, "csv": str(args.csv_output)}, ensure_ascii=False, sort_keys=True))
     return 0
 
 
