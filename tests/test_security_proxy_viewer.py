@@ -113,5 +113,6 @@ def test_stale_live_quote_falls_back_to_completed_eod_without_zero_fill(tmp_path
     item = result["security_proxy"]["instruments"][0]
     assert item["data_mode"] == "completed_eod"
     assert item["quote_status"] == "completed_eod"
+    assert result["security_proxy"]["status"] == "completed_eod"
     assert Decimal(item["current"]) == Decimal("11")
     assert Decimal(item["pct_change"]) == Decimal("10")

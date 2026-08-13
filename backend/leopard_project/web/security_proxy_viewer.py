@@ -67,7 +67,10 @@ class SecurityProxyViewerService:
         observation = observations[0]
         histories = get_security_proxy_daily_histories(session, (item.symbol for item in observation.instruments)) if session else {}
         instruments = [self._instrument_payload(item, histories.get(item.symbol, ())) for item in observation.instruments]
-        return {**base, "viewer_source_mode": "security_proxy", "fallback_reason": availability.reason or availability.status, "disclosure": DISCLAIMER, "security_proxy": {"display_label": "代理观察", "status": observation.status, "recommended_display_mode": observation.recommended_display_mode, "instruments": instruments, "cache_hit": cache_hit, "quote_datetime": observation.quote_datetime.isoformat() if observation.quote_datetime else None}}
+        completed_eod = any(item["data_mode"] == "completed_eod" for item in instruments)
+        live = any(item["data_mode"] == "live" for item in instruments)
+        status = "available" if live else "completed_eod" if completed_eod else observation.status
+        return {**base, "viewer_source_mode": "security_proxy", "fallback_reason": availability.reason or availability.status, "disclosure": DISCLAIMER, "security_proxy": {"display_label": "代理观察", "status": status, "recommended_display_mode": observation.recommended_display_mode, "instruments": instruments, "cache_hit": cache_hit, "quote_datetime": observation.quote_datetime.isoformat() if observation.quote_datetime else None}}
 
     @staticmethod
     def _completed_eod_payload(item: object, history: tuple[object, ...]) -> dict | None:
