@@ -33,7 +33,6 @@ from .enhanced import EnhancedReportService
 from .enhanced_routes import register_enhanced_routes
 from .intraday import IntradayRefreshCoordinator
 from .market_automation import EodBackfillCoordinator
-from .path_history import ensure_latest_path_history
 from .review_workflow import ReviewWorkflowService
 from .enhanced import EnhancedReportService
 from .intraday import intraday_policy, resolve_intraday_data_status
@@ -170,7 +169,6 @@ def create_app(settings: WebSettings | None = None, session_factory: sessionmake
             fixture_bar = safety_session.scalar(select(SectorDailyBar).where(SectorDailyBar.data_source.like("%fixture%")).limit(1))
             if fixture_report or fixture_bar:
                 raise RuntimeError("real_local refused to start because fixture data was detected")
-            ensure_latest_path_history(safety_session)
         finally:
             safety_session.close()
         if settings.market_automation_enabled:

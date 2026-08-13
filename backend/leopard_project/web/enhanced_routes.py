@@ -26,6 +26,7 @@ from .enhanced import (
 )
 from .models import (
     IntradayRefreshSession,
+    LiveMarketAnchorDaily,
     MarketRefreshItem,
     MarketRefreshRun,
     Report,
@@ -52,7 +53,7 @@ from .intraday import IntradayRefreshCoordinator, intraday_policy, resolve_intra
 from .market_automation import EodBackfillCoordinator
 from .live_market_anchor import LiveShanghaiMarketAnchorService
 from leopard_project.live_market_anchor_daily import recent_defense_line_validations
-from .path_history import ensure_latest_path_history, matrix_dates
+from .path_history import matrix_dates
 
 
 def register_enhanced_routes(
@@ -93,6 +94,82 @@ def register_enhanced_routes(
         ))
         return item.status if item else None
 
+    def objective_market_anchor(session: Session) -> dict:
+        """Expose Shanghai market facts without a report or defense dependency."""
+        live = live_market_anchor.observe(market_path="", core_view="")
+        if live["quote_status"] == "available":
+            return {
+                "data_mode": "live",
+                "market_context": "objective_market_anchor",
+                "quote_status": "available",
+                "trading_date": live["quote_datetime"][:10] if live["quote_datetime"] else None,
+                "value": live["current"],
+                "current": live["current"],
+                "pre_close": live["pre_close"],
+                "change": live["change"],
+                "pct_change": live["pct_change"],
+                "quote_datetime": live["quote_datetime"],
+                "captured_at": None,
+                "source": live["provider"],
+                "provider": live["provider"],
+                "provider_role": live["provider_role"],
+                "error_code": None,
+                "index_name": live["index_name"],
+                "symbol": live["symbol"],
+            }
+        completed = session.scalar(select(LiveMarketAnchorDaily).where(
+            LiveMarketAnchorDaily.symbol == "sh000001",
+        ).order_by(desc(LiveMarketAnchorDaily.trading_date)))
+        if completed is not None:
+            return {
+                "data_mode": "completed_eod",
+                "market_context": "objective_market_anchor",
+                "quote_status": "available",
+                "trading_date": completed.trading_date.isoformat(),
+                "value": float(completed.close),
+                "current": float(completed.close),
+                "pre_close": float(completed.pre_close),
+                "change": float(completed.close - completed.pre_close),
+                "pct_change": float(completed.pct_change),
+                "quote_datetime": completed.quote_datetime.isoformat(),
+                "captured_at": completed.fetched_at.isoformat(),
+                "source": completed.source,
+                "provider": completed.source,
+                "provider_role": "diagnostic_provider",
+                "error_code": None,
+                "index_name": "上证指数",
+                "symbol": completed.symbol,
+            }
+        return {
+            "data_mode": "unavailable", "market_context": "objective_market_anchor",
+            "quote_status": "unavailable", "trading_date": None, "value": None,
+            "current": None, "pre_close": None, "change": None, "pct_change": None,
+            "quote_datetime": None, "captured_at": None, "source": None,
+            "provider": live["provider"], "provider_role": live["provider_role"],
+            "error_code": live["error_code"], "index_name": "上证指数", "symbol": "sh000001",
+        }
+
+    def attach_report_defense(anchor: dict, report: Report) -> dict:
+        metadata = json.loads(report.interpretation_meta_json or "{}")
+        defense = live_market_anchor.enrich_with_defense(
+            anchor,
+            market_path=report.market_path,
+            core_view=report.core_view,
+            parsed_primary=(metadata.get("defense_lines") or {}).get("primary_defense_line"),
+        )
+        return {
+            **anchor,
+            **{
+                key: defense[key]
+                for key in (
+                    "defense_line_value", "defense_line_source", "stand_above_condition",
+                    "break_below_condition", "validation_conditions", "distance_points",
+                    "distance_pct", "defense_position",
+                )
+            },
+            "market_context_note": "当前或最近完整上证数据与本报告攻防线分别读取；前者不代表报告日期的历史指数。",
+        }
+
     @app.get("/api/v1/path-statuses", response_model=ApiObjectResponse)
     def status_contract(current: Principal | None = Depends(optional_principal)) -> dict:
         return path_status_document()
@@ -101,7 +178,6 @@ def register_enhanced_routes(
     def enhanced_report(report_id: str, current: Principal | None = Depends(optional_principal), session: Session = Depends(db_session)) -> dict:
         report = readable(required_report(report_id, session), current)
         service = EnhancedReportService(session)
-        service.ensure_structure(report)
         snapshots = snapshot_map(service, report.id)
         assessments = []
         for item in service.assessments(report.id):
@@ -109,12 +185,8 @@ def register_enhanced_routes(
             payload["active_holding_interval"] = service.holding_interval_for_sector(report, item.sector_key)
             assessments.append(payload)
         paths = [path_entry_payload(item) for item in service.path_entries(report.id)]
-        report_meta = json.loads(report.interpretation_meta_json or "{}")
-        current_market_anchor = live_market_anchor.observe(
-            market_path=report.market_path,
-            core_view=report.core_view,
-            parsed_primary=(report_meta.get("defense_lines") or {}).get("primary_defense_line"),
-        )
+        objective_anchor = objective_market_anchor(session)
+        current_market_anchor = attach_report_defense(objective_anchor, report)
         groups: dict[str, list[dict]] = {}
         for item in assessments:
             groups.setdefault(item["current_path_status"], []).append(item)
@@ -125,8 +197,11 @@ def register_enhanced_routes(
             "status_groups": [{"status": key, "count": len(value), "items": value} for key, value in groups.items()],
             "market_snapshots": list(snapshots.values()),
             "live_market_anchor": current_market_anchor,
+            "market_anchor": objective_anchor,
             "recent_defense_line_validations": recent_defense_line_validations(session),
             "comparison": service.comparison(report),
+            # Compatibility only.  The Viewer must never treat this legacy
+            # report-snapshot count as a market-data quality gate.
             "market_data_attached": bool(snapshots),
             "data_notice": "研究辅助数据，非生产级行情服务。",
         }
@@ -141,8 +216,6 @@ def register_enhanced_routes(
     ) -> dict:
         report = readable(required_report(report_id, session), current)
         service = EnhancedReportService(session)
-        service.ensure_structure(report)
-        ensure_latest_path_history(session, report.report_date)
         selected_period = period or periods
         available_dates = list(session.scalars(select(SectorPathHistoryEntry.path_report_date).where(
             SectorPathHistoryEntry.path_report_date <= report.report_date,
@@ -272,7 +345,6 @@ def register_enhanced_routes(
     def report_assessments(report_id: str, current: Principal | None = Depends(optional_principal), session: Session = Depends(db_session)) -> list[dict]:
         report = readable(required_report(report_id, session), current)
         service = EnhancedReportService(session)
-        service.ensure_structure(report)
         snapshots = snapshot_map(service, report.id)
         return [assessment_payload(item, snapshots.get(item.sector_key)) for item in service.assessments(report.id)]
 
@@ -303,8 +375,6 @@ def register_enhanced_routes(
         report_key = market_path.parent_report_topic
         service = EnhancedReportService(session)
         reports = list(session.scalars(select(Report).where(Report.status == "published").order_by(desc(Report.report_date))))
-        if reports:
-            ensure_latest_path_history(session, reports[0].report_date)
         selected_path_period = path_period if path_period is not None else path_periods
         if selected_path_period not in {10, 20, 40, 60}:
             raise WebDomainError("invalid_path_period", "路径期数仅支持10、20、40或60期", 422)
@@ -320,7 +390,6 @@ def register_enhanced_routes(
         detailed_history = []
         latest_explicit = None
         for report in reports:
-            service.ensure_structure(report)
             entry = session.scalar(select(SectorPathEntry).where(SectorPathEntry.report_id == report.id, SectorPathEntry.sector_key == report_key))
             assessment = assessment_by_report[report.id]
             if entry:
@@ -462,6 +531,10 @@ def register_enhanced_routes(
             return {"sector_key": sector_key, "status": "unsupported", "detail": "港股跨市场行情暂未接入"}
         payload = EnhancedReportService(session).latest_market(sector_key)
         return {"sector_key": sector_key, "status": "available" if payload else "unavailable", "market": payload}
+
+    @app.get("/api/v1/market/anchor", response_model=ApiObjectResponse)
+    def market_anchor(current: Principal | None = Depends(optional_principal), session: Session = Depends(db_session)) -> dict:
+        return objective_market_anchor(session)
 
     @app.post("/api/v1/admin/reports/{report_id}/enhance/parse", response_model=ApiObjectResponse)
     def enhance_parse(report_id: str, current: Principal = Depends(admin), session: Session = Depends(db_session)) -> dict:

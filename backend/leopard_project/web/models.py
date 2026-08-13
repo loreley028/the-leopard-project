@@ -94,6 +94,7 @@ class Report(Base):
     file: Mapped["ReportFile"] = relationship(back_populates="report", uselist=False, cascade="all, delete-orphan")
     sections: Mapped[list["ReportSection"]] = relationship(back_populates="report", cascade="all, delete-orphan")
     mentions: Mapped[list["SectorMention"]] = relationship(back_populates="report", cascade="all, delete-orphan")
+    assessments: Mapped[list["SectorAssessment"]] = relationship(back_populates="report", cascade="all, delete-orphan")
     unmapped_terms: Mapped[list["UnmappedTerm"]] = relationship(back_populates="report", cascade="all, delete-orphan")
 
 
@@ -311,6 +312,7 @@ class SectorAssessment(Base):
     __table_args__ = (UniqueConstraint("report_id", "sector_key", name="uq_report_assessment_sector"),)
     id: Mapped[str] = mapped_column(String(32), primary_key=True, default=new_id)
     report_id: Mapped[str] = mapped_column(ForeignKey("reports.id"), index=True)
+    report: Mapped["Report"] = relationship(back_populates="assessments")
     sector_key: Mapped[str] = mapped_column(String(120), index=True)
     sector_name: Mapped[str] = mapped_column(String(120))
     current_path_status: Mapped[str] = mapped_column(String(30))

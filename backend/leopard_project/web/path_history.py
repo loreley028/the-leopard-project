@@ -49,6 +49,28 @@ def _snapshot_payload(row: ReportSectorMarketSnapshot | None) -> tuple[date | No
     return row.market_as_of_date, payload.get("daily_pct_change"), "eod_complete"
 
 
+def _exact_market_payload(
+    *,
+    requested_market_date: date,
+    snapshot: ReportSectorMarketSnapshot | None,
+    bar: SectorDailyBar | None,
+) -> tuple[date | None, float | None, str]:
+    """Return only a fact whose date exactly matches the requested date.
+
+    A report may explicitly bind a non-trading report date to a prior trading
+    date.  That explicit binding is the requested date; a legacy ``last
+    known`` bar is never an acceptable substitute.
+    """
+    if snapshot is not None:
+        market_date, daily_pct, status = _snapshot_payload(snapshot)
+        if market_date == requested_market_date:
+            return market_date, daily_pct, status
+        return None, None, "unavailable"
+    if bar is not None and bar.trade_date == requested_market_date:
+        return bar.trade_date, float(bar.daily_pct_change), "eod_complete"
+    return None, None, "unavailable"
+
+
 @dataclass(frozen=True)
 class PathHistorySyncResult:
     date_count: int
@@ -85,12 +107,21 @@ def sync_path_history(session: Session, report: Report, *, commit: bool = True) 
             ReportSectorMarketSnapshot.report_id.in_([item.id for item in detailed_reports.values()])
         ))
     } if detailed_reports else {}
-    market_rows: dict[str, list[SectorDailyBar]] = {}
+    # A path cell may only carry an objectively observed market value for its
+    # own requested market date.  Do not turn the last known close into a
+    # surrogate quote for a later report/path date: that would permanently
+    # contaminate the frozen path ledger.
+    requested_market_dates = {
+        item.market_as_of_date if item.market_as_of_date_confirmed and item.market_as_of_date else item.report_date
+        for item in detailed_reports.values()
+        if item.report_date
+    } | set(resolved_dates)
+    market_rows: dict[tuple[str, date], SectorDailyBar] = {}
     for bar in session.scalars(select(SectorDailyBar).where(
         SectorDailyBar.eod_status == "complete_eod",
-        SectorDailyBar.trade_date <= max(resolved_dates),
+        SectorDailyBar.trade_date.in_(requested_market_dates),
     ).order_by(SectorDailyBar.trade_date)):
-        market_rows.setdefault(bar.sector_key, []).append(bar)
+        market_rows[(bar.sector_key, bar.trade_date)] = bar
 
     existing = {
         (item.sector_key, item.path_report_date): item
@@ -114,14 +145,17 @@ def sync_path_history(session: Session, report: Report, *, commit: bool = True) 
                 continue
             current = existing.get((sector_key, path_date))
             detail = detailed_reports.get(path_date)
+            requested_market_date = (
+                detail.market_as_of_date
+                if detail and detail.market_as_of_date_confirmed and detail.market_as_of_date
+                else path_date
+            )
             snapshot = snapshots.get((detail.id, sector_key)) if detail else None
-            market_date, daily_pct, market_status = _snapshot_payload(snapshot)
-            if snapshot is None:
-                bar = next((item for item in reversed(market_rows.get(sector_key, [])) if item.trade_date <= path_date), None)
-                if bar is not None:
-                    market_date = bar.trade_date
-                    daily_pct = float(bar.daily_pct_change)
-                    market_status = "eod_complete"
+            market_date, daily_pct, market_status = _exact_market_payload(
+                requested_market_date=requested_market_date,
+                snapshot=snapshot,
+                bar=market_rows.get((sector_key, requested_market_date)),
+            )
             if current is not None:
                 if current.path_status != status:
                     differences.append({

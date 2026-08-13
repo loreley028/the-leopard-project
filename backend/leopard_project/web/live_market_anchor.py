@@ -199,12 +199,35 @@ class LiveShanghaiMarketAnchorService:
         )
         return result
 
-    def observe(self, *, market_path: str, core_view: str, parsed_primary: object | None = None) -> dict:
+    def enrich_with_defense(
+        self,
+        quote: dict,
+        *,
+        market_path: str,
+        core_view: str,
+        parsed_primary: object | None = None,
+    ) -> dict:
+        """Attach report interpretation to already-read objective market facts.
+
+        This deliberately does not fetch another quote.  A report defense line is
+        interpretation metadata; the index quote remains an independent market
+        fact and can be read without a report.
+        """
         defense = structure_leopard_defense_line(market_path, core_view, parsed_primary)
-        quote, cache_hit = self.cache.get_or_fetch(self._fetch_quote)
         return {
             **quote,
             **self._position_payload(quote, defense),
-            "cache_hit": cache_hit,
             "market_context_note": "当前市场辅助：实时上证指数用于对照本报告攻防线，不代表报告日期的历史指数。",
+        }
+
+    def observe(self, *, market_path: str, core_view: str, parsed_primary: object | None = None) -> dict:
+        quote, cache_hit = self.cache.get_or_fetch(self._fetch_quote)
+        return {
+            **self.enrich_with_defense(
+                quote,
+                market_path=market_path,
+                core_view=core_view,
+                parsed_primary=parsed_primary,
+            ),
+            "cache_hit": cache_hit,
         }

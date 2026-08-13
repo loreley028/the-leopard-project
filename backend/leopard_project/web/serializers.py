@@ -31,6 +31,7 @@ def _display_short_time(value) -> str | None:
 
 
 def report_payload(report: Report, *, admin: bool = False) -> dict:
+    explicit_assessment_count = sum(1 for entry in report.assessments if entry.explicitly_mentioned)
     payload = {
         "id": report.id,
         "title": report.title,
@@ -59,6 +60,7 @@ def report_payload(report: Report, *, admin: bool = False) -> dict:
         "market_path": report.market_path,
         "risk_warning": report.risk_warning,
         "focus_sectors": json.loads(report.focus_sectors_json),
+        "explicit_assessment_count": explicit_assessment_count,
         "created_at": report.created_at.isoformat(),
         "created_at_display": _display_time(report.created_at),
         "published_at": report.published_at.isoformat() if report.published_at else None,
@@ -107,7 +109,6 @@ def objective_change_summary(current: Report, previous: Report | None) -> dict:
 
 def sector_payloads(repo: ReportRepository) -> list[dict]:
     from .enhanced import EnhancedReportService, effective_statuses, path_statuses
-    from .path_history import ensure_latest_path_history
 
     bundle = load_seed_bundle()
     registry = load_market_path_registry(bundle)
@@ -122,8 +123,6 @@ def sector_payloads(repo: ReportRepository) -> list[dict]:
     pinned = {item.sector_key for item in repo.session.scalars(select(SectorResearchPreference).where(SectorResearchPreference.is_pinned_for_research.is_(True)))}
     now = datetime.now(timezone.utc)
     phase = market_phase(now)
-    for report in published:
-        enhanced.ensure_structure(report)
     latest: dict[str, SectorMention] = {}
     latest_dates: dict[str, str] = {}
     for report in published:
@@ -132,8 +131,6 @@ def sector_payloads(repo: ReportRepository) -> list[dict]:
                 latest[mention.sector_key] = mention
                 latest_dates[mention.sector_key] = report.report_date.isoformat()
     latest_report_keys = {item.sector_key for item in published[0].mentions} if published else set()
-    if published:
-        ensure_latest_path_history(repo.session, published[0].report_date)
     output: list[dict] = []
     for market_path in registry.market_paths:
         sector = report_topic_sector(market_path, bundle)
