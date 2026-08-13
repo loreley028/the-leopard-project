@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import json
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from typing import Callable
 
 from fastapi import Depends, FastAPI, File, Form, Query, UploadFile
@@ -97,7 +97,10 @@ def register_enhanced_routes(
     def objective_market_anchor(session: Session) -> dict:
         """Expose Shanghai market facts without a report or defense dependency."""
         live = live_market_anchor.observe(market_path="", core_view="")
-        if live["quote_status"] == "available":
+        quote_datetime = datetime.fromisoformat(live["quote_datetime"]) if live["quote_datetime"] else None
+        now = datetime.now(timezone.utc)
+        fresh_live = quote_datetime is not None and quote_datetime.astimezone(timezone.utc) >= now - timedelta(minutes=15)
+        if live["quote_status"] == "available" and fresh_live:
             return {
                 "data_mode": "live",
                 "market_context": "objective_market_anchor",

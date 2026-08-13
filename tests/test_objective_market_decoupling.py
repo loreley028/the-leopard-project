@@ -79,3 +79,20 @@ def test_market_anchor_works_without_report_and_falls_back_to_completed_eod(tmp_
     assert payload["data_mode"] == "completed_eod"
     assert payload["trading_date"] == "2026-08-12"
     assert payload["value"] == 3946.68
+
+
+def test_stale_anchor_quote_uses_completed_eod_instead_of_live_label(tmp_path) -> None:
+    settings = _settings(tmp_path)
+    sessions = create_session_factory(settings.database_url)
+    with sessions() as session:
+        session.add(LiveMarketAnchorDaily(
+            symbol="sh000001", trading_date=date(2026, 8, 12), close=Decimal("3946.68"),
+            pre_close=Decimal("3934.09"), pct_change=Decimal("0.32"), high=None, low=None,
+            quote_datetime=datetime(2026, 8, 12, 15, 20, tzinfo=timezone.utc),
+            fetched_at=datetime(2026, 8, 12, 15, 20, tzinfo=timezone.utc), source="tencent_standard_security_quote",
+        ))
+        session.commit()
+    with TestClient(create_app(settings, sessions)) as client:
+        payload = client.get("/api/v1/market/anchor").json()
+    assert payload["data_mode"] == "completed_eod"
+    assert payload["current"] == 3946.68
