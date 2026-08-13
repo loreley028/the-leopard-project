@@ -1,11 +1,15 @@
 from __future__ import annotations
 
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 from decimal import Decimal
 
 import pytest
 
-from leopard_project.security_proxy_observation import SecurityProxyObservationService
+from leopard_project.security_proxy_observation import (
+    SecurityProxyInstrumentQuote,
+    SecurityProxyObservation,
+    SecurityProxyObservationService,
+)
 from leopard_project.providers.tencent_standard_quote import TencentStandardSecurityQuoteProvider
 from leopard_project.web.security_proxy_viewer import OfficialBoardAvailability, SecurityProxyViewerCache, SecurityProxyViewerService
 from leopard_project.web.database import create_session_factory
@@ -116,3 +120,30 @@ def test_stale_live_quote_falls_back_to_completed_eod_without_zero_fill(tmp_path
     assert result["security_proxy"]["status"] == "completed_eod"
     assert Decimal(item["current"]) == Decimal("11")
     assert Decimal(item["pct_change"]) == Decimal("10")
+
+
+def test_timezone_aware_utc_clock_keeps_a_fresh_shanghai_quote_live() -> None:
+    class LiveObservationService:
+        def __init__(self) -> None:
+            self.registry = SecurityProxyObservationService(provider=TencentStandardSecurityQuoteProvider()).registry
+
+        def observe(self, keys, *, enable_provider=False):
+            definition = next(item for item in self.registry if item.market_path_key == "cpo")
+            quote_time = datetime(2026, 8, 13, 13, 40, tzinfo=timezone.utc)
+            instruments = tuple(SecurityProxyInstrumentQuote(
+                item.symbol, item.security_name, item.proxy_role, item.coverage_type,
+                Decimal("10.02"), Decimal("10.00"), Decimal("0.02"), Decimal("0.2"), quote_time,
+                "available", None,
+            ) for item in definition.instruments)
+            return (SecurityProxyObservation(
+                "cpo", definition.display_name, "security_proxy", "代理观察", definition.recommended_display_mode,
+                True, quote_time, quote_time, instruments, definition.disclosure, "available",
+            ),)
+
+    result = SecurityProxyViewerService(
+        observation_service=LiveObservationService(), enabled=True,
+        now=lambda: datetime(2026, 8, 13, 5, 41, tzinfo=timezone.utc),
+    ).observe(unavailable())
+    instrument = result["security_proxy"]["instruments"][0]
+    assert instrument["data_mode"] == "live"
+    assert instrument["quote_status"] == "available"

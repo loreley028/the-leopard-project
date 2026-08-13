@@ -48,7 +48,7 @@ class SecurityProxyViewerCache:
 
 class SecurityProxyViewerService:
     """Only this service decides fallback; callers never supply a security code."""
-    def __init__(self, *, observation_service: SecurityProxyObservationService, enabled: bool = False, cache: SecurityProxyViewerCache | None = None, now: Callable[[], datetime] = datetime.now) -> None:
+    def __init__(self, *, observation_service: SecurityProxyObservationService, enabled: bool = False, cache: SecurityProxyViewerCache | None = None, now: Callable[[], datetime] = lambda: datetime.now(timezone.utc)) -> None:
         self.observation_service, self.enabled, self.cache, self.now = observation_service, enabled, cache or SecurityProxyViewerCache(), now
 
     def observe(self, availability: OfficialBoardAvailability, *, session: Session | None = None) -> dict:
@@ -99,6 +99,9 @@ class SecurityProxyViewerService:
         quote_time = getattr(item, "quote_datetime", None)
         now = self.now()
         if now.tzinfo is None:
+            # The app's default clock is UTC.  Tests and explicit callers may
+            # provide a naive value, which therefore follows the same contract
+            # instead of silently treating Shanghai wall-clock time as UTC.
             now = now.replace(tzinfo=timezone.utc)
         fresh_quote = isinstance(quote_time, datetime) and quote_time.tzinfo is not None and now.astimezone(timezone.utc) - quote_time.astimezone(timezone.utc) <= timedelta(minutes=15)
         live_available = getattr(item, "quote_status") == "available" and getattr(item, "current") is not None and fresh_quote
