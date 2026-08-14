@@ -370,7 +370,8 @@ class EnhancedReportService:
         This maintenance pass never changes a report date, path status,
         publication state, frozen history, or manually entered assessment.
         It exists for older records where the deterministic parser did not
-        retain the evidence and observation-condition table columns.
+        retain a table column, or retained only a demonstrably truncated tail
+        that conflicts with the native positioned PDF cell.
         """
         text = extract_text_layer(payload)
         layout_text = extract_layout_text(payload)
@@ -393,14 +394,30 @@ class EnhancedReportService:
         def missing(value: str) -> bool:
             return not value.strip() or value.startswith("本报告未")
 
+        def truncated_tail(value: str, candidate: str, *, positioned: bool) -> bool:
+            """Allow only a provable native-cell repair, never a rewrite.
+
+            Earlier flattened V2.9 parsing can retain the last wrapped lines
+            of an otherwise nonempty cell.  When the new native-cell text has
+            that exact old value as its suffix, the source proves this is a
+            truncated stored fact rather than a new interpretation.
+            """
+            if not positioned or not value.strip() or value.startswith("本报告未"):
+                return False
+            normalize = lambda item: re.sub(r"\s+", "", item)
+            old, complete = normalize(value), normalize(candidate)
+            return len(complete) > len(old) and complete.endswith(old)
+
         for sector_key, record in records.items():
             assessment = assessments.get(sector_key)
             if assessment is None or assessment.manually_modified:
                 continue
             changed = False
+            positioned = record.get("extraction_method") == "pdf_v29_positioned_table_cells"
             for field in ("recent_path_summary", "current_judgement", "main_basis", "observation_condition"):
                 candidate = str(record.get(field) or "").strip()
-                if candidate and missing(str(getattr(assessment, field) or "")):
+                existing = str(getattr(assessment, field) or "")
+                if candidate and (missing(existing) or truncated_tail(existing, candidate, positioned=positioned)):
                     setattr(assessment, field, candidate)
                     changed = True
             # A prior deterministic parse may already have retained every
