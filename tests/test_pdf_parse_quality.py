@@ -7,6 +7,7 @@ from leopard_project.web.services import (
     _parse_v29_positioned_assessments,
     _validate_v29_positioned_assessment_set,
     _validate_assessment_set,
+    parse_v23_assessments,
 )
 
 
@@ -129,7 +130,7 @@ def test_v24_split_headers_cross_page_and_explicit_status_cell_wins() -> None:
 
 
 def test_v29_positioned_cells_preserve_evidence_and_condition_without_text_order_review() -> None:
-    records = _parse_v29_positioned_assessments([{
+    positioned_pages = [{
         "page": 6,
         "items": [
             _item(36, 710, "半导体", 7),
@@ -140,9 +141,14 @@ def test_v29_positioned_cells_preserve_evidence_and_condition_without_text_order
             _item(470, 710, "资金承接优于通信设备，量能保持改善。"),
             _item(620, 710, "跌破20日线且量能转弱则调整。"),
         ],
-    }])
+    }]
+    records = _parse_v29_positioned_assessments(positioned_pages)
     checked = _validate_v29_positioned_assessment_set(records)
     assert len(checked) == 1
     assert checked[0]["main_basis"] == "资金承接优于通信设备，量能保持改善。"
     assert checked[0]["observation_condition"] == "跌破20日线且量能转弱则调整。"
     assert checked[0]["quality_status"] == "verified_structure"
+    # Some genuine PDFs omit their version label from the text layer.  The
+    # native table geometry, not that decorative string, selects this route.
+    selected = parse_v23_assessments("板块观点详细汇总", "板块观点详细汇总", positioned_pages)
+    assert selected[0]["quality_status"] == "verified_structure"

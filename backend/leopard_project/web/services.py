@@ -1342,7 +1342,12 @@ def parse_v23_assessments(
     layout_text: str = "",
     positioned_pages: list[dict[str, Any]] | None = None,
 ) -> list[dict[str, Any]]:
-    v29_positioned_records = _parse_v29_positioned_assessments(positioned_pages or []) if "V2.9" in layout_text else []
+    # Uploaded V2.9 PDFs do not consistently print their version label in the
+    # text layer.  The positioned parser is itself the contract check: it only
+    # returns rows when it finds the native five-column geometry and an
+    # explicit sector-plus-judgement cell.  Earlier templates use different
+    # column positions and therefore safely fall through to their own parser.
+    v29_positioned_records = _parse_v29_positioned_assessments(positioned_pages or [])
     if v29_positioned_records:
         return _validate_v29_positioned_assessment_set(v29_positioned_records)
     v29_records = _parse_v29_layout_assessments(layout_text) if layout_text else []
