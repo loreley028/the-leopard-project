@@ -46,6 +46,7 @@ class SecurityProxyDefinition:
     production_enabled: bool
     status: str
     recommended_display_mode: str
+    primary_observation_symbol: str | None
     priority_theme: bool
     etf_proxies: tuple[SecurityProxyInstrument, ...]
     leader_proxies: tuple[SecurityProxyInstrument, ...]
@@ -57,6 +58,10 @@ class SecurityProxyDefinition:
     @property
     def instruments(self) -> tuple[SecurityProxyInstrument, ...]:
         return self.etf_proxies + self.leader_proxies
+
+    @property
+    def primary_observation(self) -> SecurityProxyInstrument | None:
+        return next((item for item in self.instruments if item.symbol == self.primary_observation_symbol), None)
 
 
 @dataclass(frozen=True)
@@ -102,7 +107,9 @@ def _definition(value: dict[str, object]) -> SecurityProxyDefinition:
         market_path_key=str(value["market_path_key"]), display_name=str(value["display_name"]),
         official_board_preferred=bool(value["official_board_preferred"]), fallback_only=bool(value["fallback_only"]),
         production_enabled=bool(value["production_enabled"]), status=str(value["status"]),
-        recommended_display_mode=str(value["recommended_display_mode"]), priority_theme=bool(value["priority_theme"]),
+        recommended_display_mode=str(value["recommended_display_mode"]),
+        primary_observation_symbol=str(value["primary_observation_symbol"]) if value.get("primary_observation_symbol") else None,
+        priority_theme=bool(value["priority_theme"]),
         etf_proxies=tuple(_instrument(row, "etf") for row in value["etf_proxies"]),
         leader_proxies=tuple(_instrument(row, "leader") for row in value["leader_proxies"]),
         semantic_risks=tuple(str(item) for item in value["semantic_risks"]), disclosure=str(value["disclosure"]),
@@ -129,8 +136,12 @@ def validate_security_proxy_registry(document: dict[str, object]) -> tuple[Secur
         instruments = path.instruments
         if path.status == NO_RELIABLE and instruments:
             raise SecurityProxyRegistryError("no-reliable path must not contain instruments")
+        if path.status == NO_RELIABLE and path.primary_observation_symbol is not None:
+            raise SecurityProxyRegistryError("no-reliable path must not define a primary observation")
         if path.status == APPROVED and not instruments:
             raise SecurityProxyRegistryError("approved fallback needs an instrument")
+        if path.status == APPROVED and path.primary_observation is None:
+            raise SecurityProxyRegistryError("approved fallback needs an enabled fixed primary observation")
         if len(path.etf_proxies) > 1 or len(path.leader_proxies) > (3 if path.priority_theme else 1):
             raise SecurityProxyRegistryError("proxy count exceeds path limit")
         symbols = [item.symbol for item in instruments]
@@ -144,6 +155,8 @@ def validate_security_proxy_registry(document: dict[str, object]) -> tuple[Secur
         for item in instruments:
             if not SYMBOL.fullmatch(item.symbol) or item.security_code != item.symbol[2:] or item.exchange != item.symbol[:2].upper():
                 raise SecurityProxyRegistryError("security symbol is invalid")
+        if path.primary_observation is not None and not path.primary_observation.enabled:
+            raise SecurityProxyRegistryError("primary observation must remain enabled")
     cpo = next(item for item in paths if item.market_path_key == "cpo")
     if [item.symbol for item in cpo.etf_proxies] != ["sh515880"] or [item.symbol for item in cpo.leader_proxies] != ["sz300308", "sz300502", "sz300394"]:
         raise SecurityProxyRegistryError("CPO must retain the approved ETF and three leaders")

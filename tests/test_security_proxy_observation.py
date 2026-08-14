@@ -65,13 +65,27 @@ def test_static_observation_lists_are_fixed_and_innovative_medicine_has_four_ins
     assert all([item.symbol for item in paths[key].instruments] == symbols for key, symbols in expected.items())
 
 
-@pytest.mark.parametrize("mutation", ["compact", "duplicate_symbol", "duplicate_order", "no_reliable_instrument"])
+def test_primary_observation_is_static_and_only_approved_paths_define_one() -> None:
+    paths = {item.market_path_key: item for item in load_security_proxy_registry()}
+    expected = {
+        "cpo": "sh515880", "commercial_space": "sh600118", "computing_power_rental": "sh516510",
+        "liquid_cooling": "sz002837", "ai_applications": "sz159819", "internet_finance": "sz159851",
+        "optical_fiber_theme": "sh515880", "rare_earth": "sh516780", "innovative_drug_medicine": "sz159992",
+        "semiconductor": "sz159995", "hotel": "sz159766",
+    }
+    assert {key: item.primary_observation_symbol for key, item in paths.items() if item.status == APPROVED} == expected
+    assert paths["glass_substrate"].primary_observation is None
+    assert paths["catering"].primary_observation is None
+
+
+@pytest.mark.parametrize("mutation", ["compact", "duplicate_symbol", "duplicate_order", "no_reliable_instrument", "missing_primary"])
 def test_registry_rejects_invalid_symbols_and_structure(mutation: str) -> None:
     document = registry_document()
     cpo = document["paths"][0]
     if mutation == "compact": cpo["etf_proxies"][0]["symbol"] = "s_sh515880"
     elif mutation == "duplicate_symbol": cpo["leader_proxies"][0]["symbol"] = "sh515880"
     elif mutation == "duplicate_order": cpo["leader_proxies"][0]["display_order"] = 1
+    elif mutation == "missing_primary": cpo["primary_observation_symbol"] = "sh999999"
     else: document["paths"][-1]["leader_proxies"] = [deepcopy(cpo["leader_proxies"][0])]
     with pytest.raises(SecurityProxyRegistryError): validate_security_proxy_registry(document)
 

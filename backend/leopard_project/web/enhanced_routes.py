@@ -56,6 +56,7 @@ from .market_automation import EodBackfillCoordinator
 from .live_market_anchor import LiveShanghaiMarketAnchorService
 from leopard_project.live_market_anchor_daily import recent_defense_line_validations
 from .path_history import matrix_dates
+from .primary_market_observation import primary_history
 
 
 def register_enhanced_routes(
@@ -361,30 +362,39 @@ def register_enhanced_routes(
             previous_by_symbol[item.symbol] = float(item.close)
 
         def market_overlay(sector_key: str, entry: SectorPathHistoryEntry) -> dict:
-            """Describe only objective exact-date market evidence for one matrix cell.
+            """Describe one fixed, exact-date Reader market observation.
 
-            A proxy is never reduced to a synthetic sector return: multi-security
-            paths expose availability counts and their individual rows instead.
+            Reader cells use the registry's stable primary security only.  The
+            remaining fixed securities survive in the detail payload and are
+            never combined into a sector return.
             """
             market_date = entry.market_as_of_date or entry.path_report_date
-            if entry.frozen_daily_pct_change is not None:
-                return {
-                    "kind": "official_board",
-                    "label": f"官方 {float(entry.frozen_daily_pct_change):+.2f}%",
-                    "market_date": market_date.isoformat() if market_date else None,
-                    "pct_change": float(entry.frozen_daily_pct_change),
-                    "instruments": [],
-                }
             definition = proxy_definitions.get(sector_key)
             if definition is None or market_date is None:
                 return {
                     "kind": "unavailable", "label": "—",
                     "market_date": market_date.isoformat() if market_date else None,
-                    "pct_change": None, "instruments": [],
+                    "pct_change": None, "primary": None, "instruments": [],
                 }
+            primary = definition.primary_observation
+            primary_record = proxy_by_symbol_date.get((primary.symbol, market_date)) if primary else None
+            if primary is None or primary_record is None:
+                return {
+                    "kind": "unavailable", "label": "—",
+                    "market_date": market_date.isoformat(), "pct_change": None,
+                    "primary": None, "instruments": [],
+                }
+            primary_previous = proxy_previous_close.get((primary.symbol, market_date))
+            primary_close = float(primary_record.close)
+            primary_pct = ((primary_close / primary_previous - 1) * 100) if primary_previous and primary_previous > 0 else None
+            primary_payload = {
+                "name": primary.security_name, "role": primary.proxy_role,
+                "close": primary_close, "pct_change": primary_pct,
+                "trading_date": market_date.isoformat(),
+            }
             instruments = []
             for instrument in definition.instruments:
-                if not instrument.enabled:
+                if not instrument.enabled or instrument.symbol == primary.symbol:
                     continue
                 record = proxy_by_symbol_date.get((instrument.symbol, market_date))
                 if record is None:
@@ -399,26 +409,11 @@ def register_enhanced_routes(
                     "pct_change": pct_change,
                     "trading_date": market_date.isoformat(),
                 })
-            total = sum(1 for instrument in definition.instruments if instrument.enabled)
-            available = len(instruments)
-            if not available:
-                return {
-                    "kind": "unavailable", "label": "—",
-                    "market_date": market_date.isoformat(), "pct_change": None,
-                    "instruments": [],
-                }
-            if total == 1:
-                only = instruments[0]
-                label = f"代理 {only['pct_change']:+.2f}%" if only["pct_change"] is not None else "代理 1/1"
-                return {
-                    "kind": "proxy_single", "label": label,
-                    "market_date": market_date.isoformat(), "pct_change": only["pct_change"],
-                    "instruments": instruments,
-                }
             return {
-                "kind": "proxy_multi", "label": f"代理 {available}/{total}",
-                "market_date": market_date.isoformat(), "pct_change": None,
-                "instruments": instruments,
+                "kind": "primary",
+                "label": f"{primary.security_name} {primary_pct:+.2f}%" if primary_pct is not None else f"{primary.security_name} —",
+                "market_date": market_date.isoformat(), "pct_change": primary_pct,
+                "primary": primary_payload, "instruments": instruments,
             }
         rows = []
         for sector in sorted(bundle.sectors, key=lambda item: item.overall_order):
@@ -603,6 +598,8 @@ def register_enhanced_routes(
         capability = load_provider_capabilities().get(market_key)
         if capability and not capability.selectable_candidates:
             resolved_intraday_status = "provider_failed"
+        primary_definition = next((item for item in load_security_proxy_registry() if item.market_path_key == market_key and item.status == APPROVED), None)
+        primary_market = primary_history(session, primary_definition) if primary_definition is not None else None
         pref = session.get(SectorResearchPreference, market_key)
         is_pinned = bool(pref and pref.is_pinned_for_research)
         last_ten = all_path_rows[:10]
@@ -629,6 +626,7 @@ def register_enhanced_routes(
             ) if reports else None,
             "current_latest_market": latest_market,
             "latest_complete_market": latest_market,
+            "primary_market": primary_market,
             "recent_10_trading_days": recent_days,
             "intraday_snapshot": intraday_snapshot,
             "intraday_status": resolved_intraday_status,

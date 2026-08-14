@@ -12,8 +12,7 @@ const marketOverlayLabel = (cell: Cell) => cell.market_overlay?.label ?? (cell.d
 const marketOverlayTitle = (cell: Cell) => {
   const overlay = cell.market_overlay;
   if (!overlay || overlay.kind === "unavailable") return "该日期暂无可用客观行情";
-  if (overlay.kind === "official_board") return "该日期官方板块完整行情";
-  return `固定代理证券的${overlay.market_date ?? "该日期"}逐项客观行情；不构成板块综合涨跌。`;
+  return `${overlay.market_date ?? "该日期"}固定主观察标的；点击查看相关证券逐项表现。`;
 };
 
 export function IslandPathMatrix({ matrix, period, onPeriodChange }: { matrix: PathMatrix; period: string; onPeriodChange: (value: string) => void }) {
@@ -55,7 +54,6 @@ export function IslandPathMatrix({ matrix, period, onPeriodChange }: { matrix: P
     target?.scrollIntoView({ behavior: "smooth", block: "start" });
     setActiveGroup(name);
   };
-  const selectedMarket = research?.history.find(item => item.report_id === selected?.detail_report_id)?.report_snapshot ?? null;
   const selectedHistory = research?.history.find(item => item.report_id === selected?.detail_report_id);
   return <div className="path-matrix-shell">
     <div className="matrix-controls" aria-label="历史路径筛选">
@@ -66,7 +64,7 @@ export function IslandPathMatrix({ matrix, period, onPeriodChange }: { matrix: P
     <nav className="group-jump-nav" aria-label="一级分组快捷导航">
       {groups.map(item => <button key={item.group_name} type="button" aria-current={activeGroup === item.group_name ? "true" : undefined} onClick={() => jumpToGroup(item.group_name)}>{item.group_name}<small>{item.rows.length}</small></button>)}
     </nav>
-    <p className="matrix-caption">{matrix.caption}。主日期为直播报告日期；橙色小字为对应完整行情日期，周日报告通常关联上一个完整交易日。第二行优先显示该日期官方板块行情；官方缺失时只显示固定代理证券的逐项覆盖，不生成综合涨跌。</p>
+    <p className="matrix-caption">{matrix.caption}。主日期为直播报告日期；第二行仅显示该主题固定主观察标的的对应日期表现。相关证券逐项表现请点击查看；不构成板块指数或综合收益。</p>
     <div className="matrix-desktop matrix-viewport" ref={viewport}>
       <table className="path-matrix"><caption className="sr-only">{matrix.caption}</caption><thead><tr><th className="sticky-sector" scope="col">板块</th>{matrix.dates.map((item, index) => <th className={index === matrix.dates.length - 1 ? "latest-column" : ""} scope="col" key={item.report_id} title={`直播报告 ${item.report_date} ${item.weekday}${item.market_as_of_date ? `；完整行情 ${item.market_as_of_date} ${item.market_weekday ?? ""}` : ""}`}><span>{shortDate(item.report_date)} <b>{shortWeekday(item.weekday)}</b></span>{item.market_as_of_date && item.market_as_of_date !== item.report_date && <small>行{shortDate(item.market_as_of_date)} {shortWeekday(item.market_weekday)}</small>}</th>)}</tr></thead>
         <tbody>{groups.flatMap(({ group_name: group, rows: items }) => [
@@ -75,9 +73,9 @@ export function IslandPathMatrix({ matrix, period, onPeriodChange }: { matrix: P
         ])}</tbody>
       </table>
     </div>
-    <div className="matrix-mobile" aria-label="移动端板块最近五期路径">{groups.map(({ group_name: group, rows: items }) => <section className="matrix-mobile-group" data-group-name={group} ref={node => { if (node) mobileGroups.current.set(group, node); else mobileGroups.current.delete(group); }} key={group}><h3>{group}</h3>{items.map(row => <details key={row.sector_key}><summary>{row.sector_name}</summary><ol>{row.cells.filter(cell => reportIds.has(cell.report_id)).slice(-5).map(cell => <li key={cell.report_id}><time>{cell.report_date}</time><button type="button" className={`path-chip path-${cell.path_status}`} onClick={() => setSelected({ ...cell, sector_name: row.sector_name, sector_key: row.sector_key })}>{cell.path_status_label}</button><span>{cell.judgement_summary || "本期未明确提及"}</span></li>)}</ol></details>)}</section>)}</div>
-    <IslandDialog open={Boolean(selected)} title={selected ? `${selected.sector_name} · 报告${selected.report_date}` : "路径详情"} onClose={() => setSelected(undefined)}>
-      {selected && <div className="stack"><p><strong>路径状态：</strong>{selected.path_status_label}</p><p><strong>报告日期：</strong>{selected.report_date}</p><p><strong>完整行情日期：</strong>{selected.market_as_of_date ?? "未附加"}</p>{selected.market_overlay?.kind === "official_board" && <p><strong>客观行情：</strong>官方板块 {formatPct(selected.market_overlay.pct_change)}</p>}{selected.market_overlay?.kind === "unavailable" && <p className="notice">该日期暂无可用客观行情。</p>}{selected.market_overlay && ["proxy_single", "proxy_multi"].includes(selected.market_overlay.kind) && <section className="matrix-market-detail"><strong>固定代理证券（{selected.market_overlay.market_date}）</strong><p className="notice">仅展示逐项主题观察，不代表官方板块指数或综合收益。</p><ul>{selected.market_overlay.instruments.map(item => <li key={`${item.name}-${item.trading_date}`}><span>{item.role === "etf" ? "代理ETF" : "核心公司"} · {item.name}</span><span>收盘 {item.close.toFixed(2)} · {formatPct(item.pct_change)}</span></li>)}</ul></section>}{selected.has_detailed_report ? <><p><strong>当期判断：</strong>{selectedHistory?.assessment.current_judgement || selected.judgement_summary || "本期未明确提及，不代表观点失效。"}</p><p><strong>主要依据：</strong>{selectedHistory?.assessment.main_basis || "—"}</p><p><strong>观察条件：</strong>{selectedHistory?.assessment.observation_condition || "—"}</p><p><strong>近5日：</strong>{formatPct(selectedMarket?.return_5d)}</p></> : <p className="notice">仅有路径记录，尚未补充该期原始报告。</p>}<p>{selected.detail_report_id && <><Link to={`/reports/${selected.detail_report_id}`}>来源报告</Link> · </>}<Link to={`/sectors/${selected.sector_key}`}>板块档案</Link></p></div>}
+    <div className="matrix-mobile" aria-label="移动端板块最近五期路径">{groups.map(({ group_name: group, rows: items }) => <section className="matrix-mobile-group" data-group-name={group} ref={node => { if (node) mobileGroups.current.set(group, node); else mobileGroups.current.delete(group); }} key={group}><h3>{group}</h3>{items.map(row => <details key={row.sector_key}><summary>{row.sector_name}</summary><ol>{row.cells.filter(cell => reportIds.has(cell.report_id)).slice(-5).map(cell => <li key={cell.report_id}><time>{cell.report_date}</time><button type="button" className={`path-chip path-${cell.path_status}`} onClick={() => setSelected({ ...cell, sector_name: row.sector_name, sector_key: row.sector_key })}>{cell.path_status_label}</button><span>{cell.judgement_summary || "本期未明确提及"}<small>{marketOverlayLabel(cell)}</small></span></li>)}</ol></details>)}</section>)}</div>
+    <IslandDialog open={Boolean(selected)} title={selected ? `${selected.sector_name} · ${selected.report_date}` : "路径详情"} onClose={() => setSelected(undefined)}>
+      {selected && <div className="stack matrix-dialog-content"><p><strong>报告观点：</strong>{selected.path_status_label}</p>{selected.market_overlay?.kind === "unavailable" && <p className="notice">该日期暂无可靠主观察标的行情。</p>}{selected.market_overlay?.kind === "primary" && <section className="matrix-market-detail"><strong>主观察标的</strong>{selected.market_overlay.primary && <div className="matrix-primary-observation"><span>{selected.market_overlay.primary.role === "etf" ? "ETF" : "核心公司"} · {selected.market_overlay.primary.name}</span><b>收盘 {selected.market_overlay.primary.close.toFixed(2)} · {formatPct(selected.market_overlay.primary.pct_change)}</b></div>}{selected.market_overlay.instruments.length > 0 && <><strong className="matrix-related-heading">相关证券</strong><ul>{selected.market_overlay.instruments.map(item => <li key={`${item.name}-${item.trading_date}`}><span>{item.role === "etf" ? "ETF" : "核心公司"} · {item.name}</span><span>收盘 {item.close.toFixed(2)} · {formatPct(item.pct_change)}</span></li>)}</ul></>}<p className="matrix-disclosure">以下为相关证券逐项表现，不代表板块指数或综合收益。</p></section>}{selected.has_detailed_report ? <><p><strong>报告依据：</strong>{selectedHistory?.assessment.main_basis || "—"}</p><p><strong>观察条件：</strong>{selectedHistory?.assessment.observation_condition || "—"}</p></> : <p className="muted">该日为历史路径记录，无独立报告正文。</p>}<p>{selected.detail_report_id && <><Link to={`/reports/${selected.detail_report_id}`}>来源报告</Link> · </>}<Link to={`/sectors/${selected.sector_key}`}>板块档案</Link></p></div>}
     </IslandDialog>
   </div>;
 }

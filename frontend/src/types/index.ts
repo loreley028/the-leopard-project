@@ -227,6 +227,7 @@ export interface Sector {
   current_path_status: PathStatus;
   current_path_status_label: string;
   latest_market: MarketSnapshot | null;
+  primary_market?: PrimaryMarketObservation | null;
   latest_complete_market?: MarketSnapshot | null;
   intraday_snapshot?: IntradaySnapshot | null;
   intraday_status?: string;
@@ -248,6 +249,24 @@ export interface Sector {
   historical_broad_intervals?: HoldingInterval[];
   is_low_attention?: boolean;
   is_pinned_for_research?: boolean;
+}
+
+export interface PrimaryMarketObservation {
+  symbol: string;
+  name: string;
+  role: "etf" | "leader";
+  trade_date: string | null;
+  close: number | null;
+  daily_pct_change: number | null;
+  return_10d: number | null;
+  history_days: number;
+  history: RecentTradingDay[];
+  ma5: number | null;
+  ma10: number | null;
+  ma20: number | null;
+  close_vs_ma5_pct: number | null;
+  close_vs_ma10_pct: number | null;
+  close_vs_ma20_pct: number | null;
 }
 
 export type PathStatus = "avoid" | "strong_watch" | "watch" | "weak_watch" | "turn_hold" | "hold" | "turn_weak" | "exit" | "not_mentioned";
@@ -532,10 +551,11 @@ export interface PathMatrix {
     report_id: string;
     report_date: string;
     market_overlay?: {
-      kind: "official_board" | "proxy_single" | "proxy_multi" | "unavailable";
+      kind: "primary" | "unavailable";
       label: string;
       market_date: string | null;
       pct_change: number | null;
+      primary: { name: string; role: "etf" | "leader"; close: number; pct_change: number | null; trading_date: string } | null;
       instruments: Array<{ name: string; role: "etf" | "leader"; close: number; pct_change: number | null; trading_date: string }>;
     };
   }> }>;
@@ -557,6 +577,7 @@ export interface SectorResearch {
   latest_report_date?: string | null;
   latest_report_explicitly_mentioned?: boolean | null;
   current_latest_market: MarketSnapshot | null;
+  primary_market?: PrimaryMarketObservation | null;
   latest_complete_market?: MarketSnapshot | null;
   recent_10_trading_days?: RecentTradingDay[];
   intraday_snapshot?: IntradaySnapshot | null;

@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import date, datetime, timezone
 from decimal import Decimal
 
+import pytest
 from starlette.testclient import TestClient
 from sqlalchemy import func, select
 
@@ -13,6 +14,7 @@ from leopard_project.web.models import LiveMarketAnchorDaily, Report, SectorDail
 from leopard_project.web.path_history import _exact_market_payload
 from leopard_project.config import load_seed_bundle
 from leopard_project.security_proxy_observation import load_security_proxy_registry
+from leopard_project.web.primary_market_observation import primary_for_exact_date, primary_history
 
 
 def _settings(tmp_path) -> WebSettings:
@@ -64,7 +66,7 @@ def test_path_matrix_get_is_read_only_and_uses_uploaded_report_fallback(tmp_path
         assert session.scalar(select(func.count()).select_from(SectorPathHistoryEntry)) == 0
 
 
-def test_path_matrix_uses_exact_path_date_proxy_rows_without_synthesizing_a_sector_return(tmp_path) -> None:
+def test_matrix_uses_same_primary_across_dates_and_never_displays_proxy_ratio(tmp_path) -> None:
     settings = _settings(tmp_path)
     sessions = create_session_factory(settings.database_url)
     day, prior = date(2026, 8, 10), date(2026, 8, 9)
@@ -97,11 +99,37 @@ def test_path_matrix_uses_exact_path_date_proxy_rows_without_synthesizing_a_sect
         matrix = client.get(f"/api/v1/reports/{report.id}/path-matrix?periods=10").json()
     cpo_cell = next(row for row in matrix["rows"] if row["sector_key"] == "cpo")["cells"][0]
     assert cpo_cell["daily_return"] is None
-    assert cpo_cell["market_overlay"]["kind"] == "proxy_multi"
-    assert cpo_cell["market_overlay"]["label"] == "代理 4/4"
+    assert cpo_cell["market_overlay"]["kind"] == "primary"
+    assert cpo_cell["market_overlay"]["label"] == "通信ETF +10.00%"
     assert cpo_cell["market_overlay"]["market_date"] == day.isoformat()
-    assert len(cpo_cell["market_overlay"]["instruments"]) == 4
+    assert cpo_cell["market_overlay"]["primary"] | {"pct_change": None} == {
+        "name": "通信ETF", "role": "etf", "close": 11.0,
+        "pct_change": None, "trading_date": day.isoformat(),
+    }
+    assert cpo_cell["market_overlay"]["primary"]["pct_change"] == pytest.approx(10.0)
+    assert len(cpo_cell["market_overlay"]["instruments"]) == 3
     assert all(item["pct_change"] is not None for item in cpo_cell["market_overlay"]["instruments"])
+    assert "代理" not in cpo_cell["market_overlay"]["label"]
+    assert "官方" not in cpo_cell["market_overlay"]["label"]
+
+
+def test_primary_market_exact_date_only_and_no_primary_truthful_empty(tmp_path) -> None:
+    settings = _settings(tmp_path)
+    sessions = create_session_factory(settings.database_url)
+    cpo = next(item for item in load_security_proxy_registry() if item.market_path_key == "cpo")
+    with sessions() as session:
+        session.add(SecurityProxyDaily(
+            symbol="sz300308", trading_date=date(2026, 8, 10), close=Decimal("100"),
+            open=None, high=None, low=None, amount_yuan=None, quote_datetime=None,
+            fetched_at=datetime.now(timezone.utc), source="test",
+        ))
+        session.commit()
+        assert primary_for_exact_date(session, cpo, date(2026, 8, 10)) is None
+        primary = primary_history(session, cpo)
+    assert primary is not None
+    assert primary["symbol"] == "sh515880"
+    assert primary["history"] == []
+    assert primary["close"] is None
 
 
 def test_market_anchor_works_without_report_and_falls_back_to_completed_eod(tmp_path) -> None:

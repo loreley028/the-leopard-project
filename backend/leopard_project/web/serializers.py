@@ -7,10 +7,12 @@ from zoneinfo import ZoneInfo
 from leopard_project.config import load_seed_bundle
 from leopard_project.market_paths import load_market_path_registry, report_topic_sector
 from leopard_project.providers.capabilities import load_provider_capabilities
+from leopard_project.security_proxy_observation import APPROVED, load_security_proxy_registry
 from sqlalchemy import desc, select
 
 from .models import MarketRefreshItem, MarketRefreshRun, Report, SectorDailyBar, SectorMention, SectorResearchPreference
 from .repository import ReportRepository
+from .primary_market_observation import primary_history
 
 
 SHANGHAI = ZoneInfo("Asia/Shanghai")
@@ -115,6 +117,7 @@ def sector_payloads(repo: ReportRepository) -> list[dict]:
     capabilities = load_provider_capabilities()
     published = repo.list_reports(published_only=True)
     enhanced = EnhancedReportService(repo.session)
+    primary_definitions = {item.market_path_key: item for item in load_security_proxy_registry() if item.status == APPROVED}
     from .intraday import intraday_policy, market_phase, resolve_intraday_data_status
     latest_run = repo.session.scalar(select(MarketRefreshRun).where(MarketRefreshRun.mode == "intraday_refresh").order_by(desc(MarketRefreshRun.started_at)))
     latest_items = {
@@ -191,6 +194,7 @@ def sector_payloads(repo: ReportRepository) -> list[dict]:
         recent_days = [] if unsupported else enhanced.recent_complete_days(market_key)
         if market is not None:
             market["recent_10_trading_days"] = recent_days
+        primary_market = primary_history(repo.session, primary_definitions[market_key]) if market_key in primary_definitions else None
         output.append({
             "sector_key": market_key,
             "sector_name": market_path.display_name,
@@ -213,6 +217,7 @@ def sector_payloads(repo: ReportRepository) -> list[dict]:
             "effective_status_label": path_statuses()[current_effective]["label"] if current_effective else "暂无",
             "latest_market": market,
             "latest_complete_market": market,
+            "primary_market": primary_market,
             "intraday_snapshot": snapshot,
             "intraday_status": intraday_status,
             "intraday_last_attempt_at": _display_short_time(latest_run.started_at) if latest_run else None,
