@@ -29,7 +29,13 @@ from .models import (
     SectorPathHistoryEntry,
     SectorPathEntry,
 )
-from .services import WebDomainError
+from .services import (
+    WebDomainError,
+    extract_layout_text,
+    extract_positioned_pages,
+    extract_text_layer,
+    parse_report_text,
+)
 
 
 PATH_STATUS_PATH = CONFIG_DIR / "sector_path_status_v1.json"
@@ -357,6 +363,68 @@ class EnhancedReportService:
         self._revision(report, actor, "deterministic_text_layer_enhancement")
         self.session.commit()
         return {"path_entries_parsed": parsed_paths, "assessments_parsed": parsed_assessments, "unknown_statuses": unknown_statuses}
+
+    def reparse_missing_assessment_facts(self, report: Report, payload: bytes, actor: str) -> dict[str, int]:
+        """Fill only missing V2.9 table facts from the uploaded PDF text layer.
+
+        This maintenance pass never changes a report date, path status,
+        publication state, frozen history, or manually entered assessment.
+        It exists for older records where the deterministic parser did not
+        retain the evidence and observation-condition table columns.
+        """
+        text = extract_text_layer(payload)
+        layout_text = extract_layout_text(payload)
+        positioned_pages = extract_positioned_pages(payload)
+        fields, _, _, _ = parse_report_text(
+            text,
+            report.id,
+            report.file.original_filename if report.file else "",
+            layout_text,
+            positioned_pages,
+        )
+        records = {
+            record["sector_key"]: record
+            for record in fields.get("interpretation_meta", {}).get("assessment_records", [])
+            if record.get("sector_key")
+        }
+        assessments = {item.sector_key: item for item in self.assessments(report.id)}
+        updated = 0
+
+        def missing(value: str) -> bool:
+            return not value.strip() or value.startswith("本报告未")
+
+        for sector_key, record in records.items():
+            assessment = assessments.get(sector_key)
+            if assessment is None or assessment.manually_modified:
+                continue
+            changed = False
+            for field in ("recent_path_summary", "current_judgement", "main_basis", "observation_condition"):
+                candidate = str(record.get(field) or "").strip()
+                if candidate and missing(str(getattr(assessment, field) or "")):
+                    setattr(assessment, field, candidate)
+                    changed = True
+            if not changed:
+                continue
+            assessment.source_section = str(record.get("source_section") or assessment.source_section)
+            assessment.source_text_reference = str(record.get("source_text_reference") or assessment.source_text_reference)
+            assessment.extraction_method = str(record.get("extraction_method") or assessment.extraction_method)
+            assessment.source_page = record.get("source_page")
+            assessment.source_text_start = record.get("source_text_start")
+            assessment.source_text_end = record.get("source_text_end")
+            assessment.source_text_excerpt = str(record.get("source_text_excerpt") or assessment.source_text_excerpt)
+            assessment.confidence = str(record.get("confidence") or assessment.confidence)
+            assessment.validation_flags_json = json.dumps(record.get("validation_flags", []), ensure_ascii=False)
+            assessment.quality_status = str(record.get("quality_status") or assessment.quality_status)
+            if assessment.quality_status == "verified_structure":
+                assessment.review_status = "confirmed"
+            assessment.revision_id = f"deterministic-v29-facts-{report.enhanced_revision_number + 1}"
+            assessment.updated_at = datetime.now(timezone.utc)
+            updated += 1
+        if updated:
+            report.enhanced_revision_number += 1
+            self._revision(report, actor, "deterministic_v29_assessment_fact_reparse")
+            self.session.commit()
+        return {"parsed_records": len(records), "updated_assessments": updated}
 
     def interpretation(self, report: Report) -> dict[str, Any]:
         metadata = json.loads(report.interpretation_meta_json or "{}")

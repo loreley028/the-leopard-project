@@ -3,6 +3,7 @@ from __future__ import annotations
 from leopard_project.web.services import (
     _assessment_quality,
     _parse_positioned_assessments,
+    _parse_v29_layout_assessments,
     _validate_assessment_set,
 )
 
@@ -42,6 +43,29 @@ def test_missing_source_evidence_cannot_be_marked_verified() -> None:
     assert quality == "needs_attention"
     assert confidence == "medium"
     assert {"missing_source_page", "missing_source_range"} <= set(flags)
+
+
+def test_v29_native_layout_keeps_evidence_and_condition_in_their_columns() -> None:
+    def row(sector: str, history: str, status: str, basis: str, condition: str) -> str:
+        return (
+            " " * 10 + sector
+            + " " * (27 - 10 - len(sector)) + history
+            + " " * (63 - 27 - len(history)) + status
+            + " " * (78 - 63 - len(status)) + basis
+            + " " * (104 - 78 - len(basis)) + condition
+        )
+
+    layout = "\n".join([
+        "[[LEOPARD_PAGE:6]]", "V2.9", "七、当日板块观点详细汇总",
+        "板块" + " " * 30 + "历史路径（最近转折）" + " " * 15 + "8/11 判断" + " " * 20 + "主要依据" + " " * 20 + "观察条件",
+        row("半导体", "8/10持有→8/11持有", "持有", "主力资金仍在", "资金离场再调整"),
+        row("CPO", "8/10持有→8/11持有", "持有", "回踩仍有承接", "失去承接再观察"),
+    ])
+    records = {item["sector_key"]: item for item in _parse_v29_layout_assessments(layout)}
+    assert records["semiconductor"]["main_basis"] == "主力资金仍在"
+    assert records["semiconductor"]["observation_condition"] == "资金离场再调整"
+    assert records["cpo"]["main_basis"] == "回踩仍有承接"
+    assert records["cpo"]["observation_condition"] == "失去承接再观察"
 
 
 def test_abnormal_status_density_and_outlier_length_are_blocking() -> None:

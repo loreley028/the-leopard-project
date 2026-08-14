@@ -696,6 +696,167 @@ def _parse_positioned_assessments(positioned_pages: list[dict[str, Any]]) -> lis
     return sorted(unique.values(), key=lambda record: next(item.overall_order for item in load_seed_bundle().sectors if item.sector_key == record["sector_key"]))
 
 
+def _layout_chunks(line: str) -> list[tuple[int, str]]:
+    """Return visual layout cells separated by the PDF renderer's wide gaps.
+
+    V2.9's native five-column table is emitted by pypdf as fixed-width text.
+    Wrapped cells retain their horizontal starting column, while individual
+    glyph coordinates can be coalesced into one fragment.  This deliberately
+    uses only the PDF's own layout whitespace; it does not infer any facts
+    from prose outside the authoritative table.
+    """
+    output: list[tuple[int, str]] = []
+    for match in re.finditer(r"\S(?:.*?\S)?(?=(?: {5,}|\s*$))", line):
+        value = match.group(0).strip()
+        if value:
+            output.append((match.start(), value))
+    return output
+
+
+def _parse_v29_layout_assessments(layout_text: str) -> list[dict[str, Any]]:
+    """Recover V2.9 five-column rows without crossing PDF table boundaries.
+
+    The early V2.9 PDFs collapse each header into one positioned text fragment,
+    so their x coordinates cannot identify the five column boundaries.  Their
+    layout text still preserves the native wide column gaps, including wrapped
+    rows.  We only accept explicit judgement-cell values and keep each field in
+    the column where the PDF placed it.
+    """
+    if "V2.9" not in layout_text or "板块观点详细汇总" not in layout_text:
+        return []
+    records: list[dict[str, Any]] = []
+    current: dict[str, Any] | None = None
+    page_number: int | None = None
+    offset = 0
+    active = False
+    prelude: list[tuple[int, str, list[tuple[int, str]]]] = []
+
+    def append_chunks(target: dict[str, Any], chunks: list[tuple[int, str]]) -> None:
+        for start, value in chunks:
+            # These ranges are stable for the V2.9 native table's body.
+            # They intentionally describe layout columns, not semantics.
+            if start < 25:
+                continue
+            if start < 60:
+                target["history_parts"].append(value)
+            # The left-aligned status cell begins at column 63.  Depending on
+            # the V2.9 page's renderer, the following evidence cell begins at
+            # 78 or 79, so it must not be absorbed into the status column.
+            elif start < 77:
+                target["status_parts"].append(value)
+            elif start < 103:
+                target["basis_parts"].append(value)
+            else:
+                target["condition_parts"].append(value)
+
+    def flush() -> None:
+        nonlocal current
+        if current is None:
+            return
+        status_text = _compact(" ".join(current["status_parts"]))
+        status_labels = re.findall("|".join(STATUS_LABELS), status_text)
+        status_label = status_labels[0] if len(set(status_labels)) == 1 else ""
+        record: dict[str, Any] = {
+            "sector_key": current["sector"].sector_key,
+            "sector_name": current["sector"].sector_name,
+            "path_status": STATUS_TO_CODE.get(status_label, ""),
+            "recent_path_summary": _compact(" ".join(current["history_parts"])),
+            "current_judgement": status_label,
+            "main_basis": _compact(" ".join(current["basis_parts"])),
+            "observation_condition": _compact(" ".join(current["condition_parts"])),
+            "source_section": "板块观点详细汇总",
+            "source_page": current["source_page"],
+            "source_text_start": current["source_start"],
+            "source_text_end": current["source_end"],
+            "source_text_reference": _compact(" ".join(current["raw_lines"])),
+            "source_text_excerpt": _compact(" ".join(current["raw_lines"]))[:900],
+            "source_reference": f"第{current['source_page']}页·板块观点详细汇总·{current['sector'].sector_name}表格行",
+            "extraction_method": "pdf_v29_layout_table_columns",
+            "manually_modified": False,
+        }
+        if record["path_status"]:
+            quality, confidence, flags = _assessment_quality(record)
+            record["quality_status"] = quality
+            record["confidence"] = confidence
+            record["validation_flags"] = sorted(set(flags))
+            records.append(record)
+        current = None
+
+    for raw_line in layout_text.splitlines(keepends=True):
+        line = raw_line.rstrip("\r\n")
+        marker = re.match(r"\[\[LEOPARD_PAGE:(\d+)\]\]", line)
+        if marker:
+            flush()
+            page_number = int(marker.group(1))
+            offset += len(raw_line)
+            continue
+        compact_line = _normalized_sector_token(line)
+        if "当日板块观点详细汇总" in compact_line:
+            active = True
+            offset += len(raw_line)
+            continue
+        if "板块观点详细汇总" in compact_line and "板块历史路径" not in compact_line:
+            active = True
+            offset += len(raw_line)
+            continue
+        if not active:
+            offset += len(raw_line)
+            continue
+        if compact_line.startswith(("八、", "8、", "核心结论", "与8月")):
+            flush()
+            break
+        # B1/B2/B3 headings sit outside the five-column data rows.  They
+        # delimit a row but never invalidate the table header for the page.
+        if re.match(r"^\s*B\d(?:[-.．]|\s)", line):
+            flush()
+            prelude.clear()
+            offset += len(raw_line)
+            continue
+        if all(label in compact_line for label in ("板块", "历史路径", "判断", "主要依据", "观察条件")):
+            flush()
+            prelude.clear()
+            offset += len(raw_line)
+            continue
+        if "本场未形成独立更新" in compact_line:
+            flush()
+            break
+        if page_number is None or not line.strip():
+            offset += len(raw_line)
+            continue
+        chunks = _layout_chunks(line)
+        sector = _sector_from_fragment(line[:25])
+        if sector is not None:
+            flush()
+            current = {
+                "sector": sector,
+                "source_page": page_number,
+                "source_start": offset,
+                "source_end": offset + len(raw_line),
+                "history_parts": [], "status_parts": [], "basis_parts": [],
+                "condition_parts": [], "raw_lines": [],
+            }
+            for _, pending_line, pending_chunks in prelude:
+                current["raw_lines"].append(pending_line)
+                append_chunks(current, pending_chunks)
+            prelude.clear()
+        if current is not None:
+            current["source_end"] = offset + len(raw_line)
+            current["raw_lines"].append(line.strip())
+            append_chunks(current, chunks)
+        elif chunks and all(start >= 25 for start, _ in chunks):
+            # pypdf can emit the upper wrapped fragments before the line that
+            # carries the sector cell.  Buffer them only until that next row.
+            prelude.append((offset, line.strip(), chunks))
+        offset += len(raw_line)
+    flush()
+    unique: dict[str, dict[str, Any]] = {}
+    for record in records:
+        previous = unique.get(record["sector_key"])
+        if previous is None or len(record["source_text_reference"]) > len(previous["source_text_reference"]):
+            unique[record["sector_key"]] = record
+    return sorted(unique.values(), key=lambda item: next(sector.overall_order for sector in load_seed_bundle().sectors if sector.sector_key == item["sector_key"]))
+
+
 def _parse_layout_assessments(layout_text: str) -> list[dict[str, Any]]:
     if "板块观点" not in _normalized_sector_token(layout_text) or "详细汇总" not in _normalized_sector_token(layout_text):
         return []
@@ -1055,6 +1216,9 @@ def parse_v23_assessments(
     layout_text: str = "",
     positioned_pages: list[dict[str, Any]] | None = None,
 ) -> list[dict[str, Any]]:
+    v29_records = _parse_v29_layout_assessments(layout_text) if layout_text else []
+    if v29_records:
+        return _validate_assessment_set(v29_records)
     positioned_records = _parse_positioned_assessments(positioned_pages or [])
     if positioned_records:
         return _validate_assessment_set(positioned_records)
