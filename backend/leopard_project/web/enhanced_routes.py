@@ -344,7 +344,11 @@ def register_enhanced_routes(
             for instrument in definition.instruments
             if instrument.enabled
         }))
-        maximum_market_date = max((item.market_as_of_date for item in entries if item.market_as_of_date), default=None)
+        # Frozen historical rows created before Market Core may not carry a
+        # separate market_as_of_date.  Their own path report date is still the
+        # only permitted exact-date lookup key; it is never a request to use a
+        # previous or nearest market fact.
+        maximum_market_date = max((item.market_as_of_date or item.path_report_date for item in entries), default=None)
         proxy_rows = list(session.scalars(select(SecurityProxyDaily).where(
             SecurityProxyDaily.symbol.in_(proxy_symbols),
             SecurityProxyDaily.trading_date <= maximum_market_date,
@@ -362,7 +366,7 @@ def register_enhanced_routes(
             A proxy is never reduced to a synthetic sector return: multi-security
             paths expose availability counts and their individual rows instead.
             """
-            market_date = entry.market_as_of_date
+            market_date = entry.market_as_of_date or entry.path_report_date
             if entry.frozen_daily_pct_change is not None:
                 return {
                     "kind": "official_board",

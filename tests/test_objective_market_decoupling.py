@@ -64,7 +64,7 @@ def test_path_matrix_get_is_read_only_and_uses_uploaded_report_fallback(tmp_path
         assert session.scalar(select(func.count()).select_from(SectorPathHistoryEntry)) == 0
 
 
-def test_path_matrix_uses_exact_date_proxy_rows_without_synthesizing_a_sector_return(tmp_path) -> None:
+def test_path_matrix_uses_exact_path_date_proxy_rows_without_synthesizing_a_sector_return(tmp_path) -> None:
     settings = _settings(tmp_path)
     sessions = create_session_factory(settings.database_url)
     day, prior = date(2026, 8, 10), date(2026, 8, 9)
@@ -78,7 +78,7 @@ def test_path_matrix_uses_exact_date_proxy_rows_without_synthesizing_a_sector_re
             session.add(SectorPathHistoryEntry(
                 sector_key=sector.sector_key, sector_name=sector.sector_name,
                 path_report_date=day, path_status="hold", source_report_id=report.id,
-                detail_report_id=report.id, market_as_of_date=day,
+                detail_report_id=report.id, market_as_of_date=None,
                 frozen_daily_pct_change=None, market_data_status="unavailable",
                 source_pdf_sha256="a" * 64,
             ))
@@ -99,6 +99,7 @@ def test_path_matrix_uses_exact_date_proxy_rows_without_synthesizing_a_sector_re
     assert cpo_cell["daily_return"] is None
     assert cpo_cell["market_overlay"]["kind"] == "proxy_multi"
     assert cpo_cell["market_overlay"]["label"] == "代理 4/4"
+    assert cpo_cell["market_overlay"]["market_date"] == day.isoformat()
     assert len(cpo_cell["market_overlay"]["instruments"]) == 4
     assert all(item["pct_change"] is not None for item in cpo_cell["market_overlay"]["instruments"])
 
