@@ -394,6 +394,9 @@ class EnhancedReportService:
         def missing(value: str) -> bool:
             return not value.strip() or value.startswith("本报告未")
 
+        def normalized(value: str) -> str:
+            return re.sub(r"\s+", "", value)
+
         def truncated_tail(value: str, candidate: str, *, positioned: bool) -> bool:
             """Allow only a provable native-cell repair, never a rewrite.
 
@@ -404,8 +407,7 @@ class EnhancedReportService:
             """
             if not positioned or not value.strip() or value.startswith("本报告未"):
                 return False
-            normalize = lambda item: re.sub(r"\s+", "", item)
-            old, complete = normalize(value), normalize(candidate)
+            old, complete = normalized(value), normalized(candidate)
             return len(complete) > len(old) and complete.endswith(old)
 
         for sector_key, record in records.items():
@@ -414,10 +416,22 @@ class EnhancedReportService:
                 continue
             changed = False
             positioned = record.get("extraction_method") == "pdf_v29_positioned_table_cells"
+            native_conflict = (
+                positioned
+                and record.get("quality_status") == "verified_structure"
+                and normalized(str(record.get("source_text_reference") or ""))
+                != normalized(str(assessment.source_text_reference or ""))
+            )
             for field in ("recent_path_summary", "current_judgement", "main_basis", "observation_condition"):
                 candidate = str(record.get(field) or "").strip()
                 existing = str(getattr(assessment, field) or "")
-                if candidate and (missing(existing) or truncated_tail(existing, candidate, positioned=positioned)):
+                if native_conflict and candidate != existing:
+                    # This is a documented source conflict, not a generated
+                    # interpretation.  A deliberately blank V2.9 cell must
+                    # also clear an old misplaced value so Reader shows `—`.
+                    setattr(assessment, field, candidate)
+                    changed = True
+                elif candidate and (missing(existing) or truncated_tail(existing, candidate, positioned=positioned)):
                     setattr(assessment, field, candidate)
                     changed = True
             # A prior deterministic parse may already have retained every
