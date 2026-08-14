@@ -913,6 +913,29 @@ def _parse_v29_positioned_assessments(positioned_pages: list[dict[str, Any]]) ->
     ordering of wrapped lines.
     """
     records: list[dict[str, Any]] = []
+
+    def cell_text(
+        items: list[dict[str, Any]], lower_y: float, upper_y: float, lower_x: float, upper_x: float | None,
+    ) -> str:
+        """Rebuild a V2.9 cell in its native, top-to-bottom page order."""
+        selected = [
+            item for item in items
+            if lower_y < float(item["y"]) <= upper_y
+            and float(item["x"]) >= lower_x
+            and (upper_x is None or float(item["x"]) < upper_x)
+            and float(item.get("font_size", 8.0)) <= 9.0
+        ]
+        lines: dict[float, list[dict[str, Any]]] = {}
+        for item in selected:
+            lines.setdefault(round(float(item["y"]), 1), []).append(item)
+        rebuilt: list[str] = []
+        # pypdf's visitor matrix for these native V2.9 PDFs increases from
+        # header to footer, so ascending y is the visual reading order.
+        for y in sorted(lines):
+            lines[y].sort(key=lambda item: float(item["x"]))
+            rebuilt.append("".join(item["text"] for item in lines[y]))
+        return _compact("".join(rebuilt))
+
     for page in positioned_pages:
         page_number = int(page["page"])
         if page_number < 6:
@@ -926,30 +949,30 @@ def _parse_v29_positioned_assessments(positioned_pages: list[dict[str, Any]]) ->
             labels = re.findall("|".join(STATUS_LABELS), status_text)
             if sector is not None and len(set(labels)) == 1:
                 centers.append((y, sector))
-        for index, (center_y, sector) in enumerate(sorted(centers, reverse=True)):
-            ordered = sorted(centers, reverse=True)
+        ordered = sorted(centers)
+        for index, (center_y, sector) in enumerate(ordered):
             if index:
-                upper_y = (ordered[index - 1][0] + center_y) / 2
+                lower_y = (ordered[index - 1][0] + center_y) / 2
             elif index + 1 < len(ordered):
-                upper_y = center_y + (center_y - ordered[index + 1][0]) / 2
-            else:
-                upper_y = center_y + 25
-            if index + 1 < len(ordered):
-                lower_y = (center_y + ordered[index + 1][0]) / 2
-            elif index:
-                lower_y = center_y - (ordered[index - 1][0] - center_y) / 2
+                lower_y = center_y - (ordered[index + 1][0] - center_y) / 2
             else:
                 lower_y = center_y - 25
-            history = _cell_text(items, lower_y, upper_y, 150, 350)
-            status_text = _cell_text(items, lower_y, upper_y, 350, 450)
-            basis = _cell_text(items, lower_y, upper_y, 450, 600)
-            condition = _cell_text(items, lower_y, upper_y, 600, None)
+            if index + 1 < len(ordered):
+                upper_y = (center_y + ordered[index + 1][0]) / 2
+            elif index:
+                upper_y = center_y + (center_y - ordered[index - 1][0]) / 2
+            else:
+                upper_y = center_y + 25
+            history = cell_text(items, lower_y, upper_y, 150, 350)
+            status_text = cell_text(items, lower_y, upper_y, 350, 450)
+            basis = cell_text(items, lower_y, upper_y, 450, 600)
+            condition = cell_text(items, lower_y, upper_y, 600, None)
             labels = re.findall("|".join(STATUS_LABELS), status_text)
             status_label = labels[0] if len(set(labels)) == 1 else ""
             if not status_label:
                 continue
             row_items = [item for item in items if lower_y < float(item["y"]) <= upper_y]
-            row_items.sort(key=lambda item: (-float(item["y"]), float(item["x"])))
+            row_items.sort(key=lambda item: (float(item["y"]), float(item["x"])))
             excerpt = _compact(" ".join(item["text"] for item in row_items))
             record: dict[str, Any] = {
                 "sector_key": sector.sector_key,

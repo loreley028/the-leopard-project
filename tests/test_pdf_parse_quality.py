@@ -152,3 +152,22 @@ def test_v29_positioned_cells_preserve_evidence_and_condition_without_text_order
     # native table geometry, not that decorative string, selects this route.
     selected = parse_v23_assessments("板块观点详细汇总", "板块观点详细汇总", positioned_pages)
     assert selected[0]["quality_status"] == "verified_structure"
+
+
+def test_v29_positioned_cells_keep_wrapped_text_with_its_own_row() -> None:
+    records = _parse_v29_positioned_assessments([{
+        "page": 6,
+        "items": [
+            _item(36, 100, "半导体", 8.666), _item(160, 100, "8/10持有", 8.666),
+            _item(380, 100, "持有", 8.666), _item(470, 100, "第一行依据", 8.666),
+            _item(620, 100, "第一行条件", 8.666),
+            _item(36, 160, "稀土", 8.666), _item(160, 160, "8/10观察", 8.666),
+            _item(380, 160, "观察", 8.666), _item(470, 148, "第二行依据上半", 8.666),
+            _item(470, 160, "第二行依据下半", 8.666), _item(620, 148, "第二行条件上半", 8.666),
+            _item(620, 160, "第二行条件下半", 8.666),
+        ],
+    }])
+    by_key = {record["sector_key"]: record for record in records}
+    assert by_key["semiconductor"]["main_basis"] == "第一行依据"
+    assert by_key["rare_earth"]["main_basis"] == "第二行依据上半第二行依据下半"
+    assert by_key["rare_earth"]["observation_condition"] == "第二行条件上半第二行条件下半"
