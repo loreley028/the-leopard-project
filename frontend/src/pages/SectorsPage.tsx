@@ -19,8 +19,7 @@ function RealtimeCell({ item, system }: { item: Sector; system?: IntradayStatus 
   const snapshot = item.intraday_snapshot;
   const presentation = realtimePresentation(item, system);
   const title = [
-    `Provider：${snapshot?.provider ?? system?.provider ?? "尚无"}`,
-    `角色：${snapshot?.provider_role ?? system?.provider_role ?? "research_provider"}`,
+    "实时行情辅助",
     `最近尝试：${item.intraday_last_attempt_at ?? system?.last_attempt_at ?? "暂无"}`,
     snapshot ? `快照日期：${snapshot.trade_date}` : `状态：${item.intraday_status ?? "provider_failed"}`,
   ].join("\n");
