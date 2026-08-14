@@ -544,6 +544,8 @@ export interface SectorResearch {
   report_topic_name?: string;
   group_name: string;
   latest_explicit_view: { report_id: string; report_date: string; path: PathEntry; assessment: SectorAssessment; report_snapshot: MarketSnapshot | null } | null;
+  latest_report_date?: string | null;
+  latest_report_explicitly_mentioned?: boolean | null;
   current_latest_market: MarketSnapshot | null;
   latest_complete_market?: MarketSnapshot | null;
   recent_10_trading_days?: RecentTradingDay[];

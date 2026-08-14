@@ -410,6 +410,12 @@ def register_enhanced_routes(
         path_rows = service.path_history(report_key, selected_path_period, reports[0].report_date if reports else None)
         all_path_rows = service.path_history(report_key, through=reports[0].report_date if reports else None)
         report_by_id = {item.id: item for item in reports}
+        latest_report_entry = session.scalar(
+            select(SectorPathEntry).where(
+                SectorPathEntry.report_id == reports[0].id,
+                SectorPathEntry.sector_key == report_key,
+            )
+        ) if reports else None
         assessment_by_report = {
             item.id: next((assessment for assessment in service.assessments(item.id) if assessment.sector_key == report_key), None)
             for item in reports
@@ -520,6 +526,12 @@ def register_enhanced_routes(
             "report_topic_name": sector.sector_name,
             "group_name": sector.category_level_1,
             "latest_explicit_view": latest_explicit,
+            "latest_report_date": reports[0].report_date.isoformat() if reports and reports[0].report_date else None,
+            "latest_report_explicitly_mentioned": bool(
+                latest_report_entry
+                and latest_report_entry.explicitly_mentioned
+                and latest_report_entry.path_status != "not_mentioned"
+            ) if reports else None,
             "current_latest_market": latest_market,
             "latest_complete_market": latest_market,
             "recent_10_trading_days": recent_days,

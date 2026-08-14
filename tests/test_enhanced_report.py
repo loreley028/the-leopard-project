@@ -215,6 +215,8 @@ def test_not_mentioned_keeps_latest_explicit_view(enhanced_web) -> None:
     client.post(f"/api/v1/admin/reports/{second}/publish")
     research = client.get("/api/v1/sectors/semiconductor/research").json()
     assert research["latest_explicit_view"]["report_id"] == first
+    assert research["latest_report_date"] == "2026-07-19"
+    assert research["latest_report_explicitly_mentioned"] is False
     assert research["history"][0]["path"]["path_status"] == "not_mentioned"
     assert len(research["recent_path"]) == len(research["recent_path_entries"]) == 10
     assert sum(item["has_detailed_assessment"] for item in research["recent_path_entries"]) == 2
