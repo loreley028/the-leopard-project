@@ -638,7 +638,9 @@ def _cell_text(items: list[dict[str, Any]], lower_y: float, upper_y: float, lowe
         if lower_y < float(item["y"]) <= upper_y
         and float(item["x"]) >= lower_x
         and (upper_x is None or float(item["x"]) < upper_x)
-        and float(item.get("font_size", 8.0)) <= 8.1
+        # Native V2.9 body cells use 8.666pt in the uploaded PDFs.  Keep the
+        # cap below heading sizes while allowing that documented body font.
+        and float(item.get("font_size", 8.0)) <= 9.0
     ]
     lines: dict[float, list[dict[str, Any]]] = {}
     for item in selected:

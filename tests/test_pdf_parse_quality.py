@@ -133,13 +133,13 @@ def test_v29_positioned_cells_preserve_evidence_and_condition_without_text_order
     positioned_pages = [{
         "page": 6,
         "items": [
-            _item(36, 710, "半导体", 7),
-            _item(160, 710, "8/10持有→8/11持有"),
-            _item(380, 710, "持有", 7),
+            _item(36, 710, "半导体", 8.666),
+            _item(160, 710, "8/10持有→8/11持有", 8.666),
+            _item(380, 710, "持有", 8.666),
             # Mentioning another sector inside the evidence is valid PDF prose,
             # not a row boundary when the native cells are spatially isolated.
-            _item(470, 710, "资金承接优于通信设备，量能保持改善。"),
-            _item(620, 710, "跌破20日线且量能转弱则调整。"),
+            _item(470, 710, "资金承接优于通信设备，量能保持改善。", 8.666),
+            _item(620, 710, "跌破20日线且量能转弱则调整。", 8.666),
         ],
     }]
     records = _parse_v29_positioned_assessments(positioned_pages)
