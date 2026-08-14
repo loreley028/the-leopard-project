@@ -4,6 +4,8 @@ from leopard_project.web.services import (
     _assessment_quality,
     _parse_positioned_assessments,
     _parse_v29_layout_assessments,
+    _parse_v29_positioned_assessments,
+    _validate_v29_positioned_assessment_set,
     _validate_assessment_set,
 )
 
@@ -124,3 +126,23 @@ def test_v24_split_headers_cross_page_and_explicit_status_cell_wins() -> None:
         ("创新药/医药", "hold"),
     ]
     assert all(item["quality_status"] == "verified_structure" for item in records)
+
+
+def test_v29_positioned_cells_preserve_evidence_and_condition_without_text_order_review() -> None:
+    records = _parse_v29_positioned_assessments([{
+        "page": 6,
+        "items": [
+            _item(36, 710, "半导体", 7),
+            _item(160, 710, "8/10持有→8/11持有"),
+            _item(380, 710, "持有", 7),
+            # Mentioning another sector inside the evidence is valid PDF prose,
+            # not a row boundary when the native cells are spatially isolated.
+            _item(470, 710, "资金承接优于通信设备，量能保持改善。"),
+            _item(620, 710, "跌破20日线且量能转弱则调整。"),
+        ],
+    }])
+    checked = _validate_v29_positioned_assessment_set(records)
+    assert len(checked) == 1
+    assert checked[0]["main_basis"] == "资金承接优于通信设备，量能保持改善。"
+    assert checked[0]["observation_condition"] == "跌破20日线且量能转弱则调整。"
+    assert checked[0]["quality_status"] == "verified_structure"

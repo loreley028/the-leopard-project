@@ -403,7 +403,16 @@ class EnhancedReportService:
                 if candidate and missing(str(getattr(assessment, field) or "")):
                     setattr(assessment, field, candidate)
                     changed = True
-            if not changed:
+            # A prior deterministic parse may already have retained every
+            # reader fact but marked it for review because flattened PDF text
+            # made an otherwise valid native V2.9 row look ambiguous.  Refresh
+            # provenance/quality only when the repaired positioned parser has
+            # verified that same structured row; never overwrite reader facts.
+            provenance_improved = (
+                record.get("quality_status") == "verified_structure"
+                and assessment.quality_status != "verified_structure"
+            )
+            if not changed and not provenance_improved:
                 continue
             assessment.source_section = str(record.get("source_section") or assessment.source_section)
             assessment.source_text_reference = str(record.get("source_text_reference") or assessment.source_text_reference)

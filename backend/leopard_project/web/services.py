@@ -506,6 +506,26 @@ def _validate_assessment_set(records: list[dict[str, Any]]) -> list[dict[str, An
     return records
 
 
+def _validate_v29_positioned_assessment_set(records: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Keep the native V2.9 row contract fail-closed without text-order false positives.
+
+    The five cells have already been bounded by their physical coordinates in
+    ``_parse_v29_positioned_assessments``.  Re-applying the generic adjacent
+    prose similarity heuristic would incorrectly treat legitimate references
+    to another sector or a repeated market condition as row bleed.  Duplicate
+    sector keys, however, remain a structural error.
+    """
+    by_sector: dict[str, list[dict[str, Any]]] = {}
+    for record in records:
+        by_sector.setdefault(record["sector_key"], []).append(record)
+    for rows in by_sector.values():
+        if len(rows) > 1:
+            for row in rows:
+                row["validation_flags"] = sorted(set(row.get("validation_flags", []) + ["duplicate_positioned_sector_row"]))
+                row["quality_status"], row["confidence"] = "blocking_parse_error", "low"
+    return records
+
+
 def _finalize_layout_assessment(row: dict[str, Any]) -> dict[str, Any] | None:
     status_text = _compact(" ".join(row["status_parts"]))
     status_labels = re.findall("|".join(STATUS_LABELS), status_text)
@@ -744,10 +764,30 @@ def _parse_v29_layout_assessments(layout_text: str) -> list[dict[str, Any]]:
             # 78 or 79, so it must not be absorbed into the status column.
             elif start < 77:
                 target["status_parts"].append(value)
-            elif start < 103:
+            # The condition cell begins at 100 on some pages and 103-105 on
+            # others; the gap is renderer spacing, not a semantic column.
+            elif start < 100:
                 target["basis_parts"].append(value)
             else:
                 target["condition_parts"].append(value)
+
+    def starts_next_wrapped_row(target: dict[str, Any], chunks: list[tuple[int, str]]) -> bool:
+        """Recognize the renderer's out-of-order first line of the next row.
+
+        It can print a wrapped history/basis/condition line immediately before
+        the next row's sector/status line.  A true continuation advances the
+        current row's history dates; a next-row prelude restarts at an earlier
+        history date after the current row has already reached its last date.
+        """
+        candidate_history = " ".join(value for start, value in chunks if 25 <= start < 60)
+        existing_history = " ".join(target["history_parts"])
+        candidate_dates = re.findall(r"(\d{1,2})\s*/\s*(\d{1,2})", candidate_history)
+        existing_dates = re.findall(r"(\d{1,2})\s*/\s*(\d{1,2})", existing_history)
+        if not candidate_dates or not existing_dates:
+            return False
+        candidate_start = tuple(map(int, candidate_dates[0]))
+        existing_end = max(tuple(map(int, value)) for value in existing_dates)
+        return candidate_start <= existing_end
 
     def flush() -> None:
         nonlocal current
@@ -825,6 +865,11 @@ def _parse_v29_layout_assessments(layout_text: str) -> list[dict[str, Any]]:
             continue
         chunks = _layout_chunks(line)
         sector = _sector_from_fragment(line[:25])
+        if sector is None and current is not None and starts_next_wrapped_row(current, chunks):
+            flush()
+            prelude.append((offset, line.strip(), chunks))
+            offset += len(raw_line)
+            continue
         if sector is not None:
             flush()
             current = {
@@ -854,6 +899,87 @@ def _parse_v29_layout_assessments(layout_text: str) -> list[dict[str, Any]]:
         previous = unique.get(record["sector_key"])
         if previous is None or len(record["source_text_reference"]) > len(previous["source_text_reference"]):
             unique[record["sector_key"]] = record
+    return sorted(unique.values(), key=lambda item: next(sector.overall_order for sector in load_seed_bundle().sectors if sector.sector_key == item["sector_key"]))
+
+
+def _parse_v29_positioned_assessments(positioned_pages: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Recover V2.9 rows from the native positioned five-column body cells.
+
+    These files flatten their header into one fragment, but body fragments keep
+    their physical coordinates.  Fixed native columns let us group every row
+    by its explicit sector and judgement cells, avoiding the renderer's text
+    ordering of wrapped lines.
+    """
+    records: list[dict[str, Any]] = []
+    for page in positioned_pages:
+        page_number = int(page["page"])
+        if page_number < 6:
+            continue
+        items = page["items"]
+        groups = _positioned_groups(items)
+        centers: list[tuple[float, Any]] = []
+        for y, group in groups.items():
+            sector = _sector_from_fragment("".join(item["text"] for item in group if float(item["x"]) < 150))
+            status_text = "".join(item["text"] for item in group if 350 <= float(item["x"]) < 450)
+            labels = re.findall("|".join(STATUS_LABELS), status_text)
+            if sector is not None and len(set(labels)) == 1:
+                centers.append((y, sector))
+        for index, (center_y, sector) in enumerate(sorted(centers, reverse=True)):
+            ordered = sorted(centers, reverse=True)
+            if index:
+                upper_y = (ordered[index - 1][0] + center_y) / 2
+            elif index + 1 < len(ordered):
+                upper_y = center_y + (center_y - ordered[index + 1][0]) / 2
+            else:
+                upper_y = center_y + 25
+            if index + 1 < len(ordered):
+                lower_y = (center_y + ordered[index + 1][0]) / 2
+            elif index:
+                lower_y = center_y - (ordered[index - 1][0] - center_y) / 2
+            else:
+                lower_y = center_y - 25
+            history = _cell_text(items, lower_y, upper_y, 150, 350)
+            status_text = _cell_text(items, lower_y, upper_y, 350, 450)
+            basis = _cell_text(items, lower_y, upper_y, 450, 600)
+            condition = _cell_text(items, lower_y, upper_y, 600, None)
+            labels = re.findall("|".join(STATUS_LABELS), status_text)
+            status_label = labels[0] if len(set(labels)) == 1 else ""
+            if not status_label:
+                continue
+            row_items = [item for item in items if lower_y < float(item["y"]) <= upper_y]
+            row_items.sort(key=lambda item: (-float(item["y"]), float(item["x"])))
+            excerpt = _compact(" ".join(item["text"] for item in row_items))
+            record: dict[str, Any] = {
+                "sector_key": sector.sector_key,
+                "sector_name": sector.sector_name,
+                "path_status": STATUS_TO_CODE[status_label],
+                "recent_path_summary": history,
+                "current_judgement": status_label,
+                "main_basis": basis,
+                "observation_condition": condition,
+                "source_section": "板块观点详细汇总",
+                "source_page": page_number,
+                "source_text_start": int(lower_y * 1000),
+                "source_text_end": int(upper_y * 1000),
+                "source_text_reference": excerpt,
+                "source_text_excerpt": excerpt[:900],
+                "source_reference": f"第{page_number}页·板块观点详细汇总·{sector.sector_name}表格行",
+                "extraction_method": "pdf_v29_positioned_table_cells",
+                "manually_modified": False,
+            }
+            quality, confidence, flags = _assessment_quality(record)
+            # Other sector names and status words can be legitimate evidence
+            # inside a spatially isolated native row.  The positioned bounds
+            # above, rather than those textual mentions, are the row-bleed
+            # guard for this V2.9 contract.
+            contextual_flags = {"multiple_other_sector_names", "abnormal_status_sequence"}
+            if set(flags) <= contextual_flags and all((history, basis, condition)):
+                quality, confidence, flags = "verified_structure", "high", []
+            record["quality_status"] = quality
+            record["confidence"] = confidence
+            record["validation_flags"] = sorted(set(flags))
+            records.append(record)
+    unique = {record["sector_key"]: record for record in records}
     return sorted(unique.values(), key=lambda item: next(sector.overall_order for sector in load_seed_bundle().sectors if sector.sector_key == item["sector_key"]))
 
 
@@ -1216,6 +1342,9 @@ def parse_v23_assessments(
     layout_text: str = "",
     positioned_pages: list[dict[str, Any]] | None = None,
 ) -> list[dict[str, Any]]:
+    v29_positioned_records = _parse_v29_positioned_assessments(positioned_pages or []) if "V2.9" in layout_text else []
+    if v29_positioned_records:
+        return _validate_v29_positioned_assessment_set(v29_positioned_records)
     v29_records = _parse_v29_layout_assessments(layout_text) if layout_text else []
     if v29_records:
         return _validate_assessment_set(v29_records)
