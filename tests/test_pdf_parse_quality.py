@@ -171,3 +171,15 @@ def test_v29_positioned_cells_keep_wrapped_text_with_its_own_row() -> None:
     assert by_key["semiconductor"]["main_basis"] == "第一行依据"
     assert by_key["rare_earth"]["main_basis"] == "第二行依据上半第二行依据下半"
     assert by_key["rare_earth"]["observation_condition"] == "第二行条件上半第二行条件下半"
+
+
+def test_v29_positioned_empty_condition_cell_is_verified_as_an_explicit_pdf_fact() -> None:
+    records = _parse_v29_positioned_assessments([{
+        "page": 6,
+        "items": [
+            _item(36, 100, "小金属", 8.666), _item(160, 100, "8/10持有", 8.666),
+            _item(380, 100, "持有", 8.666), _item(470, 100, "资源线继续跟踪。", 8.666),
+        ],
+    }])
+    assert records[0]["observation_condition"] == ""
+    assert records[0]["quality_status"] == "verified_structure"

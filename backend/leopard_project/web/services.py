@@ -997,8 +997,15 @@ def _parse_v29_positioned_assessments(positioned_pages: list[dict[str, Any]]) ->
             # inside a spatially isolated native row.  The positioned bounds
             # above, rather than those textual mentions, are the row-bleed
             # guard for this V2.9 contract.
-            contextual_flags = {"multiple_other_sector_names", "abnormal_status_sequence"}
-            if set(flags) <= contextual_flags and all((history, basis, condition)):
+            contextual_flags = {
+                "multiple_other_sector_names",
+                "abnormal_status_sequence",
+                # A geometrically isolated V2.9 condition cell can be
+                # intentionally empty.  The Reader renders that fact as `—`;
+                # it is not an invitation for a manual reviewer to invent it.
+                "missing_observation_condition",
+            }
+            if set(flags) <= contextual_flags and all((history, basis)):
                 quality, confidence, flags = "verified_structure", "high", []
             record["quality_status"] = quality
             record["confidence"] = confidence
