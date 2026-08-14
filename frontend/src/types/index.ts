@@ -528,7 +528,17 @@ export interface PathMatrix {
   caption: string;
   dates: Array<{ report_id: string; detail_report_id: string | null; has_detailed_report: boolean; report_date: string; market_as_of_date: string | null; market_weekday: string | null; weekday: string; is_weekend_report: boolean }>;
   groups: Array<{ group_order: number; group_name: string; sector_count: number }>;
-  rows: Array<{ sector_key: string; sector_name: string; group_name: string; group_order: number; overall_order: number; cells: Array<PathEntry & { report_id: string; report_date: string }> }>;
+  rows: Array<{ sector_key: string; sector_name: string; group_name: string; group_order: number; overall_order: number; cells: Array<PathEntry & {
+    report_id: string;
+    report_date: string;
+    market_overlay?: {
+      kind: "official_board" | "proxy_single" | "proxy_multi" | "unavailable";
+      label: string;
+      market_date: string | null;
+      pct_change: number | null;
+      instruments: Array<{ name: string; role: "etf" | "leader"; close: number; pct_change: number | null; trading_date: string }>;
+    };
+  }> }>;
   status_contract: { statuses: Array<{ code: PathStatus; label: string; color: string; order: number }> };
   period?: string;
   default_period?: string;

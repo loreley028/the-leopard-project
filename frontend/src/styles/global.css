@@ -108,10 +108,13 @@ button, a, input, textarea, [tabindex] { outline-offset: 4px; }
 .enhanced-report { min-width: 0; }
 .enhanced-report section { min-width: 0; scroll-margin-top: 9rem; }
 .report-overview-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--space-4); align-items: stretch; }
-.core-insight-panel { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(16rem, .9fr); gap: 1rem; }
+.core-insight-panel { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(16rem, .9fr); grid-template-areas: "judgment defense" "market market" "validation validation"; gap: 1rem; align-items: start; }
 .core-insight-panel > section { min-width: 0; padding: .9rem; border-radius: 14px; background: rgb(233 239 220 / 45%); }
-.core-insight-panel > section:first-child { grid-column: 1 / -1; }
-.core-view-summary { margin: .35rem 0 0; max-width: 72ch; font-size: 1.02rem; line-height: 1.75; }
+.core-judgment-panel { grid-area: judgment; align-self: stretch; }
+.defense-line-panel { grid-area: defense; }
+.core-insight-panel .reader-market-anchor { grid-area: market; }
+.core-insight-panel .defense-validation-panel { grid-area: validation; }
+.core-view-summary { margin: .35rem 0 0; font-size: 1.02rem; line-height: 1.75; }
 .market-anchor-title { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .5rem; }
 .market-anchor-title p { margin: 0; }
 .market-anchor-title span { padding: .2rem .45rem; border-radius: 999px; background: rgb(255 250 240 / 80%); color: var(--text-muted); font-size: .72rem; font-weight: 800; }
@@ -397,6 +400,9 @@ button, a, input, textarea, [tabindex] { outline-offset: 4px; }
 }
 .path-cell { display: grid; gap: .05rem; min-height: 2.65rem; align-content: center; }
 .path-cell small { font-size: .68rem; font-variant-numeric: tabular-nums; }
+.market-overlay-proxy_multi, .market-overlay-proxy_single { font-size: .63rem !important; letter-spacing: -.02em; }
+.matrix-market-detail ul { display: grid; gap: .4rem; margin: .65rem 0 0; padding: 0; list-style: none; }
+.matrix-market-detail li { display: flex; flex-wrap: wrap; justify-content: space-between; gap: .35rem .8rem; padding: .45rem .55rem; border-radius: .55rem; background: var(--surface-cream); font-size: .84rem; }
 .assessment-fields dd { white-space: pre-wrap; }
 .path-matrix thead th span, .path-matrix thead th small { display: block; white-space: nowrap; }
 .path-matrix thead th small { margin-top: .2rem; color: #9a3412; font-size: .66rem; }
@@ -486,7 +492,7 @@ button, a, input, textarea, [tabindex] { outline-offset: 4px; }
   .market-lab-history-header { display: none; }
   .market-lab-history-row small { white-space: normal; overflow: visible; text-overflow: clip; }
   .report-overview-grid, .core-insight-panel { grid-template-columns: 1fr; }
-  .core-insight-panel > section:first-child { grid-column: auto; }
+  .core-insight-panel { grid-template-areas: "judgment" "defense" "market" "validation"; }
   .market-anchor-panel dl div, .defense-line-panel dl div { grid-template-columns: 1fr; gap: .15rem; }
   .market-anchor-metrics { grid-template-columns: 1fr; }
   .market-history-panel { grid-column: auto; }

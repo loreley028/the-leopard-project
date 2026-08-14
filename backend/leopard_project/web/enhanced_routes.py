@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session, sessionmaker
 from leopard_project.config import load_seed_bundle
 from leopard_project.market_paths import load_market_path_registry, market_path_for_key, report_topic_sector
 from leopard_project.providers.capabilities import load_provider_capabilities, provider_capability_summary
+from leopard_project.security_proxy_observation import APPROVED, load_security_proxy_registry
 
 from .auth import Principal
 from .catalog import configured_groups
@@ -37,6 +38,7 @@ from .models import (
     SectorResearchPreference,
     SectorPathHistoryEntry,
     SectorPathEntry,
+    SecurityProxyDaily,
 )
 from .schemas import (
     ApiListItem,
@@ -290,6 +292,11 @@ def register_enhanced_routes(
                         "daily_return": None,
                         "market_as_of_date": item.market_as_of_date.isoformat() if item.market_as_of_date else None,
                         "market_data_status": "unavailable",
+                        "market_overlay": {
+                            "kind": "unavailable", "label": "—",
+                            "market_date": item.market_as_of_date.isoformat() if item.market_as_of_date else None,
+                            "pct_change": None, "instruments": [],
+                        },
                     } for item in fallback_reports],
                 } for sector in sorted(load_seed_bundle().sectors, key=lambda item: item.overall_order)],
                 "status_contract": path_status_document(),
@@ -326,6 +333,89 @@ def register_enhanced_routes(
             "is_weekend_report": path_date.weekday() >= 5,
         } for path_date in available_dates]
         bundle = load_seed_bundle()
+        proxy_definitions = {
+            item.market_path_key: item
+            for item in load_security_proxy_registry()
+            if item.status == APPROVED
+        }
+        proxy_symbols = tuple(sorted({
+            instrument.symbol
+            for definition in proxy_definitions.values()
+            for instrument in definition.instruments
+            if instrument.enabled
+        }))
+        maximum_market_date = max((item.market_as_of_date for item in entries if item.market_as_of_date), default=None)
+        proxy_rows = list(session.scalars(select(SecurityProxyDaily).where(
+            SecurityProxyDaily.symbol.in_(proxy_symbols),
+            SecurityProxyDaily.trading_date <= maximum_market_date,
+        ).order_by(SecurityProxyDaily.symbol, SecurityProxyDaily.trading_date))) if proxy_symbols and maximum_market_date else []
+        proxy_by_symbol_date = {(item.symbol, item.trading_date): item for item in proxy_rows}
+        proxy_previous_close: dict[tuple[str, date], float | None] = {}
+        previous_by_symbol: dict[str, float] = {}
+        for item in proxy_rows:
+            proxy_previous_close[(item.symbol, item.trading_date)] = previous_by_symbol.get(item.symbol)
+            previous_by_symbol[item.symbol] = float(item.close)
+
+        def market_overlay(sector_key: str, entry: SectorPathHistoryEntry) -> dict:
+            """Describe only objective exact-date market evidence for one matrix cell.
+
+            A proxy is never reduced to a synthetic sector return: multi-security
+            paths expose availability counts and their individual rows instead.
+            """
+            market_date = entry.market_as_of_date
+            if entry.frozen_daily_pct_change is not None:
+                return {
+                    "kind": "official_board",
+                    "label": f"官方 {float(entry.frozen_daily_pct_change):+.2f}%",
+                    "market_date": market_date.isoformat() if market_date else None,
+                    "pct_change": float(entry.frozen_daily_pct_change),
+                    "instruments": [],
+                }
+            definition = proxy_definitions.get(sector_key)
+            if definition is None or market_date is None:
+                return {
+                    "kind": "unavailable", "label": "—",
+                    "market_date": market_date.isoformat() if market_date else None,
+                    "pct_change": None, "instruments": [],
+                }
+            instruments = []
+            for instrument in definition.instruments:
+                if not instrument.enabled:
+                    continue
+                record = proxy_by_symbol_date.get((instrument.symbol, market_date))
+                if record is None:
+                    continue
+                previous_close = proxy_previous_close.get((instrument.symbol, market_date))
+                close = float(record.close)
+                pct_change = ((close / previous_close - 1) * 100) if previous_close and previous_close > 0 else None
+                instruments.append({
+                    "name": instrument.security_name,
+                    "role": instrument.proxy_role,
+                    "close": close,
+                    "pct_change": pct_change,
+                    "trading_date": market_date.isoformat(),
+                })
+            total = sum(1 for instrument in definition.instruments if instrument.enabled)
+            available = len(instruments)
+            if not available:
+                return {
+                    "kind": "unavailable", "label": "—",
+                    "market_date": market_date.isoformat(), "pct_change": None,
+                    "instruments": [],
+                }
+            if total == 1:
+                only = instruments[0]
+                label = f"代理 {only['pct_change']:+.2f}%" if only["pct_change"] is not None else "代理 1/1"
+                return {
+                    "kind": "proxy_single", "label": label,
+                    "market_date": market_date.isoformat(), "pct_change": only["pct_change"],
+                    "instruments": instruments,
+                }
+            return {
+                "kind": "proxy_multi", "label": f"代理 {available}/{total}",
+                "market_date": market_date.isoformat(), "pct_change": None,
+                "instruments": instruments,
+            }
         rows = []
         for sector in sorted(bundle.sectors, key=lambda item: item.overall_order):
             rows.append({
@@ -354,6 +444,7 @@ def register_enhanced_routes(
                     "daily_return": float(entry.frozen_daily_pct_change) if entry.frozen_daily_pct_change is not None else None,
                     "market_as_of_date": entry.market_as_of_date.isoformat() if entry.market_as_of_date else None,
                     "market_data_status": entry.market_data_status,
+                    "market_overlay": market_overlay(sector.sector_key, entry),
                 } for path_date in available_dates],
             })
         return {

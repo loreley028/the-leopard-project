@@ -45,7 +45,7 @@ function ReportOverview({ enhanced, market }: { enhanced: EnhancedReport; market
   return <div className="report-overview-grid">
     <IslandCard title="核心观点">
       <div className="core-insight-panel">
-        <section><p className="eyebrow">猎豹核心判断</p><p className="core-view-summary">{report.core_view}</p></section>
+        <section className="core-judgment-panel"><p className="eyebrow">猎豹核心判断</p><p className="core-view-summary">{report.core_view}</p></section>
         <MarketCoreShanghaiReader market={market} />
         <section className="defense-line-panel" aria-label="猎豹攻防线">
           <div className="defense-level"><span>猎豹攻防点</span><strong>{defense.defense_line_value == null ? "报告未单列" : point(defense.defense_line_value)}</strong></div>

@@ -9,8 +9,10 @@ from sqlalchemy import func, select
 from leopard_project.web.app import WebSettings, create_app
 from leopard_project.web.database import create_session_factory
 from leopard_project.web.enhanced import EnhancedReportService
-from leopard_project.web.models import LiveMarketAnchorDaily, Report, SectorDailyBar, SectorPathHistoryEntry
+from leopard_project.web.models import LiveMarketAnchorDaily, Report, SectorDailyBar, SectorPathHistoryEntry, SecurityProxyDaily
 from leopard_project.web.path_history import _exact_market_payload
+from leopard_project.config import load_seed_bundle
+from leopard_project.security_proxy_observation import load_security_proxy_registry
 
 
 def _settings(tmp_path) -> WebSettings:
@@ -60,6 +62,45 @@ def test_path_matrix_get_is_read_only_and_uses_uploaded_report_fallback(tmp_path
         assert client.get(f"/api/v1/reports/{report.id}/path-matrix").status_code == 200
     with sessions() as session:
         assert session.scalar(select(func.count()).select_from(SectorPathHistoryEntry)) == 0
+
+
+def test_path_matrix_uses_exact_date_proxy_rows_without_synthesizing_a_sector_return(tmp_path) -> None:
+    settings = _settings(tmp_path)
+    sessions = create_session_factory(settings.database_url)
+    day, prior = date(2026, 8, 10), date(2026, 8, 9)
+    with sessions() as session:
+        report = Report(
+            id="source", title="published", report_date=day, report_date_confirmed=True,
+            status="published", is_current=True, created_by="admin", data_origin="real_upload",
+        )
+        session.add(report)
+        for sector in load_seed_bundle().sectors:
+            session.add(SectorPathHistoryEntry(
+                sector_key=sector.sector_key, sector_name=sector.sector_name,
+                path_report_date=day, path_status="hold", source_report_id=report.id,
+                detail_report_id=report.id, market_as_of_date=day,
+                frozen_daily_pct_change=None, market_data_status="unavailable",
+                source_pdf_sha256="a" * 64,
+            ))
+        cpo = next(item for item in load_security_proxy_registry() if item.market_path_key == "cpo")
+        for offset, instrument in enumerate(cpo.instruments):
+            session.add_all([
+                SecurityProxyDaily(symbol=instrument.symbol, trading_date=prior, close=Decimal("10") + offset,
+                    open=None, high=None, low=None, amount_yuan=None, quote_datetime=None,
+                    fetched_at=datetime.now(timezone.utc), source="test"),
+                SecurityProxyDaily(symbol=instrument.symbol, trading_date=day, close=Decimal("11") + offset,
+                    open=None, high=None, low=None, amount_yuan=None, quote_datetime=None,
+                    fetched_at=datetime.now(timezone.utc), source="test"),
+            ])
+        session.commit()
+    with TestClient(create_app(settings, sessions)) as client:
+        matrix = client.get(f"/api/v1/reports/{report.id}/path-matrix?periods=10").json()
+    cpo_cell = next(row for row in matrix["rows"] if row["sector_key"] == "cpo")["cells"][0]
+    assert cpo_cell["daily_return"] is None
+    assert cpo_cell["market_overlay"]["kind"] == "proxy_multi"
+    assert cpo_cell["market_overlay"]["label"] == "代理 4/4"
+    assert len(cpo_cell["market_overlay"]["instruments"]) == 4
+    assert all(item["pct_change"] is not None for item in cpo_cell["market_overlay"]["instruments"])
 
 
 def test_market_anchor_works_without_report_and_falls_back_to_completed_eod(tmp_path) -> None:
