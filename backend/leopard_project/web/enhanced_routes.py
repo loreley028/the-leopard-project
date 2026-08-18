@@ -260,19 +260,6 @@ def register_enhanced_routes(
         entries = list(session.scalars(select(SectorPathHistoryEntry).where(
             SectorPathHistoryEntry.path_report_date.in_(report_dates)
         ))) if report_dates else []
-        historical_path_dates = {entry.path_report_date for entry in entries}
-        # A frozen path ledger may initialize older dates from a later full PDF.
-        # Those rows are still valuable historical evidence, but they are not
-        # independent report opinions on every historical trading day.  Reader
-        # status colour is reserved for an actual published report whose own
-        # report date maps to that trading day; all other calendar days remain
-        # neutral market-only cells.
-        published_reports_by_id = {item.id: item for item in published_reports}
-        entries = [
-            entry for entry in entries
-            if (source := published_reports_by_id.get(entry.source_report_id)) is not None
-            and source.report_date == entry.path_report_date
-        ]
         # A detailed published report remains a valid report-fact overlay even
         # when its date is absent from the frozen full-PDF ledger.  It does not
         # create a report-date column: it only overlays its mapped trade day.
@@ -321,7 +308,6 @@ def register_enhanced_routes(
         first_candidate_date = min(
             [item.trading_date for item in proxy_rows]
             + [item for item in mapped_entry_days.values() if item is not None]
-            + [mapped for item in historical_path_dates if (mapped := report_market_date(item)) is not None]
             + [mapped for item in published_reports if (mapped := report_market_date(item.report_date)) is not None],
             default=None,
         )
