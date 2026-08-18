@@ -88,10 +88,10 @@ class WebSettings:
     data_mode: str = "test"
     market_automation_enabled: bool = False
     security_proxy_viewer_enabled: bool = False
-    security_proxy_cache_ttl_seconds: int = 300
+    security_proxy_cache_ttl_seconds: int = 5
     security_proxy_error_cache_ttl_seconds: int = 30
     live_market_anchor_enabled: bool = False
-    live_market_anchor_cache_ttl_seconds: int = 300
+    live_market_anchor_cache_ttl_seconds: int = 5
     live_market_anchor_error_cache_ttl_seconds: int = 30
     build_commit: str = "unknown"
     auto_publish_uploads: bool = False
@@ -121,10 +121,10 @@ class WebSettings:
             # Do not resurrect the legacy in-process backfill/scheduler by default.
             market_automation_enabled=os.getenv("LEOPARD_MARKET_AUTOMATION_ENABLED", "false").lower() == "true",
             security_proxy_viewer_enabled=os.getenv("SECURITY_PROXY_VIEWER_ENABLED", "false").lower() == "true",
-            security_proxy_cache_ttl_seconds=int(os.getenv("SECURITY_PROXY_CACHE_TTL_SECONDS", "300")),
+            security_proxy_cache_ttl_seconds=int(os.getenv("SECURITY_PROXY_CACHE_TTL_SECONDS", "5")),
             security_proxy_error_cache_ttl_seconds=int(os.getenv("SECURITY_PROXY_ERROR_CACHE_TTL_SECONDS", "30")),
             live_market_anchor_enabled=os.getenv("LEOPARD_LIVE_MARKET_ANCHOR_ENABLED", "false").lower() == "true",
-            live_market_anchor_cache_ttl_seconds=int(os.getenv("LEOPARD_LIVE_MARKET_ANCHOR_CACHE_TTL_SECONDS", "300")),
+            live_market_anchor_cache_ttl_seconds=int(os.getenv("LEOPARD_LIVE_MARKET_ANCHOR_CACHE_TTL_SECONDS", "5")),
             live_market_anchor_error_cache_ttl_seconds=int(os.getenv("LEOPARD_LIVE_MARKET_ANCHOR_ERROR_CACHE_TTL_SECONDS", "30")),
             build_commit=os.getenv("LEOPARD_BUILD_COMMIT", "unknown"),
             auto_publish_uploads=os.getenv(
@@ -254,6 +254,14 @@ def create_app(settings: WebSettings | None = None, session_factory: sessionmake
     ) -> dict:
         """Independent fixed broad-market ETFs; never derived from a report."""
         return app.state.market_core.broad_market(session, limit=limit)
+
+    @app.get("/api/v1/market/current/{scope}")
+    def standalone_current_market(scope: str, current: Principal | None = Depends(optional_principal)) -> dict:
+        """Current fixed-symbol quotes only; callers never provide symbols."""
+        try:
+            return app.state.market_core.current_quotes(scope=scope)
+        except KeyError as exc:
+            raise WebDomainError("market_current_scope_not_found", "Fixed market current scope not found", 404) from exc
 
     @app.get("/api/v1/market/proxies/{proxy_set}")
     def standalone_proxy_market(

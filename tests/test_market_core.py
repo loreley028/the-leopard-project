@@ -16,6 +16,7 @@ from leopard_project.web.database import create_session_factory
 from leopard_project.web.live_market_anchor import LiveShanghaiMarketAnchorService
 from leopard_project.web.market_core import MarketCoreReadService
 from leopard_project.web.market_date_axis import market_core_completed_dates
+from leopard_project.web.market_session import cn_a_session_state
 from leopard_project.web.models import LiveMarketAnchorDaily, SecurityProxyDaily
 
 
@@ -157,6 +158,25 @@ def test_market_core_keeps_same_day_after_close_quotes_visible_but_refuses_old_o
     assert stale["live"]["error_code"] == "stale_quote"
 
 
+def test_market_session_boundaries_do_not_misclassify_afternoon_as_lunch() -> None:
+    assert cn_a_session_state(datetime(2026, 8, 18, 4, 29, 59, tzinfo=timezone.utc)) == "lunch_break"
+    assert cn_a_session_state(datetime(2026, 8, 18, 5, 0, tzinfo=timezone.utc)) == "afternoon_trading"
+    assert cn_a_session_state(datetime(2026, 8, 18, 5, 11, tzinfo=timezone.utc)) == "afternoon_trading"
+    assert cn_a_session_state(datetime(2026, 8, 18, 7, 0, tzinfo=timezone.utc)) == "after_close"
+
+
+def test_market_current_overview_batches_shanghai_and_four_broad_anchors_once(tmp_path) -> None:
+    sessions = create_session_factory(_settings(tmp_path).database_url)
+    provider = StubProvider()
+    service = MarketCoreReadService(provider=provider, live_anchor=_anchor(provider), enabled=True, now=lambda: NOW)
+    first = service.current_quotes(scope="overview")
+    second = service.current_quotes(scope="overview")
+    expected = ("sh000001", *(item.symbol for item in load_broad_market_anchors()))
+    assert provider.calls == [expected]
+    assert [item["symbol"] for item in first["quotes"]] == list(expected)
+    assert first["provider_request_count"] == 1 and second["cache_hit"] is True and second["provider_request_count"] == 0
+
+
 def test_market_core_ma_uses_completed_eod_only_and_requires_full_windows(tmp_path) -> None:
     sessions = create_session_factory(_settings(tmp_path).database_url)
     with sessions() as session:
@@ -185,11 +205,13 @@ def test_zero_report_fastapi_market_endpoints_are_anonymous_and_have_no_report_i
         shanghai = client.get("/api/v1/market/shanghai")
         proxies = client.get("/api/v1/market/proxies/cpo")
         broad = client.get("/api/v1/market/broad")
-    assert shanghai.status_code == 200 and proxies.status_code == 200 and broad.status_code == 200
+        current = client.get("/api/v1/market/current/overview")
+    assert shanghai.status_code == 200 and proxies.status_code == 200 and broad.status_code == 200 and current.status_code == 200
     assert shanghai.json()["coverage"]["available_days"] == 1
     assert len(proxies.json()["groups"][0]["instruments"]) == 4
     assert [item["symbol"] for item in broad.json()["anchors"]] == [item.symbol for item in load_broad_market_anchors()]
     assert all(item["security_code"].endswith((".SH", ".SZ")) for item in broad.json()["anchors"])
+    assert [item["symbol"] for item in current.json()["quotes"]] == ["sh000001", *(item.symbol for item in load_broad_market_anchors())]
 
 
 def test_zero_report_eod_collectors_plan_shanghai_and_all_fixed_proxies_without_report_gate(tmp_path) -> None:

@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useMemo, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useLocation, useParams } from "../routes/router";
 import { api, publicResourcePath } from "../api/client";
 import { IslandCard } from "../components/island/IslandCard";
@@ -9,6 +9,7 @@ import { PdfPagePreview } from "../components/PdfPagePreview";
 import type { DefenseLineValidation, EnhancedReport, MarketCoreBroadMarket, MarketCoreShanghai, MarketSnapshot, PathMatrix, ReportDefense, SectorAssessment } from "../types";
 import { formatPct } from "../utils/format";
 import { judgementDetail, pdfGroup } from "../utils/judgement";
+import { useMarketCurrentPolling } from "../hooks/useMarketCurrentPolling";
 
 const GROUP_ORDER = ["B1 继续持有", "B2 重点观察区", "B3 当前不碰"];
 const chineseDate = (value: string | null) => value ? `${Number(value.slice(0, 4))}年${Number(value.slice(5, 7))}月${Number(value.slice(8, 10))}日` : "待确认日期";
@@ -122,6 +123,19 @@ export function ReportDetailPage({ latest = false }: { latest?: boolean }) {
   useEffect(() => { if (reportId) api.enhancedReport(reportId).then(setEnhanced).catch(() => setEnhanced(null)); }, [reportId]);
   useEffect(() => { api.marketShanghai().then(setMarketCoreShanghai).catch(() => setMarketCoreShanghai(null)); }, []);
   useEffect(() => { api.marketBroad().then(setBroadMarket).catch(() => setBroadMarket(null)); }, []);
+  const refreshOverviewCurrent = useCallback(async () => {
+    const current = await api.marketCurrent("overview");
+    const quoteBySymbol = new Map(current.quotes.map(item => [item.symbol, item]));
+    setMarketCoreShanghai(previous => previous ? { ...previous, live: quoteBySymbol.get(previous.symbol) ?? previous.live } : previous);
+    setBroadMarket(previous => previous ? {
+      ...previous,
+      cache_hit: current.cache_hit,
+      provider_request_count: current.provider_request_count,
+      anchors: previous.anchors.map(item => ({ ...item, live: quoteBySymbol.get(item.symbol) ?? item.live })),
+    } : previous);
+    return current;
+  }, []);
+  useMarketCurrentPolling(refreshOverviewCurrent, Boolean(marketCoreShanghai || broadMarket));
   useEffect(() => { if (reportId) api.pathMatrix(reportId, period).then(setMatrix).catch(() => setMatrix(null)); }, [reportId, period]);
   const grouped = useMemo(() => {
     const result = new Map<string, SectorAssessment[]>();

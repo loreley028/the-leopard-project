@@ -24,7 +24,7 @@ from leopard_project.broad_market_anchors import BroadMarketAnchor, load_broad_m
 from .live_market_anchor import LiveShanghaiMarketAnchorService, SHANGHAI_COMPOSITE_NAME, SHANGHAI_COMPOSITE_SYMBOL
 from .models import LiveMarketAnchorDaily
 from .market_date_axis import market_core_completed_dates
-from .market_session import reader_quote_display
+from .market_session import cn_a_session_state, reader_quote_display
 from .security_proxy_viewer import SecurityProxyViewerCache
 
 
@@ -172,6 +172,39 @@ class MarketCoreReadService:
             raise KeyError(proxy_set)
         return (found,)
 
+    def _current_instruments(self, scope: str) -> tuple[SecurityProxyInstrument | BroadMarketAnchor, ...]:
+        """Resolve a constrained Reader scope to configured, server-side symbols."""
+        if scope == "overview":
+            return (BroadMarketAnchor(
+                symbol=SHANGHAI_COMPOSITE_SYMBOL, exchange="sh", security_code="000001",
+                security_name=SHANGHAI_COMPOSITE_NAME, display_order=0, enabled=True,
+            ), *load_broad_market_anchors())
+        definitions = self._definitions(scope)
+        return tuple(item for definition in definitions for item in definition.instruments if item.enabled)
+
+    def current_quotes(self, *, scope: str) -> dict:
+        """Serve one short-lived, single-flight quote batch for an approved scope.
+
+        The overview contains Shanghai plus the four configured broad ETFs; a
+        sector scope contains only that sector's fixed proxy securities.  No
+        history, report, or caller-provided symbol enters this route.
+        """
+        instruments = self._current_instruments(scope)
+        symbols = tuple(dict.fromkeys(item.symbol for item in instruments))
+        cache_key = ("market_core_current", scope, *symbols)
+        cached, cache_hit = self.cache.get_or_fetch(cache_key, lambda: (self._fetch_quotes(symbols),))
+        batch = cached[0]
+        now = _aware(self.now())
+        return {
+            "market_core": "standalone_objective",
+            "scope": scope,
+            "session_state": cn_a_session_state(now),
+            "provider": self.provider.provider_key,
+            "cache_hit": cache_hit,
+            "provider_request_count": batch.provider_request_count if not cache_hit else 0,
+            "quotes": [self._current_quote_payload(item, batch, now) for item in instruments],
+        }
+
     def _fetch_quotes(self, symbols: tuple[str, ...]) -> _CachedProxyBatch:
         received = _aware(self.now())
         if not self.enabled:
@@ -273,4 +306,31 @@ class MarketCoreReadService:
             "history": self._history_rows(history),
             "coverage": self._coverage(history),
             "indicators": self._objective_averages(history, indicator_current),
+        }
+
+    def _current_quote_payload(self, instrument: SecurityProxyInstrument | BroadMarketAnchor, batch: _CachedProxyBatch, now: datetime) -> dict:
+        quote = batch.quotes.get(instrument.symbol)
+        quote_time = getattr(quote, "quote_datetime", None)
+        display = reader_quote_display(
+            quote_available=quote is not None,
+            quote_datetime=quote_time if isinstance(quote_time, datetime) else None,
+            current=getattr(quote, "current", None),
+            now=now,
+        )
+        available = display.status == "available"
+        return {
+            "symbol": instrument.symbol,
+            "name": instrument.security_name,
+            "security_code": instrument.reader_code,
+            "status": display.status,
+            "current": _as_float(getattr(quote, "current", None)) if available else None,
+            "pre_close": _as_float(getattr(quote, "pre_close", None)) if available else None,
+            "pct_change": _as_float(getattr(quote, "pct_change", None)) if available else None,
+            "quote_datetime": quote_time.isoformat() if available else None,
+            "server_received_at": batch.server_received_at.isoformat() if available else None,
+            "freshness": display.freshness,
+            "display_mode": display.display_mode,
+            "session_state": display.session_state,
+            "provider": self.provider.provider_key,
+            "error_code": display.error_code if quote is not None else batch.failures.get(instrument.symbol),
         }

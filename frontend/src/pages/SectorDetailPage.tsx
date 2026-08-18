@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "../routes/router";
 import { api } from "../api/client";
 import { IslandCard } from "../components/island/IslandCard";
@@ -10,6 +10,7 @@ import { SecurityProxySparkline } from "../components/island/SecurityProxySparkl
 import type { MarketCoreProxies, SectorResearch, ViewerObservation } from "../types";
 import { formatPct, formatSecurityPrice } from "../utils/format";
 import { intradayDataLabel } from "../utils/intraday";
+import { useMarketCurrentPolling } from "../hooks/useMarketCurrentPolling";
 
 const PATH_LABELS: Record<string, string> = { avoid: "不碰", strong_watch: "强观", watch: "观察", weak_watch: "弱观", turn_hold: "转持", hold: "持有", turn_weak: "转弱", exit: "离场", not_mentioned: "未提" };
 const aShareTone = (value: number | null | undefined) => value == null || value === 0 ? "a-share-neutral" : value > 0 ? "a-share-positive" : "a-share-negative";
@@ -32,6 +33,18 @@ export function SectorDetailPage() {
     if (viewerObservation?.viewer_source_mode !== "security_proxy") { setMarketCoreProxies(null); return; }
     api.marketProxies(sectorKey).then(setMarketCoreProxies).catch(() => setMarketCoreProxies(null));
   }, [sectorKey, viewerObservation?.viewer_source_mode]);
+  const refreshProxyCurrent = useCallback(async () => {
+    const current = await api.marketCurrent(sectorKey);
+    const quoteBySymbol = new Map(current.quotes.map(item => [item.symbol, item]));
+    setMarketCoreProxies(previous => previous ? {
+      ...previous,
+      cache_hit: current.cache_hit,
+      provider_request_count: current.provider_request_count,
+      groups: previous.groups.map(group => ({ ...group, instruments: group.instruments.map(item => ({ ...item, live: quoteBySymbol.get(item.symbol) ?? item.live })) })),
+    } : previous);
+    return current;
+  }, [sectorKey]);
+  useMarketCurrentPolling(refreshProxyCurrent, viewerObservation?.viewer_source_mode === "security_proxy" && Boolean(marketCoreProxies));
   const monthGroups = useMemo(() => {
     const groups: Array<{ month: string; items: NonNullable<SectorResearch["recent_path"]> }> = [];
     for (const item of [...(research?.recent_path ?? [])].reverse()) {

@@ -37,13 +37,22 @@ def cn_a_session_state(now: datetime) -> str:
     if calendar is None or calendar.evaluate(local.date()).status != CalendarStatus.TRADING_DAY:
         return "non_trading_day"
     current = local.timetz().replace(tzinfo=None)
-    if time(9, 30) <= current < time(11, 30) or time(13, 0) <= current < time(15, 0):
-        return "continuous"
+    if time(9, 30) <= current < time(11, 30):
+        return "morning_trading"
     if time(11, 30) <= current < time(13, 0):
         return "lunch_break"
+    if time(13, 0) <= current < time(15, 0):
+        return "afternoon_trading"
     if current >= time(15, 0):
         return "after_close"
-    return "before_open"
+    return "pre_open"
+
+
+def same_day_session_quote_allowed(*, quote_datetime: datetime, now: datetime) -> bool:
+    """Allow a same-day quote only during the scheduled non-continuous sessions."""
+    local_now = _aware(now).astimezone(SHANGHAI)
+    local_quote = _aware(quote_datetime).astimezone(SHANGHAI)
+    return local_quote.date() == local_now.date() and cn_a_session_state(local_now) in {"lunch_break", "after_close"}
 
 
 def reader_quote_display(*, quote_available: bool, quote_datetime: datetime | None, current: object | None, now: datetime) -> QuoteDisplayDecision:
@@ -56,6 +65,6 @@ def reader_quote_display(*, quote_available: bool, quote_datetime: datetime | No
     age = local_now - local_quote
     if timedelta(0) <= age <= LIVE_FRESHNESS:
         return QuoteDisplayDecision("available", "fresh", "live", session_state, None)
-    if local_quote.date() == local_now.date() and session_state in {"lunch_break", "after_close"}:
+    if same_day_session_quote_allowed(quote_datetime=local_quote, now=local_now):
         return QuoteDisplayDecision("available", "session_latest", "same_day_session_latest", session_state, None)
     return QuoteDisplayDecision("unavailable", "stale", "unavailable", session_state, "stale_quote")

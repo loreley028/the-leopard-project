@@ -41,8 +41,8 @@ def payload(*items: str) -> bytes:
     return "\n".join(items).encode("gbk")
 
 
-def provider(payload_value: bytes, *, config_value: dict[str, object] | None = None) -> TencentStandardSecurityQuoteProvider:
-    return TencentStandardSecurityQuoteProvider(transport=lambda _url, _timeout: payload_value, config=config_value or config(), now=lambda: NOW)
+def provider(payload_value: bytes, *, config_value: dict[str, object] | None = None, now: datetime = NOW) -> TencentStandardSecurityQuoteProvider:
+    return TencentStandardSecurityQuoteProvider(transport=lambda _url, _timeout: payload_value, config=config_value or config(), now=lambda: now)
 
 
 def fetch(value: TencentStandardSecurityQuoteProvider, symbols: list[str]):
@@ -96,6 +96,21 @@ def test_insufficient_empty_decode_stale_and_malformed_are_classified() -> None:
     assert fetch(provider(b"\xff"), ["sh510300"]).failures["sh510300"] == TencentQuoteErrorCode.DECODE_ERROR
     assert fetch(provider(payload(record("sh510300", timestamp="20260804130000"))), ["sh510300"]).failures["sh510300"] == TencentQuoteErrorCode.STALE_QUOTE
     assert fetch(provider(payload(record("sh510300", current="zero"))), ["sh510300"]).failures["sh510300"] == TencentQuoteErrorCode.MALFORMED_RECORD
+
+
+@pytest.mark.parametrize("now", [
+    datetime.fromisoformat("2026-08-18T12:45:00+08:00"),
+    datetime.fromisoformat("2026-08-18T15:20:00+08:00"),
+])
+def test_same_day_session_latest_quote_is_accepted_outside_continuous_trading(now: datetime) -> None:
+    batch = fetch(provider(payload(record("sh510300", timestamp="20260818113000")), now=now), ["sh510300"])
+    assert [quote.requested_symbol for quote in batch.quotes] == ["sh510300"]
+
+
+def test_same_day_stale_quote_remains_rejected_during_afternoon_trading() -> None:
+    afternoon = datetime.fromisoformat("2026-08-18T13:11:00+08:00")
+    batch = fetch(provider(payload(record("sh510300", timestamp="20260818113000")), now=afternoon), ["sh510300"])
+    assert batch.failures == {"sh510300": TencentQuoteErrorCode.STALE_QUOTE}
 
 
 def test_requested_symbols_are_deduplicated_and_compact_format_is_rejected() -> None:

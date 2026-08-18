@@ -1,4 +1,4 @@
-import type { EnhancedReport, Interpretation, IntradayStatus, LiveMarketAnchor, LiveMarketAnchorHistory, MarketCoreBroadMarket, MarketCoreProxies, MarketCoreShanghai, PathMatrix, Principal, Report, Sector, SectorAssessment, SectorResearch, ViewerObservation, ViewerSecurityProxyInstrument } from "../types";
+import type { EnhancedReport, Interpretation, IntradayStatus, LiveMarketAnchor, LiveMarketAnchorHistory, MarketCoreBroadMarket, MarketCoreCurrentQuotes, MarketCoreProxies, MarketCoreShanghai, PathMatrix, Principal, Report, Sector, SectorAssessment, SectorResearch, ViewerObservation, ViewerSecurityProxyInstrument } from "../types";
 import { apiPath, appPath } from "../config/appBasePath";
 
 export class ApiError extends Error {
@@ -105,6 +105,7 @@ export const api = {
   marketShanghai: () => request<MarketCoreShanghai>("/market/shanghai"),
   marketBroad: () => request<MarketCoreBroadMarket>("/market/broad"),
   marketProxies: (proxySet = "all") => request<MarketCoreProxies>(`/market/proxies/${encodeURIComponent(proxySet)}`),
+  marketCurrent: (scope: string) => request<MarketCoreCurrentQuotes>(`/market/current/${encodeURIComponent(scope)}`),
   pathMatrix: (id: string, period = "20") => request<PathMatrix>(`/reports/${id}/path-matrix?periods=${encodeURIComponent(period)}`),
   reportAssessments: (id: string) => request<SectorAssessment[]>(`/reports/${id}/sector-assessments`),
   sectors: (includeLowAttention = false, lowAttentionOnly = false) => request<Sector[]>(`/sectors?include_low_attention=${includeLowAttention}&low_attention_only=${lowAttentionOnly}`),

@@ -22,6 +22,7 @@ from urllib.request import urlopen
 from zoneinfo import ZoneInfo
 
 from ..config import CONFIG_DIR
+from ..web.market_session import same_day_session_quote_allowed
 
 
 Transport = Callable[[str, float], bytes]
@@ -210,7 +211,9 @@ class TencentStandardSecurityQuoteProvider:
             except TencentQuoteError:
                 amount_yuan = None
         age = (self._now().astimezone(SHANGHAI) - quote_datetime).total_seconds()
-        if age > self.max_quote_age_seconds or age < -self.max_quote_age_seconds:
+        if (
+            age > self.max_quote_age_seconds or age < -self.max_quote_age_seconds
+        ) and not same_day_session_quote_allowed(quote_datetime=quote_datetime, now=self._now()):
             raise TencentQuoteError(TencentQuoteErrorCode.STALE_QUOTE, "Tencent quote timestamp is stale")
         return StandardSecurityQuote(
             requested_symbol=requested_symbol, name=name, symbol=symbol, current=current, pre_close=pre_close,

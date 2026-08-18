@@ -52,6 +52,12 @@ describe("Market Core reader surfaces", () => {
     expect(screen.queryByText("当前实时行情已结束")).not.toBeInTheDocument();
   });
 
+  it("keeps provider quote seconds visible rather than substituting a client timestamp", () => {
+    const current = { ...staleShanghai, live: { ...staleShanghai.live, status: "available" as const, current: 3926.96, pre_close: 3910, pct_change: .43, quote_datetime: "2026-08-18T13:11:35+08:00", freshness: "fresh" as const, display_mode: "live" as const, session_state: "afternoon_trading" as const, error_code: null } };
+    render(<MarketCoreShanghaiReader market={current} includeHistory={false} />);
+    expect(screen.getByText(/2026-08-18.*13:11:35/)).toBeVisible();
+  });
+
   it("keeps completed history and all moving averages visible after a stale live quote", () => {
     render(<MarketCoreShanghaiReader market={staleShanghai} />);
     expect(screen.getByText(/当前实时行情已结束/)).toBeVisible();

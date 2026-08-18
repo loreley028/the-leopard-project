@@ -22,7 +22,7 @@ export interface MarketCoreLiveQuote {
   server_received_at: string | null;
   freshness: "fresh" | "session_latest" | "stale" | "unavailable";
   display_mode?: "live" | "same_day_session_latest" | "unavailable";
-  session_state?: "continuous" | "lunch_break" | "after_close" | "before_open" | "non_trading_day";
+  session_state?: "morning_trading" | "lunch_break" | "afternoon_trading" | "after_close" | "pre_open" | "non_trading_day";
   provider: string | null;
   error_code: string | null;
 }
@@ -95,6 +95,22 @@ export interface MarketCoreProxies {
   cache_hit: boolean;
   provider_request_count: number;
   groups: MarketCoreProxyGroup[];
+}
+
+export interface MarketCoreCurrentQuote extends MarketCoreLiveQuote {
+  symbol: string;
+  name: string;
+  security_code: string;
+}
+
+export interface MarketCoreCurrentQuotes {
+  market_core: "standalone_objective";
+  scope: string;
+  session_state: NonNullable<MarketCoreLiveQuote["session_state"]>;
+  provider: string;
+  cache_hit: boolean;
+  provider_request_count: number;
+  quotes: MarketCoreCurrentQuote[];
 }
 
 export interface SectorMention {
