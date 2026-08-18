@@ -1938,14 +1938,10 @@ class ReportService:
                 )
                 freeze["validation"] = validation
                 freeze["frozen_source_report_id"] = prior_report.id
-                if validation["status"] == "frozen_history_changed":
-                    metadata.setdefault("attention_items", []).append({
-                        "kind": "history_rewrite",
-                        "severity": "blocking",
-                        "message": "新PDF改写了已冻结的历史路径，禁止静默覆盖",
-                        "differences": validation["differences"],
-                    })
-                    metadata["quality_status"] = "blocking_parse_error"
+                # Matrices remain report-local snapshots.  A cross-date
+                # difference is reconciled by canonical source authority at
+                # publication, not treated as a parse failure.
+                freeze["authority_policy"] = "newer_formal_complete_pdf"
             report.interpretation_meta_json = json.dumps(metadata, ensure_ascii=False)
             attention = fields["interpretation_meta"]["attention_items"]
             report.interpretation_status = "needs_attention" if attention else "ready"
@@ -2064,8 +2060,8 @@ class ReportService:
         differences = audit_frozen_path_history(self.repo.session, report)
         if differences:
             raise WebDomainError(
-                "frozen_history_conflict",
-                "PDF历史路径与已冻结记录冲突；系统未自动发布",
+                "same_date_pdf_conflict",
+                "同一报告日期存在不同SHA的PDF；系统未自动发布",
                 409,
             )
         original_storage_name = report.file.storage_filename if report.file else None
@@ -2079,7 +2075,7 @@ class ReportService:
             )
             result = sync_path_history(self.repo.session, report, commit=False)
             if result.difference_count:
-                raise WebDomainError("frozen_history_conflict", "历史路径冲突；系统未自动发布", 409)
+                raise WebDomainError("canonical_history_conflict", "同一来源的历史快照发生变化；系统未自动发布", 409)
             metadata = json.loads(report.interpretation_meta_json or "{}")
             matrix = metadata.get("pdf_history_matrix") or {}
             metadata["ingestion_summary"] = {

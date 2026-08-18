@@ -351,14 +351,12 @@ class EnhancedReportService:
         from .path_history import audit_frozen_path_history
         differences = audit_frozen_path_history(self.session, report)
         if differences:
-            severity = "warning" if len(differences) <= 10 else "blocking"
             interpretation_meta.setdefault("attention_items", []).append({
-                "kind": "history_rewrite", "severity": severity,
-                "message": f"新PDF与冻结路径存在{len(differences)}处差异，旧记录未被覆盖",
+                "kind": "same_date_pdf_conflict", "severity": "blocking",
+                "message": "同一报告日期存在不同SHA的正式PDF，禁止自动选择",
                 "differences": differences,
             })
-            if severity == "blocking":
-                interpretation_meta["quality_status"] = "blocking_parse_error"
+            interpretation_meta["quality_status"] = "blocking_parse_error"
             report.interpretation_meta_json = json.dumps(interpretation_meta, ensure_ascii=False)
         self._revision(report, actor, "deterministic_text_layer_enhancement")
         self.session.commit()
