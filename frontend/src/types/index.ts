@@ -43,6 +43,7 @@ export interface MarketCoreIndicators {
 
 export interface MarketCoreShanghai {
   market_core: "standalone_objective";
+  date_axis_kind: "market_trading_day";
   symbol: string;
   name: string;
   live: MarketCoreLiveQuote;
@@ -67,6 +68,8 @@ export interface MarketCoreProxyInstrument {
 
 export interface MarketCoreBroadMarket {
   market_core: "standalone_objective";
+  date_axis_kind: "market_trading_day";
+  trading_date_axis: string[];
   universe: "broad_market_anchors";
   provider: string;
   provider_role: string;
@@ -264,6 +267,7 @@ export interface Sector {
 
 export interface PrimaryMarketObservation {
   symbol: string;
+  security_code: string;
   name: string;
   role: "etf" | "leader";
   trade_date: string | null;
@@ -278,6 +282,7 @@ export interface PrimaryMarketObservation {
   close_vs_ma5_pct: number | null;
   close_vs_ma10_pct: number | null;
   close_vs_ma20_pct: number | null;
+  date_axis_kind: "market_trading_day";
 }
 
 export interface PrimaryMarketHistoryRow {
@@ -604,7 +609,7 @@ export interface SectorResearch {
   current_latest_market: MarketSnapshot | null;
   primary_market?: PrimaryMarketObservation | null;
   latest_complete_market?: MarketSnapshot | null;
-  recent_10_trading_days?: RecentTradingDay[];
+  recent_10_trading_days?: PrimaryMarketHistoryRow[];
   intraday_snapshot?: IntradaySnapshot | null;
   intraday_status?: string;
   intraday_session?: IntradayStatus;
@@ -625,7 +630,8 @@ export interface SectorResearch {
   history: Array<{ report_id: string; report_date: string; path: PathEntry; assessment: SectorAssessment; report_snapshot: MarketSnapshot | null }>;
   detailed_history?: Array<{ report_id: string; report_date: string; path: PathEntry; assessment: SectorAssessment; report_snapshot: MarketSnapshot | null }>;
   recent_path?: Array<{ id: string; report_id: string; detail_report_id: string | null; report_date: string; market_as_of_date: string | null; reported_status: PathStatus; effective_status: PathStatus | null; has_detailed_assessment: boolean; path: PathEntry }>;
-  market_history?: MarketSnapshot[];
+  market_history?: PrimaryMarketHistoryRow[];
+  date_axis_kinds?: { sector_market_history: "market_trading_day"; board_recent10_status: "report_date"; holding_range: "report_date" };
   path_periods?: number;
   available_path_periods?: number;
   market_days?: number;

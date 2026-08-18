@@ -240,9 +240,10 @@ button, a, input, textarea, [tabindex] { outline-offset: 4px; }
 .sector-group-row { scroll-margin-top: 8rem; }
 .sector-group-row th { position: static !important; padding: .5rem .7rem !important; background: #e7efdc !important; font-size: 14px !important; font-weight: 600 !important; text-align: left; }
 .sector-group-row small { display: inline !important; margin: 0 0 0 .5rem !important; font-size: 11px; font-weight: 400; }
-.mini-path-strip { display: flex; gap: 2px; min-width: 8rem; }
-.mini-path-strip i { display: grid; grid-template-rows: auto 1fr; place-items: center; width: 1.55rem; height: 1.8rem; border-radius: 3px; font-size: .65rem; font-style: normal; font-weight: 900; line-height: 1; }
-.mini-path-strip i small { margin: 0; color: inherit; font-size: .48rem; font-weight: 700; }
+.mini-path-strip, .mini-path-date-axis { display: grid; grid-template-columns: repeat(10, 1.55rem); gap: 2px; min-width: 8rem; }
+.mini-path-strip i { display: grid; place-items: center; width: 1.55rem; height: 1.1rem; border-radius: 3px; font-size: .65rem; font-style: normal; font-weight: 900; line-height: 1; }
+.mini-path-date-axis { margin: .35rem 0 0; }
+.mini-path-date-axis i { color: var(--text-muted); font-size: .48rem; font-style: normal; font-weight: 600; text-align: center; white-space: nowrap; transform: scale(.9); transform-origin: center; }
 .mini-path-strip i b { font-size: .67rem; }
 .return-cell { position: relative; display: grid; min-width: 6rem; padding: .25rem; text-align: center; }
 .return-bar { position: absolute; top: 15%; bottom: 15%; left: 50%; opacity: .24; }

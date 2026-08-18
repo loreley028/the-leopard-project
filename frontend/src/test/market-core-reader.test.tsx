@@ -15,6 +15,7 @@ const history: MarketCoreHistoryRow[] = Array.from({ length: 20 }, (_, index) =>
 
 const staleShanghai: MarketCoreShanghai = {
   market_core: "standalone_objective", symbol: "sh000001", name: "上证指数",
+  date_axis_kind: "market_trading_day",
   live: { status: "unavailable", current: null, pre_close: null, pct_change: null, quote_datetime: null, server_received_at: null, freshness: "stale", provider: "tencent_standard_security_quote", error_code: "stale_quote" },
   latest_completed: history.at(-1)!, history,
   coverage: { available_days: 20, first_date: history[0].trading_date, latest_date: history.at(-1)!.trading_date, missing_dates: [] },

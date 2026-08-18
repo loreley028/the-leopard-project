@@ -62,7 +62,7 @@ function BroadAnchorCard({ instrument }: { instrument: MarketCoreBroadMarket["an
 }
 
 function AlignedBroadMarketTable({ shanghai, broad }: { shanghai: MarketCoreShanghai; broad: MarketCoreBroadMarket }) {
-  const dates = shanghai.history.slice(-10).map(item => item.trading_date);
+  const dates = broad.trading_date_axis;
   const assets = [{ name: shanghai.name, history: shanghai.history }, ...broad.anchors.map(item => ({ name: item.name, history: item.history }))];
   return <section className="aligned-broad-market" aria-label="最近10个完整交易日宽基市场">
     <div className="reader-completed-history-heading"><h4>最近10个完整交易日 · 宽基市场</h4><span>按交易日精确对齐</span></div>
