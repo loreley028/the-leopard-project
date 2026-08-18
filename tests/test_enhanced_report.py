@@ -170,7 +170,7 @@ def test_real_complete_eod_coverage_can_prove_trading_day_outside_fixture_calend
         assert bound.market_as_of_date == date(2026, 8, 3)
 
 
-def test_enhanced_parse_has_66_entries_and_no_external_ai(enhanced_web) -> None:
+def test_enhanced_parse_keeps_66_persisted_paths_and_exposes_74_report_rows(enhanced_web) -> None:
     client, _ = enhanced_web
     login(client)
     report_id = create_report(client)
@@ -180,7 +180,8 @@ def test_enhanced_parse_has_66_entries_and_no_external_ai(enhanced_web) -> None:
     assert result["path_entry_count"] == 66
     assert result["external_llm_calls"] == 0
     matrix = client.get(f"/api/v1/reports/{report_id}/path-matrix").json()
-    assert len(matrix["rows"]) == 66
+    assert len(matrix["rows"]) == 74
+    assert sum(row["market_available"] is False for row in matrix["rows"]) == 8
     hstech = next(row for row in matrix["rows"] if row["sector_key"] == "hang_seng_tech")
     assert hstech["cells"] == []  # draft is excluded from the published cross-period matrix
 

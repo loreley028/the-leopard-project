@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session, sessionmaker
 from leopard_project.config import load_seed_bundle
 from leopard_project.market_paths import load_market_path_registry, market_path_for_key, report_topic_sector
 from leopard_project.providers.capabilities import load_provider_capabilities, provider_capability_summary
+from leopard_project.report_registry import load_report_registry
 from leopard_project.security_proxy_observation import APPROVED, load_security_proxy_registry
 from leopard_project.trading_calendar import load_calendar, report_market_date
 
@@ -286,6 +287,7 @@ def register_enhanced_routes(
         entries.extend(fallback_entries)
         weekday_labels = ["周一", "周二", "周三", "周四", "周五", "周六", "周日"]
         bundle = load_seed_bundle()
+        report_objects = load_report_registry()
         proxy_definitions = {
             item.market_path_key: item
             for item in load_security_proxy_registry()
@@ -427,17 +429,19 @@ def register_enhanced_routes(
                 "daily_return": float(entry.frozen_daily_pct_change) if entry and entry.frozen_daily_pct_change is not None else None,
                 "market_as_of_date": market_date.isoformat(),
                 "market_data_status": entry.market_data_status if entry else "market_timeline_only",
-                "market_overlay": market_overlay(sector.sector_key, market_date),
+                "market_overlay": market_overlay(sector.market_sector_key or "", market_date),
+                "report_lifecycle": sector.lifecycle,
             }
 
         rows = []
-        for sector in sorted(bundle.sectors, key=lambda item: item.overall_order):
+        for sector in report_objects:
             rows.append({
                 "sector_key": sector.sector_key,
                 "sector_name": sector.sector_name,
-                "group_name": sector.category_level_1,
+                "group_name": sector.group_name,
                 "group_order": sector.group_order,
-                "overall_order": sector.overall_order,
+                "overall_order": sector.display_order,
+                "market_available": sector.market_sector_key is not None,
                 "cells": [matrix_cell(sector, trading_date) for trading_date in available_dates],
             })
         return {
@@ -447,7 +451,14 @@ def register_enhanced_routes(
             "available_period_count": len(all_trading_dates),
             "date_axis_kind": "market_trading_day",
             "dates": columns,
-            "groups": configured_groups(),
+            "groups": [
+                {
+                    "group_order": group_order,
+                    "group_name": group_name,
+                    "sector_count": sum(item.group_name == group_name for item in report_objects),
+                }
+                for group_order, group_name in sorted({(item.group_order, item.group_name) for item in report_objects})
+            ],
             "rows": rows,
             "status_contract": path_status_document(),
             "history_origin": "controlled_trading_day_timeline",

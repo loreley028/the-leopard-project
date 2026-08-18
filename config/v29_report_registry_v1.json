@@ -1,0 +1,23 @@
+{
+  "schema_version": "1.0.0",
+  "template_version": "V2.9",
+  "display_row_count": 74,
+  "active_object_count": 71,
+  "description": "Reader-facing Report registry. It is intentionally independent from the 66-topic market registry: unavailable market observations never remove a formal Report object.",
+  "historical_carry_sector_keys": [
+    "innovative_drug_medicine",
+    "battery_lithium",
+    "photovoltaic_energy_storage"
+  ],
+  "supplemental_rows": [
+    {"sector_key": "computer_equipment", "display_name": "计算机设备", "group_name": "科技软件、传媒与互联网", "group_order": 2, "within_group_order": 7},
+    {"sector_key": "innovative_drug", "display_name": "创新药", "group_name": "医药、消费与服务", "group_order": 3, "within_group_order": 8},
+    {"sector_key": "medical_biology", "display_name": "医药生物", "group_name": "医药、消费与服务", "group_order": 3, "within_group_order": 9},
+    {"sector_key": "battery", "display_name": "电池", "group_name": "新能源、汽车与高端制造", "group_order": 5, "within_group_order": 7},
+    {"sector_key": "lithium_battery", "display_name": "锂电池", "group_name": "新能源、汽车与高端制造", "group_order": 5, "within_group_order": 8},
+    {"sector_key": "photovoltaic", "display_name": "光伏", "group_name": "新能源、汽车与高端制造", "group_order": 5, "within_group_order": 9},
+    {"sector_key": "energy_storage", "display_name": "储能", "group_name": "新能源、汽车与高端制造", "group_order": 5, "within_group_order": 10},
+    {"sector_key": "nuclear_power", "display_name": "核电", "group_name": "新能源、汽车与高端制造", "group_order": 5, "within_group_order": 11}
+  ],
+  "candidate_only": ["脑机接口", "航空机场", "乳业", "跨境支付", "工程机械"]
+}

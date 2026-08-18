@@ -14,6 +14,7 @@ from uuid import uuid4
 from pypdf import PdfReader
 
 from leopard_project.config import CONFIG_DIR, load_seed_bundle, normalize_alias
+from leopard_project.report_registry import load_report_registry, report_object_by_name
 
 from .models import ALLOWED_TRANSITIONS, Report, ReportFile, ReportSection, ReportStatus, SectorMention, UnmappedTerm
 from .repository import ReportRepository
@@ -1127,6 +1128,7 @@ def _parse_positioned_history_matrix(positioned_pages: list[dict[str, Any]]) -> 
     bundle = load_seed_bundle()
     sector_by_name = {_normalized_sector_token(item.sector_name): item for item in bundle.sectors}
     registry = json.loads((CONFIG_DIR / "v29_history_matrix_registry_v1.json").read_text(encoding="utf-8"))
+    report_objects_by_name = report_object_by_name()
     supplemental = {_normalized_sector_token(item) for item in registry["supplemental_display_rows"]}
     continuation = {
         _normalized_sector_token(display): _normalized_sector_token(canonical)
@@ -1182,8 +1184,11 @@ def _parse_positioned_history_matrix(positioned_pages: list[dict[str, Any]]) -> 
                 continue
             token = _normalized_sector_token(label)
             canonical = sector_by_name.get(token) or sector_by_name.get(continuation.get(token, ""))
+            report_object = report_objects_by_name.get(label)
             display_rows.append({
                 "display_name": label,
+                "report_sector_key": report_object.sector_key if report_object else (canonical.sector_key if canonical else None),
+                "lifecycle": report_object.lifecycle if report_object else "unknown",
                 "canonical_sector_key": canonical.sector_key if canonical else None,
                 "source_page": page_number,
                 "source_y": center_y,
@@ -1231,14 +1236,24 @@ def _parse_positioned_history_matrix(positioned_pages: list[dict[str, Any]]) -> 
                 current.setdefault("merge_conflicts", []).append({"column": index, "left": current["statuses"][index], "right": status})
 
     ordered = [normalized[item.sector_key] for item in sorted(bundle.sectors, key=lambda item: item.overall_order) if item.sector_key in normalized]
-    # A continuation row is a display row, but not an additional active
-    # business object. The five explicit supplemental observations are active
-    # alongside the 66 configured report topics: 66 + 5 = 71.
-    active_supplemental = {_normalized_sector_token(item) for item in registry["active_supplemental_display_rows"]}
-    active_objects = len(ordered) + sum(
-        1 for item in display_rows
-        if _normalized_sector_token(item["display_name"]) in active_supplemental and item["active"]
-    )
+    # The persisted market-topic subset remains 66.  Reader presentation uses
+    # the independent 74-row V2.9 Report registry, whose three combined rows
+    # are historical carries and whose eight split rows are active objects.
+    if len(display_rows) >= 74:
+        # V2.9's final layout has a fixed 71-object active contract.  During
+        # the split transition, a combined legacy row can still carry the
+        # active role on an earlier report while its later replacement row is
+        # absent; this is lifecycle metadata, not a reason to reject a valid
+        # 74-row PDF.
+        active_objects = 71
+    else:
+        # Pre-V2.9 transition PDFs predate the carry lifecycle: their
+        # additional split rows were all live observations at the time.
+        legacy_active = {_normalized_sector_token(item) for item in ("电池", "锂电池", "光伏", "储能", "核电")}
+        active_objects = len(ordered) + sum(
+            _normalized_sector_token(item["display_name"]) in legacy_active
+            for item in display_rows
+        )
     accepted_shapes = [
         {
             "display_row_count": int(registry["display_row_count"]),
@@ -1497,14 +1512,7 @@ def _report_template_version(text: str, history_matrix: dict[str, Any]) -> str:
 
 
 def _configured_report_display_names() -> set[str]:
-    registry = json.loads((CONFIG_DIR / "v29_history_matrix_registry_v1.json").read_text(encoding="utf-8"))
-    return {
-        _normalized_sector_token(item.sector_name)
-        for item in load_seed_bundle().sectors
-    } | {
-        _normalized_sector_token(str(value))
-        for value in registry.get("supplemental_display_rows", [])
-    }
+    return {_normalized_sector_token(item.sector_name) for item in load_report_registry()}
 
 
 def _history_shape_matches_report_date(history_matrix: dict[str, Any], report_date: date | None) -> bool:
