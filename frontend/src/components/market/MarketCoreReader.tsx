@@ -79,7 +79,6 @@ function AlignedBroadMarketTable({ shanghai, broad }: { shanghai: MarketCoreShan
 export function BroadMarketOverview({ shanghai, broad }: { shanghai: MarketCoreShanghai | null; broad: MarketCoreBroadMarket | null }) {
   if (!shanghai) return <p className="reader-market-empty">市场总览暂不可用；报告观点仍按报告日期独立展示。</p>;
   return <section className="broad-market-overview" aria-label="市场总览">
-    <MarketCoreShanghaiReader market={shanghai} includeHistory={false} />
     {broad ? <><div className="broad-market-anchor-grid">{broad.anchors.map(item => <BroadAnchorCard key={item.symbol} instrument={item} />)}</div><AlignedBroadMarketTable shanghai={shanghai} broad={broad} /></> : <p className="reader-market-empty">宽基市场观察暂不可用。</p>}
   </section>;
 }

@@ -562,11 +562,19 @@ export interface ReportDefense {
 
 export interface PathMatrix {
   caption: string;
-  dates: Array<{ report_id: string; detail_report_id: string | null; has_detailed_report: boolean; report_date: string; market_as_of_date: string | null; market_weekday: string | null; weekday: string; is_weekend_report: boolean }>;
+  dates: Array<{ trading_date: string; weekday: string }>;
   groups: Array<{ group_order: number; group_name: string; sector_count: number }>;
-  rows: Array<{ sector_key: string; sector_name: string; group_name: string; group_order: number; overall_order: number; cells: Array<PathEntry & {
-    report_id: string;
-    report_date: string;
+  rows: Array<{ sector_key: string; sector_name: string; group_name: string; group_order: number; overall_order: number; cells: Array<Omit<PathEntry, "path_status" | "path_status_label" | "path_status_color" | "revision_id"> & {
+    trading_date: string;
+    report_present: boolean;
+    report_id: string | null;
+    detail_report_id: string | null;
+    has_detailed_report: boolean;
+    report_date: string | null;
+    path_status: PathStatus | null;
+    path_status_label: string | null;
+    path_status_color: string | null;
+    revision_id: string | null;
     market_overlay?: {
       kind: "primary" | "unavailable";
       label: string;

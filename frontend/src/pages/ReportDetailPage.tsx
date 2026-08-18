@@ -4,7 +4,7 @@ import { api, publicResourcePath } from "../api/client";
 import { IslandCard } from "../components/island/IslandCard";
 import { IslandPathMatrix } from "../components/island/IslandPathMatrix";
 import { IslandStatusBadge } from "../components/island/IslandStatusBadge";
-import { BroadMarketOverview } from "../components/market/MarketCoreReader";
+import { BroadMarketOverview, MarketCoreShanghaiReader } from "../components/market/MarketCoreReader";
 import { PdfPagePreview } from "../components/PdfPagePreview";
 import type { DefenseLineValidation, EnhancedReport, MarketCoreBroadMarket, MarketCoreShanghai, MarketSnapshot, PathMatrix, ReportDefense, SectorAssessment } from "../types";
 import { formatPct } from "../utils/format";
@@ -46,7 +46,7 @@ function ReportOverview({ enhanced, market, broad }: { enhanced: EnhancedReport;
     <IslandCard title="核心观点">
       <div className="core-insight-panel">
         <section className="core-judgment-panel"><p className="eyebrow">猎豹核心判断</p><p className="core-view-summary">{report.core_view}</p></section>
-        <BroadMarketOverview shanghai={market} broad={broad} />
+        <MarketCoreShanghaiReader market={market} includeHistory={false} />
         <section className="defense-line-panel" aria-label="猎豹攻防线">
           <div className="defense-level"><span>猎豹攻防点</span><strong>{defense.defense_line_value == null ? "报告未单列" : point(defense.defense_line_value)}</strong></div>
           {defense.defense_line_value != null && <div className="defense-live-position">
@@ -77,6 +77,7 @@ function ReportOverview({ enhanced, market, broad }: { enhanced: EnhancedReport;
           {validations.length === 0 && <p className="defense-validation-empty">攻防验证记录将随交易日自然积累。</p>}
           <p className="defense-validation-count">当前已积累 {validations.length} / 10 条完整验证记录。</p>
         </section>
+        <BroadMarketOverview shanghai={market} broad={broad} />
       </div>
     </IslandCard>
     <IslandCard title="风险提示"><p className={report.risk_warning ? "" : "report-risk-empty"}>{report.risk_warning || "本报告未单列风险提示。"}</p></IslandCard>

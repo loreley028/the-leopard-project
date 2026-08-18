@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 from datetime import date, datetime, timedelta, timezone
+from types import SimpleNamespace
 from typing import Callable
 
 from fastapi import Depends, FastAPI, File, Form, Query, UploadFile
@@ -12,7 +13,7 @@ from leopard_project.config import load_seed_bundle
 from leopard_project.market_paths import load_market_path_registry, market_path_for_key, report_topic_sector
 from leopard_project.providers.capabilities import load_provider_capabilities, provider_capability_summary
 from leopard_project.security_proxy_observation import APPROVED, load_security_proxy_registry
-from leopard_project.trading_calendar import report_market_date
+from leopard_project.trading_calendar import load_calendar, report_market_date
 
 from .auth import Principal
 from .catalog import configured_groups
@@ -246,91 +247,40 @@ def register_enhanced_routes(
         session: Session = Depends(db_session),
     ) -> dict:
         report = readable(required_report(report_id, session), current)
-        service = EnhancedReportService(session)
         selected_period = period or periods
-        available_dates = list(session.scalars(select(SectorPathHistoryEntry.path_report_date).where(
+        report_dates = list(session.scalars(select(SectorPathHistoryEntry.path_report_date).where(
             SectorPathHistoryEntry.path_report_date <= report.report_date,
         ).distinct().order_by(SectorPathHistoryEntry.path_report_date)))
-        if not available_dates:
-            fallback_reports = list(session.scalars(select(Report).where(
-                Report.status == ReportStatus.PUBLISHED.value,
-                Report.report_date <= report.report_date,
-            ).order_by(Report.report_date)))
-            selected_period = period or periods
-            if selected_period != "all":
-                fallback_reports = fallback_reports[-int(selected_period):]
-            fallback_paths = {
-                item.id: {entry.sector_key: entry for entry in service.path_entries(item.id)}
-                for item in fallback_reports
-            }
-            return {
-                "caption": "板块历史路径矩阵",
-                "period": selected_period,
-                "default_period": "20",
-                "available_period_count": len(fallback_reports),
-                "dates": [{
-                    "report_id": item.id,
-                    "detail_report_id": item.id,
-                    "has_detailed_report": True,
-                    "report_date": item.report_date.isoformat(),
-                    "market_as_of_date": report_market_date(item.report_date).isoformat() if report_market_date(item.report_date) else None,
-                    "market_weekday": ["周一", "周二", "周三", "周四", "周五", "周六", "周日"][report_market_date(item.report_date).weekday()] if report_market_date(item.report_date) else None,
-                    "weekday": ["周一", "周二", "周三", "周四", "周五", "周六", "周日"][item.report_date.weekday()],
-                    "is_weekend_report": item.report_date.weekday() >= 5,
-                } for item in fallback_reports],
-                "groups": configured_groups(),
-                "rows": [{
-                    "sector_key": sector.sector_key,
-                    "sector_name": sector.sector_name,
-                    "group_name": sector.category_level_1,
-                    "group_order": sector.group_order,
-                    "overall_order": sector.overall_order,
-                    "cells": [{
-                        "report_id": item.id,
-                        "detail_report_id": item.id,
-                        "has_detailed_report": True,
-                        "report_date": item.report_date.isoformat(),
-                        **path_entry_payload(fallback_paths[item.id][sector.sector_key]),
-                        "daily_return": None,
-                        "market_as_of_date": report_market_date(item.report_date).isoformat() if report_market_date(item.report_date) else None,
-                        "market_data_status": "unavailable",
-                        "market_overlay": {
-                            "kind": "unavailable", "label": "—",
-                            "market_date": report_market_date(item.report_date).isoformat() if report_market_date(item.report_date) else None,
-                            "pct_change": None, "instruments": [],
-                        },
-                    } for item in fallback_reports],
-                } for sector in sorted(load_seed_bundle().sectors, key=lambda item: item.overall_order)],
-                "status_contract": path_status_document(),
-                "history_origin": "uploaded_reports_fallback",
-            }
-        if selected_period != "all":
-            available_dates = available_dates[-int(selected_period):]
-        reports = {
-            item.report_date: item
-            for item in session.scalars(select(Report).where(
-                Report.status == ReportStatus.PUBLISHED.value,
-                Report.report_date.in_(available_dates),
-                Report.is_current.is_(True),
-            ))
-            if item.report_date
-        }
+        published_reports = list(session.scalars(select(Report).where(
+            Report.status == ReportStatus.PUBLISHED.value,
+            Report.report_date <= report.report_date,
+        ).order_by(Report.report_date, Report.published_at)))
+        calendar = load_calendar()
+        maximum_market_date = report_market_date(report.report_date)
         entries = list(session.scalars(select(SectorPathHistoryEntry).where(
-            SectorPathHistoryEntry.path_report_date.in_(available_dates)
-        ))) if available_dates else []
-        by_sector_date = {(item.sector_key, item.path_report_date): item for item in entries}
-        mapped_market_dates = {path_date: report_market_date(path_date) for path_date in available_dates}
+            SectorPathHistoryEntry.path_report_date.in_(report_dates)
+        ))) if report_dates else []
+        # A detailed published report remains a valid report-fact overlay even
+        # when its date is absent from the frozen full-PDF ledger.  It does not
+        # create a report-date column: it only overlays its mapped trade day.
+        fallback_entries = []
+        service = EnhancedReportService(session)
+        for published_report in published_reports:
+            for path in service.path_entries(published_report.id):
+                fallback_entries.append(SimpleNamespace(
+                    id=path.id,
+                    sector_key=path.sector_key,
+                    sector_name=path.sector_name,
+                    path_report_date=published_report.report_date,
+                    path_status=path.path_status,
+                    source_report_id=published_report.id,
+                    detail_report_id=published_report.id,
+                    frozen_daily_pct_change=None,
+                    market_data_status="unavailable",
+                    is_detailed_report_overlay=True,
+                ))
+        entries.extend(fallback_entries)
         weekday_labels = ["周一", "周二", "周三", "周四", "周五", "周六", "周日"]
-        columns = [{
-            "report_id": reports[path_date].id if path_date in reports else f"path:{path_date.isoformat()}",
-            "detail_report_id": reports[path_date].id if path_date in reports else None,
-            "has_detailed_report": path_date in reports,
-            "report_date": path_date.isoformat(),
-            "market_as_of_date": mapped_market_dates[path_date].isoformat() if mapped_market_dates[path_date] else None,
-            "market_weekday": weekday_labels[mapped_market_dates[path_date].weekday()] if mapped_market_dates[path_date] else None,
-            "weekday": weekday_labels[path_date.weekday()],
-            "is_weekend_report": path_date.weekday() >= 5,
-        } for path_date in available_dates]
         bundle = load_seed_bundle()
         proxy_definitions = {
             item.market_path_key: item
@@ -343,10 +293,6 @@ def register_enhanced_routes(
             for instrument in definition.instruments
             if instrument.enabled
         }))
-        # The controlled calendar resolves each report date exactly once.  A
-        # later absent daily record stays absent; no data-date fallback is
-        # permitted after this mapping.
-        maximum_market_date = max((item for item in mapped_market_dates.values() if item is not None), default=None)
         proxy_rows = list(session.scalars(select(SecurityProxyDaily).where(
             SecurityProxyDaily.symbol.in_(proxy_symbols),
             SecurityProxyDaily.trading_date <= maximum_market_date,
@@ -358,7 +304,53 @@ def register_enhanced_routes(
             proxy_previous_close[(item.symbol, item.trading_date)] = previous_by_symbol.get(item.symbol)
             previous_by_symbol[item.symbol] = float(item.close)
 
-        def market_overlay(sector_key: str, entry: SectorPathHistoryEntry, market_date: date | None) -> dict:
+        mapped_entry_days = {entry.path_report_date: report_market_date(entry.path_report_date) for entry in entries}
+        first_candidate_date = min(
+            [item.trading_date for item in proxy_rows]
+            + [item for item in mapped_entry_days.values() if item is not None]
+            + [mapped for item in published_reports if (mapped := report_market_date(item.report_date)) is not None],
+            default=None,
+        )
+        all_trading_dates = sorted(
+            item for item in calendar.trading_dates()
+            if first_candidate_date is not None and maximum_market_date is not None and first_candidate_date <= item <= maximum_market_date
+        ) if calendar is not None else []
+        available_dates = all_trading_dates if selected_period == "all" else all_trading_dates[-int(selected_period):]
+        source_report_ids = {entry.source_report_id for entry in entries}
+        reports_by_id = {
+            item.id: item
+            for item in session.scalars(select(Report).where(Report.id.in_(source_report_ids)))
+        } if source_report_ids else {}
+        reports_by_date = {
+            item.report_date: item
+            for item in published_reports
+            if item.report_date
+        }
+
+        def entry_precedence(entry: SectorPathHistoryEntry | SimpleNamespace) -> tuple[int, float, date, str]:
+            source = reports_by_id.get(entry.source_report_id)
+            return (
+                int(bool(getattr(entry, "is_detailed_report_overlay", False))),
+                source.published_at.timestamp() if source and source.published_at else float("-inf"),
+                entry.path_report_date,
+                entry.id,
+            )
+
+        # A weekend or holiday report can share its mapped trading day with an
+        # earlier report.  Preserve the explicit latest publish precedence and
+        # never blend two report opinions into a synthetic status.
+        by_sector_market_date: dict[tuple[str, date], SectorPathHistoryEntry] = {}
+        for entry in entries:
+            market_date = mapped_entry_days[entry.path_report_date]
+            if market_date is None or market_date not in available_dates:
+                continue
+            key = (entry.sector_key, market_date)
+            existing = by_sector_market_date.get(key)
+            if existing is None or entry_precedence(entry) > entry_precedence(existing):
+                by_sector_market_date[key] = entry
+        columns = [{"trading_date": item.isoformat(), "weekday": weekday_labels[item.weekday()]} for item in available_dates]
+
+        def market_overlay(sector_key: str, market_date: date) -> dict:
             """Describe one fixed, exact-date Reader market observation.
 
             Reader cells use the registry's stable primary security only.  The
@@ -366,10 +358,10 @@ def register_enhanced_routes(
             never combined into a sector return.
             """
             definition = proxy_definitions.get(sector_key)
-            if definition is None or market_date is None:
+            if definition is None:
                 return {
                     "kind": "unavailable", "label": "—",
-                    "market_date": market_date.isoformat() if market_date else None,
+                    "market_date": market_date.isoformat(),
                     "pct_change": None, "primary": None, "instruments": [],
                 }
             primary = definition.primary_observation
@@ -413,6 +405,36 @@ def register_enhanced_routes(
                 "market_date": market_date.isoformat(), "pct_change": primary_pct,
                 "primary": primary_payload, "instruments": instruments,
             }
+        def matrix_cell(sector, market_date: date) -> dict:
+            entry = by_sector_market_date.get((sector.sector_key, market_date))
+            source = reports_by_id.get(entry.source_report_id) if entry else None
+            dated_report = reports_by_date.get(entry.path_report_date) if entry else None
+            status = path_statuses().get(entry.path_status) if entry else None
+            return {
+                "id": entry.id if entry else f"market:{sector.sector_key}:{market_date.isoformat()}",
+                "sector_key": sector.sector_key,
+                "sector_name": sector.sector_name,
+                "trading_date": market_date.isoformat(),
+                "report_present": entry is not None,
+                "report_id": dated_report.id if dated_report else entry.source_report_id if entry else None,
+                "detail_report_id": dated_report.id if dated_report else entry.detail_report_id if entry else None,
+                "has_detailed_report": bool(entry and (dated_report or entry.detail_report_id)),
+                "report_date": entry.path_report_date.isoformat() if entry else None,
+                "path_status": entry.path_status if entry else None,
+                "path_status_label": status["label"] if status else None,
+                "path_status_color": status["color"] if status else None,
+                "explicitly_mentioned": bool(entry and source and entry.path_status != "not_mentioned"),
+                "judgement_summary": "",
+                "source_text_reference": "",
+                "review_status": "frozen_history" if entry else "market_timeline_only",
+                "manually_modified": False,
+                "revision_id": entry.source_report_id if entry else None,
+                "daily_return": float(entry.frozen_daily_pct_change) if entry and entry.frozen_daily_pct_change is not None else None,
+                "market_as_of_date": market_date.isoformat(),
+                "market_data_status": entry.market_data_status if entry else "market_timeline_only",
+                "market_overlay": market_overlay(sector.sector_key, market_date),
+            }
+
         rows = []
         for sector in sorted(bundle.sectors, key=lambda item: item.overall_order):
             rows.append({
@@ -421,39 +443,18 @@ def register_enhanced_routes(
                 "group_name": sector.category_level_1,
                 "group_order": sector.group_order,
                 "overall_order": sector.overall_order,
-                "cells": [{
-                    "id": (entry := by_sector_date[(sector.sector_key, path_date)]).id,
-                    "sector_key": sector.sector_key,
-                    "sector_name": sector.sector_name,
-                    "report_id": reports[path_date].id if path_date in reports else f"path:{path_date.isoformat()}",
-                    "detail_report_id": reports[path_date].id if path_date in reports else None,
-                    "has_detailed_report": path_date in reports,
-                    "report_date": path_date.isoformat(),
-                    "path_status": entry.path_status,
-                    "path_status_label": path_statuses()[entry.path_status]["label"],
-                    "path_status_color": path_statuses()[entry.path_status]["color"],
-                    "explicitly_mentioned": path_date in reports and entry.path_status != "not_mentioned",
-                    "judgement_summary": "",
-                    "source_text_reference": "",
-                    "review_status": "frozen_history",
-                    "manually_modified": False,
-                    "revision_id": entry.source_report_id,
-                    "daily_return": float(entry.frozen_daily_pct_change) if entry.frozen_daily_pct_change is not None else None,
-                    "market_as_of_date": mapped_market_dates[path_date].isoformat() if mapped_market_dates[path_date] else None,
-                    "market_data_status": entry.market_data_status,
-                    "market_overlay": market_overlay(sector.sector_key, entry, mapped_market_dates[path_date]),
-                } for path_date in available_dates],
+                "cells": [matrix_cell(sector, trading_date) for trading_date in available_dates],
             })
         return {
             "caption": "板块历史路径矩阵",
             "period": selected_period,
             "default_period": "20",
-            "available_period_count": len(available_dates),
+            "available_period_count": len(all_trading_dates),
             "dates": columns,
             "groups": configured_groups(),
             "rows": rows,
             "status_contract": path_status_document(),
-            "history_origin": "sector_path_history_ledger",
+            "history_origin": "controlled_trading_day_timeline",
         }
 
     @app.get("/api/v1/reports/{report_id}/sector-assessments", response_model=list[ApiListItem])

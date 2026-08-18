@@ -114,19 +114,19 @@ def test_full_pdf_restores_34_periods_independent_of_two_detailed_reports(tmp_pa
         latest_id = client.get("/api/v1/reports/latest").json()["id"]
         assert len(client.get(f"/api/v1/reports/{latest_id}/path-matrix?periods=10").json()["dates"]) == 10
         assert len(client.get(f"/api/v1/reports/{latest_id}/path-matrix?periods=20").json()["dates"]) == 20
-        assert len(client.get(f"/api/v1/reports/{latest_id}/path-matrix?periods=40").json()["dates"]) == 34
+        # The Reader Matrix is trading-day driven.  The 34 frozen report-path
+        # dates in this fixture span 33 controlled CN-A trading days.
+        assert len(client.get(f"/api/v1/reports/{latest_id}/path-matrix?periods=40").json()["dates"]) == 33
         matrix = client.get(f"/api/v1/reports/{latest_id}/path-matrix?periods=all").json()
-        assert len(matrix["dates"]) == 34
+        assert len(matrix["dates"]) == 33
         assert len(matrix["groups"]) == 8
         assert [item["group_order"] for item in matrix["groups"]] == list(range(1, 9))
         assert [item["group_order"] for item in matrix["rows"]] == sorted(item["group_order"] for item in matrix["rows"])
         assert all("overall_order" in item for item in matrix["rows"])
-        sunday = matrix["dates"][-1]
-        assert sunday["report_date"] == "2026-07-26"
-        assert sunday["weekday"] == "周日"
-        assert sunday["market_as_of_date"] == "2026-07-24"
-        assert sunday["market_weekday"] == "周五"
-        assert sum(item["has_detailed_report"] for item in matrix["dates"]) == 2
+        friday = matrix["dates"][-1]
+        assert friday["trading_date"] == "2026-07-24"
+        assert friday["weekday"] == "周五"
+        assert all("report_date" not in item for item in matrix["dates"])
         history_only = matrix["rows"][0]["cells"][0]
         assert history_only["has_detailed_report"] is False
         broad = client.get("/api/v1/sectors/pcb/research?path_periods=60&market_days=20").json()

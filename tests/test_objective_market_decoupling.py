@@ -82,7 +82,7 @@ def test_path_matrix_get_is_read_only_and_uses_uploaded_report_fallback(tmp_path
 def test_matrix_uses_same_primary_across_dates_and_never_displays_proxy_ratio(tmp_path) -> None:
     settings = _settings(tmp_path)
     sessions = create_session_factory(settings.database_url)
-    day, prior = date(2026, 8, 10), date(2026, 8, 9)
+    day, prior = date(2026, 8, 7), date(2026, 8, 6)
     with sessions() as session:
         report = Report(
             id="source", title="published", report_date=day, report_date_confirmed=True,
@@ -110,7 +110,10 @@ def test_matrix_uses_same_primary_across_dates_and_never_displays_proxy_ratio(tm
         session.commit()
     with TestClient(create_app(settings, sessions)) as client:
         matrix = client.get(f"/api/v1/reports/{report.id}/path-matrix?periods=10").json()
-    cpo_cell = next(row for row in matrix["rows"] if row["sector_key"] == "cpo")["cells"][0]
+    cpo_cell = next(
+        item for item in next(row for row in matrix["rows"] if row["sector_key"] == "cpo")["cells"]
+        if item["trading_date"] == day.isoformat()
+    )
     assert cpo_cell["daily_return"] is None
     assert cpo_cell["market_overlay"]["kind"] == "primary"
     assert cpo_cell["market_overlay"]["label"] == "通信ETF +10.00%"
@@ -124,6 +127,45 @@ def test_matrix_uses_same_primary_across_dates_and_never_displays_proxy_ratio(tm
     assert all(item["pct_change"] is not None for item in cpo_cell["market_overlay"]["instruments"])
     assert "代理" not in cpo_cell["market_overlay"]["label"]
     assert "官方" not in cpo_cell["market_overlay"]["label"]
+
+
+def test_matrix_uses_controlled_trading_days_and_maps_weekend_report_overlay(tmp_path) -> None:
+    settings = _settings(tmp_path)
+    sessions = create_session_factory(settings.database_url)
+    report_day, mapped_day, prior_day = date(2026, 8, 2), date(2026, 7, 31), date(2026, 7, 30)
+    cpo = next(item for item in load_security_proxy_registry() if item.market_path_key == "cpo")
+    with sessions() as session:
+        report = Report(
+            id="weekend", title="weekend", report_date=report_day, report_date_confirmed=True,
+            status="published", is_current=True, created_by="admin", data_origin="real_upload",
+        )
+        session.add(report)
+        session.add(SectorPathHistoryEntry(
+            sector_key="cpo", sector_name="CPO", path_report_date=report_day, path_status="hold",
+            source_report_id=report.id, detail_report_id=report.id, market_as_of_date=None,
+            frozen_daily_pct_change=None, market_data_status="unavailable", source_pdf_sha256="b" * 64,
+        ))
+        primary = cpo.primary_observation
+        assert primary is not None
+        session.add_all([
+            SecurityProxyDaily(symbol=primary.symbol, trading_date=prior_day, close=Decimal("10"), open=None, high=None, low=None, amount_yuan=None, quote_datetime=None, fetched_at=datetime.now(timezone.utc), source="test"),
+            SecurityProxyDaily(symbol=primary.symbol, trading_date=mapped_day, close=Decimal("11"), open=None, high=None, low=None, amount_yuan=None, quote_datetime=None, fetched_at=datetime.now(timezone.utc), source="test"),
+        ])
+        session.commit()
+    with TestClient(create_app(settings, sessions)) as client:
+        matrix = client.get(f"/api/v1/reports/{report.id}/path-matrix?periods=10").json()
+    assert [item["trading_date"] for item in matrix["dates"]] == [prior_day.isoformat(), mapped_day.isoformat()]
+    assert report_day.isoformat() not in [item["trading_date"] for item in matrix["dates"]]
+    cpo_cells = next(row for row in matrix["rows"] if row["sector_key"] == "cpo")["cells"]
+    no_report, weekend_overlay = cpo_cells
+    assert no_report["report_present"] is False
+    assert no_report["path_status"] is None
+    assert no_report["path_status_color"] is None
+    assert no_report["market_overlay"]["market_date"] == prior_day.isoformat()
+    assert weekend_overlay["report_present"] is True
+    assert weekend_overlay["report_date"] == report_day.isoformat()
+    assert weekend_overlay["trading_date"] == mapped_day.isoformat()
+    assert weekend_overlay["market_overlay"]["market_date"] == mapped_day.isoformat()
 
 
 def test_primary_market_exact_date_only_and_no_primary_truthful_empty(tmp_path) -> None:
