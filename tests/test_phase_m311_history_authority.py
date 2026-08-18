@@ -69,7 +69,7 @@ def _entry(session, sector_key: str) -> SectorPathHistoryEntry:
     ))
 
 
-def test_newer_formal_pdf_supersedes_older_history_snapshot_and_preserves_local_snapshot(tmp_path: Path) -> None:
+def test_later_matrix_is_a_reference_and_never_overwrites_report_local_fact(tmp_path: Path) -> None:
     sessions = create_session_factory(f"sqlite:///{tmp_path / 'authority.sqlite3'}")
     with sessions() as session:
         august_3 = _report(session, date(2026, 8, 3), sha_seed="aug03", rare_earth="hold", oil_petrochemical="hold")
@@ -78,20 +78,22 @@ def test_newer_formal_pdf_supersedes_older_history_snapshot_and_preserves_local_
         august_4 = _report(session, date(2026, 8, 4), sha_seed="aug04", rare_earth="watch", oil_petrochemical="turn_weak")
         session.commit()
         sync_path_history(session, august_4)
-        assert _entry(session, "rare_earth").path_status == "watch"
-        assert _entry(session, "oil_petrochemical").path_status == "turn_weak"
+        assert _entry(session, "rare_earth").path_status == "hold"
+        assert _entry(session, "oil_petrochemical").path_status == "hold"
 
         august_17 = _report(session, date(2026, 8, 17), sha_seed="aug17", rare_earth="hold", oil_petrochemical="hold")
         session.commit()
         result = sync_path_history(session, august_17)
         rare_earth = _entry(session, "rare_earth")
         oil = _entry(session, "oil_petrochemical")
+        # 8/3 owns its own report-local marker.  A newer matrix remains only
+        # a continuity reference unless it carries explicit correction data.
         assert rare_earth.path_status == oil.path_status == "hold"
-        assert rare_earth.source_report_id == oil.source_report_id == august_17.id
+        assert rare_earth.source_report_id == oil.source_report_id == august_3.id
         assert result.difference_count == 0
-        assert result.status == "canonical_reconciled"
+        assert result.status == "appended"
         assert {item["sector_key"] for item in result.differences} == {"rare_earth", "oil_petrochemical"}
-        assert all(item["resolution_reason"] == "newer_formal_history_baseline" for item in result.differences)
+        assert all(item["resolution_reason"] == "historical_consistency_reference_only" for item in result.differences)
         # The 8/4 source snapshot is untouched; only the derived ledger moved.
         august_4_matrix = json.loads(august_4.interpretation_meta_json)["pdf_history_matrix"]
         by_sector = {item["sector_key"]: item["statuses"][0] for item in august_4_matrix["rows"]}
@@ -99,7 +101,7 @@ def test_newer_formal_pdf_supersedes_older_history_snapshot_and_preserves_local_
         assert by_sector["oil_petrochemical"] == "turn_weak"
 
 
-def test_canonical_history_is_import_order_independent(tmp_path: Path) -> None:
+def test_report_local_history_is_import_order_independent(tmp_path: Path) -> None:
     expected: list[tuple[str, str, str]] | None = None
     for label, order in (("forward", (3, 4, 17)), ("reverse", (17, 4, 3))):
         sessions = create_session_factory(f"sqlite:///{tmp_path / f'{label}.sqlite3'}")
@@ -133,6 +135,29 @@ def test_canonical_history_is_import_order_independent(tmp_path: Path) -> None:
                 expected = actual
             else:
                 assert [(key, value) for key, value, _ in actual] == [(key, value) for key, value, _ in expected]
+
+
+def test_explicit_history_correction_is_the_only_later_override(tmp_path: Path) -> None:
+    sessions = create_session_factory(f"sqlite:///{tmp_path / 'correction.sqlite3'}")
+    with sessions() as session:
+        august_3 = _report(session, date(2026, 8, 3), sha_seed="aug03", rare_earth="hold", oil_petrochemical="hold")
+        session.commit()
+        sync_path_history(session, august_3)
+        august_17 = _report(session, date(2026, 8, 17), sha_seed="aug17", rare_earth="watch", oil_petrochemical="hold")
+        metadata = json.loads(august_17.interpretation_meta_json)
+        metadata["history_corrections"] = [{
+            "sector_key": "rare_earth",
+            "report_date": "2026-08-03",
+            "path_status": "watch",
+            "source_evidence": "第3页·历史纠错说明",
+        }]
+        august_17.interpretation_meta_json = json.dumps(metadata)
+        session.commit()
+        sync_path_history(session, august_17)
+        entry = _entry(session, "rare_earth")
+        assert entry.path_status == "watch"
+        assert entry.source_report_id == august_17.id
+        assert entry.source_kind == "explicit_history_correction"
 
 
 def test_same_date_different_sha_stays_fail_closed(tmp_path: Path) -> None:

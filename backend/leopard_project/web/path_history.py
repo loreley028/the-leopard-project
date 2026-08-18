@@ -9,6 +9,7 @@ from sqlalchemy import desc, select
 from sqlalchemy.orm import Session
 
 from leopard_project.config import load_seed_bundle
+from leopard_project.report_registry import ReportObject, load_report_registry
 
 from .models import (
     PathHistoryImport,
@@ -71,6 +72,31 @@ def _exact_market_payload(
     return None, None, "unavailable"
 
 
+def _matrix_report_rows(matrix: dict[str, Any], objects: dict[str, ReportObject]) -> dict[str, dict[str, Any]]:
+    """Lift a parsed matrix into the independent Report registry.
+
+    Legacy PDFs provide the configured 66 market-topic rows.  V2.9 additionally
+    exposes native split rows in ``display_rows``.  Both forms are retained as
+    Report facts; only the former may have a market helper mapping.
+    """
+    rows: dict[str, dict[str, Any]] = {}
+    for row in matrix.get("rows") or []:
+        key = row.get("sector_key")
+        if key in objects:
+            rows[str(key)] = row
+    for row in matrix.get("display_rows") or []:
+        key = row.get("report_sector_key")
+        if key in objects and key not in rows:
+            rows[str(key)] = {
+                "sector_key": key,
+                "sector_name": objects[str(key)].sector_name,
+                "statuses": list(row.get("statuses") or []),
+                "source_page": row.get("source_page"),
+                "source_display_rows": [row.get("display_name")],
+            }
+    return rows
+
+
 @dataclass(frozen=True)
 class PathHistorySyncResult:
     date_count: int
@@ -85,22 +111,26 @@ class PathHistorySyncResult:
 def sync_path_history(session: Session, report: Report, *, commit: bool = True) -> PathHistorySyncResult:
     """Reconcile the derived canonical ledger from formal PDF matrices.
 
-    A matrix stored on a report is an immutable report-local snapshot.  The
-    ledger is a different, derived projection: a newer formal complete matrix
-    is authoritative for an already represented historical cell.  Resolving
-    all published sources on every sync makes that policy import-order
-    independent and never imports market facts from a PDF.
+    A matrix stored on a report is an immutable report-local snapshot.  A
+    report date's own formal PDF is always the primary source for that day's
+    marker.  Later complete matrices are useful continuity evidence, but they
+    never silently rewrite an earlier report fact.  The sole exception is an
+    explicit, structured history correction recorded by a later formal PDF.
+
+    Resolving every published source on each sync keeps the result import-order
+    independent while preserving the separation between report facts and
+    objective market facts.
     """
     metadata = json.loads(report.interpretation_meta_json or "{}")
     matrix = metadata.get("pdf_history_matrix") or {}
     raw_dates = list(matrix.get("dates") or [])
     rows = list(matrix.get("rows") or [])
-    bundle = load_seed_bundle()
-    valid_sectors = {item.sector_key: item for item in bundle.sectors}
-    if not report.report_date or len(rows) != len(valid_sectors) or not raw_dates:
+    report_objects = {item.sector_key: item for item in load_report_registry()}
+    base_keys = {item.sector_key for item in load_seed_bundle().sectors}
+    local_rows = _matrix_report_rows(matrix, report_objects)
+    if not report.report_date or not base_keys.issubset(local_rows) or not raw_dates:
         return PathHistorySyncResult(len(raw_dates), len(rows), 0, 0, 0, "not_reliable", [])
-    by_sector = {item.get("sector_key"): item for item in rows}
-    if set(by_sector) != set(valid_sectors) or any(len(item.get("statuses") or []) != len(raw_dates) for item in rows):
+    if any(len(item.get("statuses") or []) != len(raw_dates) for item in local_rows.values()):
         return PathHistorySyncResult(len(raw_dates), len(rows), 0, 0, 0, "not_reliable", [])
 
     resolved_dates = matrix_dates(report.report_date, raw_dates)
@@ -115,7 +145,7 @@ def sync_path_history(session: Session, report: Report, *, commit: bool = True) 
     if report not in authority_reports:
         authority_reports.append(report)
     authority_reports.sort(key=lambda item: (item.report_date or date.min, item.created_at, item.id))
-    canonical_cells: dict[tuple[str, date], tuple[str, Report]] = {}
+    canonical_cells: dict[tuple[str, date], tuple[str, Report, str]] = {}
     source_cells: list[tuple[str, date, str, Report]] = []
     for source in authority_reports:
         source_metadata = json.loads(source.interpretation_meta_json or "{}")
@@ -125,12 +155,11 @@ def sync_path_history(session: Session, report: Report, *, commit: bool = True) 
         if (
             not source.report_date
             or (source_matrix.get("quality_status") != "verified_structure" and source.id != report.id)
-            or len(source_rows) != len(valid_sectors)
             or not source_dates
         ):
             continue
-        source_by_sector = {item.get("sector_key"): item for item in source_rows}
-        if set(source_by_sector) != set(valid_sectors):
+        source_by_sector = _matrix_report_rows(source_matrix, report_objects)
+        if not base_keys.issubset(source_by_sector):
             continue
         source_resolved_dates = matrix_dates(source.report_date, source_dates)
         if any(len(item.get("statuses") or []) != len(source_resolved_dates) for item in source_rows):
@@ -139,30 +168,54 @@ def sync_path_history(session: Session, report: Report, *, commit: bool = True) 
             for path_date, status in zip(source_resolved_dates, source_row.get("statuses") or []):
                 if status != "blank" and status in valid_statuses:
                     source_cells.append((sector_key, path_date, status, source))
-                    # Sorted later reports intentionally replace earlier
-                    # report-local snapshots for the same historical cell.
-                    canonical_cells[(sector_key, path_date)] = (status, source)
+    # First source wins for a date whose own PDF is absent.  A formal PDF for
+    # that exact report date always takes precedence.  This means the order in
+    # which historical files happen to be uploaded cannot affect report facts.
+    for sector_key, path_date, status, source in source_cells:
+        key = (sector_key, path_date)
+        existing = canonical_cells.get(key)
+        source_kind = "report_local_pdf" if source.report_date == path_date else "historical_consistency_reference"
+        if existing is None or (source.report_date == path_date and existing[1].report_date != path_date):
+            canonical_cells[key] = (status, source, source_kind)
+
+    # A correction is intentionally opt-in.  Parsers do not infer it from a
+    # later matrix mismatch; publishers must carry structured correction
+    # evidence, which makes each revised historical fact auditable.
+    corrections: list[tuple[str, date, str, Report]] = []
+    for source in authority_reports:
+        source_metadata = json.loads(source.interpretation_meta_json or "{}")
+        for correction in source_metadata.get("history_corrections", []):
+            try:
+                sector_key = str(correction["sector_key"])
+                path_date = date.fromisoformat(str(correction["report_date"]))
+                status = str(correction["path_status"])
+            except (KeyError, TypeError, ValueError):
+                continue
+            if sector_key in report_objects and status in valid_statuses and correction.get("source_evidence"):
+                corrections.append((sector_key, path_date, status, source))
+    for sector_key, path_date, status, source in corrections:
+        canonical_cells[(sector_key, path_date)] = (status, source, "explicit_history_correction")
     if not canonical_cells:
         return PathHistorySyncResult(len(resolved_dates), len(rows), 0, 0, 0, "not_reliable", [])
 
     # Preserve an explicit audit trail even when an earlier snapshot never
     # became the ledger value (for example, importing an older PDF after an
     # already-published newer baseline).  The audit is report-fact-only.
-    superseded_snapshots = [
+    historical_discrepancies = [
         {
             "report_date": path_date.isoformat(),
             "sector_key": sector_key,
-            "sector_name": valid_sectors[sector_key].sector_name,
+            "sector_name": report_objects[sector_key].sector_name,
             "old_value": status,
             "old_source_report_id": source.id,
             "old_source_pdf_sha256": source.file.sha256 if source.file else "",
-            "new_value": canonical_status,
+            "reference_value": status,
             "canonical_source_report_id": canonical_source.id,
             "canonical_source_pdf_sha256": canonical_source.file.sha256 if canonical_source.file else "",
-            "resolution_reason": "newer_formal_history_baseline",
+            "resolution_reason": "historical_consistency_reference_only",
         }
         for sector_key, path_date, status, source in source_cells
-        for canonical_status, canonical_source in [canonical_cells[(sector_key, path_date)]]
+        for canonical_status, canonical_source, canonical_kind in [canonical_cells[(sector_key, path_date)]]
         if source.id != canonical_source.id and status != canonical_status
     ]
 
@@ -203,8 +256,8 @@ def sync_path_history(session: Session, report: Report, *, commit: bool = True) 
     inserted = unchanged = 0
     differences: list[dict[str, Any]] = []
     superseded: list[dict[str, Any]] = []
-    for (sector_key, path_date), (status, source) in sorted(canonical_cells.items(), key=lambda item: (item[0][1], item[0][0])):
-        sector = valid_sectors[sector_key]
+    for (sector_key, path_date), (status, source, source_kind) in sorted(canonical_cells.items(), key=lambda item: (item[0][1], item[0][0])):
+        sector = report_objects[sector_key]
         current = existing.get((sector_key, path_date))
         detail = detailed_reports.get(path_date)
         requested_market_date = (
@@ -216,7 +269,7 @@ def sync_path_history(session: Session, report: Report, *, commit: bool = True) 
         market_date, daily_pct, market_status = _exact_market_payload(
             requested_market_date=requested_market_date,
             snapshot=snapshot,
-            bar=market_rows.get((sector_key, requested_market_date)),
+            bar=market_rows.get((sector.market_sector_key, requested_market_date)) if sector.market_sector_key else None,
         )
         if current is not None:
             if current.path_status != status:
@@ -241,13 +294,13 @@ def sync_path_history(session: Session, report: Report, *, commit: bool = True) 
                     "new_value": status,
                     "canonical_source_report_id": source.id,
                     "canonical_source_pdf_sha256": source.file.sha256 if source.file else "",
-                    "resolution_reason": "newer_formal_history_baseline",
+                    "resolution_reason": "report_local_fact_reconciled",
                 })
                 current.path_status = status
             current.source_report_id = source.id
             current.source_pdf_sha256 = source.file.sha256 if source.file else ""
             current.template_version = source.template_version
-            current.source_kind = "newer_formal_history_baseline"
+            current.source_kind = source_kind
             if detail and current.detail_report_id is None:
                 current.detail_report_id = detail.id
             unchanged += 1
@@ -264,13 +317,13 @@ def sync_path_history(session: Session, report: Report, *, commit: bool = True) 
             market_data_status=market_status,
             source_pdf_sha256=source.file.sha256 if source.file else "",
             template_version=source.template_version,
-            source_kind="newer_formal_history_baseline",
+            source_kind=source_kind,
         ))
         inserted += 1
 
     difference_count = len(differences)
     status = "initialized" if not existing else "appended" if inserted else "verified_same"
-    if superseded or superseded_snapshots:
+    if superseded:
         status = "canonical_reconciled"
     if difference_count:
         status = "needs_attention" if difference_count <= 10 else "blocking_difference"
@@ -286,19 +339,19 @@ def sync_path_history(session: Session, report: Report, *, commit: bool = True) 
             unchanged_count=unchanged,
             difference_count=difference_count,
             status=status,
-            differences_json=json.dumps([*differences, *superseded_snapshots, *superseded], ensure_ascii=False),
+            differences_json=json.dumps([*differences, *historical_discrepancies, *superseded], ensure_ascii=False),
         ))
     else:
         audit.inserted_count = inserted
         audit.unchanged_count = unchanged
         audit.difference_count = difference_count
         audit.status = status
-        audit.differences_json = json.dumps([*differences, *superseded_snapshots, *superseded], ensure_ascii=False)
+        audit.differences_json = json.dumps([*differences, *historical_discrepancies, *superseded], ensure_ascii=False)
     if commit:
         session.commit()
     return PathHistorySyncResult(
         len(resolved_dates), len(rows), inserted, unchanged, difference_count, status,
-        [*differences, *superseded_snapshots, *superseded],
+        [*differences, *historical_discrepancies, *superseded],
     )
 
 
@@ -314,8 +367,8 @@ def ensure_latest_path_history(session: Session, through: date | None = None) ->
 def audit_frozen_path_history(session: Session, report: Report) -> list[dict[str, Any]]:
     """Keep alternative SHA files for the same report date fail-closed.
 
-    Cross-date differences are intentional report-history reconciliation. A
-    same-date alternative has no newer-date authority and must be reviewed.
+    Cross-date differences are continuity evidence only. A same-date
+    alternative has no authority and must be reviewed fail-closed.
     """
     if not report.report_date or not report.file:
         return []
