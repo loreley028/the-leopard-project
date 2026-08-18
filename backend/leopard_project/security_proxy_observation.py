@@ -36,6 +36,11 @@ class SecurityProxyInstrument:
     enabled: bool
     rationale: str
 
+    @property
+    def reader_code(self) -> str:
+        """Reader-facing exchange code; provider symbols remain internal."""
+        return f"{self.security_code}.{self.exchange.upper()}"
+
 
 @dataclass(frozen=True)
 class SecurityProxyDefinition:

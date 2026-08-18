@@ -4,9 +4,9 @@ import { api, publicResourcePath } from "../api/client";
 import { IslandCard } from "../components/island/IslandCard";
 import { IslandPathMatrix } from "../components/island/IslandPathMatrix";
 import { IslandStatusBadge } from "../components/island/IslandStatusBadge";
-import { MarketCoreShanghaiReader } from "../components/market/MarketCoreReader";
+import { BroadMarketOverview } from "../components/market/MarketCoreReader";
 import { PdfPagePreview } from "../components/PdfPagePreview";
-import type { DefenseLineValidation, EnhancedReport, MarketCoreShanghai, MarketSnapshot, PathMatrix, ReportDefense, SectorAssessment } from "../types";
+import type { DefenseLineValidation, EnhancedReport, MarketCoreBroadMarket, MarketCoreShanghai, MarketSnapshot, PathMatrix, ReportDefense, SectorAssessment } from "../types";
 import { formatPct } from "../utils/format";
 import { judgementDetail, pdfGroup } from "../utils/judgement";
 
@@ -33,7 +33,7 @@ const positionTone = (position: ReportDefense["defense_position"] | DefenseLineV
     : position === "below_defense_line" || position === "close_below_defense_line" ? "a-share-negative" : "a-share-neutral"
 );
 
-function ReportOverview({ enhanced, market }: { enhanced: EnhancedReport; market: MarketCoreShanghai | null }) {
+function ReportOverview({ enhanced, market, broad }: { enhanced: EnhancedReport; market: MarketCoreShanghai | null; broad: MarketCoreBroadMarket | null }) {
   const { report } = enhanced;
   const defense = enhanced.report_defense;
   const defenseSource = defense.defense_line_source === "market_path" ? "大盘路径" : defense.defense_line_source === "core_view" ? "核心判断安全回退" : null;
@@ -46,7 +46,7 @@ function ReportOverview({ enhanced, market }: { enhanced: EnhancedReport; market
     <IslandCard title="核心观点">
       <div className="core-insight-panel">
         <section className="core-judgment-panel"><p className="eyebrow">猎豹核心判断</p><p className="core-view-summary">{report.core_view}</p></section>
-        <MarketCoreShanghaiReader market={market} />
+        <BroadMarketOverview shanghai={market} broad={broad} />
         <section className="defense-line-panel" aria-label="猎豹攻防线">
           <div className="defense-level"><span>猎豹攻防点</span><strong>{defense.defense_line_value == null ? "报告未单列" : point(defense.defense_line_value)}</strong></div>
           {defense.defense_line_value != null && <div className="defense-live-position">
@@ -114,11 +114,13 @@ export function ReportDetailPage({ latest = false }: { latest?: boolean }) {
   const [period, setPeriod] = useState("20");
   const [enhanced, setEnhanced] = useState<EnhancedReport | null>();
   const [marketCoreShanghai, setMarketCoreShanghai] = useState<MarketCoreShanghai | null>(null);
+  const [broadMarket, setBroadMarket] = useState<MarketCoreBroadMarket | null>(null);
   const [matrix, setMatrix] = useState<PathMatrix | null>(null);
   const [previewLoaded, setPreviewLoaded] = useState(false);
   useEffect(() => { if (latest) api.latestReport().then(item => setLatestReportId(item.id)).catch(() => setEnhanced(null)); }, [latest]);
   useEffect(() => { if (reportId) api.enhancedReport(reportId).then(setEnhanced).catch(() => setEnhanced(null)); }, [reportId]);
   useEffect(() => { api.marketShanghai().then(setMarketCoreShanghai).catch(() => setMarketCoreShanghai(null)); }, []);
+  useEffect(() => { api.marketBroad().then(setBroadMarket).catch(() => setBroadMarket(null)); }, []);
   useEffect(() => { if (reportId) api.pathMatrix(reportId, period).then(setMatrix).catch(() => setMatrix(null)); }, [reportId, period]);
   const grouped = useMemo(() => {
     const result = new Map<string, SectorAssessment[]>();
@@ -137,7 +139,7 @@ export function ReportDetailPage({ latest = false }: { latest?: boolean }) {
     {!latest && <nav className="breadcrumbs" aria-label="面包屑"><Link to={origin === "报告库" ? "/reports" : "/"}>{origin}</Link><span>/</span><span>{report.report_date}</span></nav>}
     <header className="report-header"><div><IslandStatusBadge status={report.status} /><p className="eyebrow">直播总结动态加强版 · {chineseDate(report.report_date)}</p><h1>{report.title}</h1></div><div className="date-contract"><span>报告日期<strong>{report.report_date}</strong></span><span>报告核心观点<strong>攻防线与板块观点</strong></span></div></header>
     <nav className="report-tabs" aria-label="增强报告章节"><a href="#overview">报告概览</a><a href="#path">历史路径</a><a href="#assessments">板块观点</a><a href="#source">原始PDF</a></nav>
-    <section id="overview"><h2>报告概览</h2><ReportOverview enhanced={enhanced} market={marketCoreShanghai} /></section>
+    <section id="overview"><h2>报告概览</h2><ReportOverview enhanced={enhanced} market={marketCoreShanghai} broad={broadMarket} /></section>
     <section id="path"><h2>历史路径矩阵</h2>{matrix ? <IslandPathMatrix matrix={matrix} period={period} onPeriodChange={setPeriod} /> : <p>路径矩阵加载中…</p>}</section>
     <section id="assessments"><h2>{chineseDate(report.report_date)}板块观点详细汇总</h2><p className="muted">按原PDF分组展示五列主体；路径历史来自矩阵，详细观点历史来自已上传PDF，两者分别保存。</p>{GROUP_ORDER.map(group => grouped.get(group)?.length ? <AssessmentTable key={group} title={group} items={grouped.get(group)!} /> : null)}<details className="advanced-review"><summary>本期未提及 {unmentioned} 个板块</summary><p>“未提”只表示本期PDF没有明确观点，不代表既有观点失效。</p></details></section>
     <section id="source"><h2>原始PDF</h2>{previewLoaded ? <PdfPagePreview reportId={report.id} /> : <div className="pdf-preview-placeholder"><p>打开或刷新报告不会请求PDF；点击后仅加载内存渲染的逐页图片，不会写入下载目录。</p><button type="button" onClick={() => setPreviewLoaded(true)}>加载逐页预览</button></div>}<p><a href={publicResourcePath(report.pdf_download_url)}>下载原始PDF</a></p><p>{enhanced.data_notice} 来源追溯由Admin保留，Viewer正文不重复展示原文摘录。</p></section>

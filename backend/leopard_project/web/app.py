@@ -248,6 +248,13 @@ def create_app(settings: WebSettings | None = None, session_factory: sessionmake
         """Objective Shanghai facts only; no report or PDF input is accepted."""
         return app.state.market_core.shanghai(session, limit=limit)
 
+    @app.get("/api/v1/market/broad")
+    def standalone_broad_market(
+        current: Principal | None = Depends(optional_principal), session: Session = Depends(db_session), limit: int = Query(default=20, ge=1, le=20),
+    ) -> dict:
+        """Independent fixed broad-market ETFs; never derived from a report."""
+        return app.state.market_core.broad_market(session, limit=limit)
+
     @app.get("/api/v1/market/proxies/{proxy_set}")
     def standalone_proxy_market(
         proxy_set: str, current: Principal | None = Depends(optional_principal), session: Session = Depends(db_session), limit: int = Query(default=20, ge=1, le=20),

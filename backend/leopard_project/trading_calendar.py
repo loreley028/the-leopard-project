@@ -128,3 +128,23 @@ def evaluate_cn_a_day(day: date, path: Path = RULES_PATH) -> CalendarEvaluation:
     except (KeyError, TypeError, ValueError, json.JSONDecodeError):
         return CalendarEvaluation(day, CalendarStatus.UNAVAILABLE, None, None, None, "calendar_rule_invalid")
     return rules.evaluate(day)
+
+
+def report_market_date(day: date, path: Path = RULES_PATH) -> date | None:
+    """Return the one controlled market date associated with a report date.
+
+    A report published on a controlled trading day uses that same day.  A
+    weekend or exchange holiday report is intentionally paired with the prior
+    *controlled* trading day.  This is calendar semantics, not a data lookup
+    fallback: callers must still require an exact market record for the
+    returned date and must not search backwards again when it is absent.
+    """
+    rules = load_calendar(path)
+    if rules is None:
+        return None
+    evaluation = rules.evaluate(day)
+    if evaluation.status == CalendarStatus.TRADING_DAY:
+        return day
+    if evaluation.status != CalendarStatus.CONFIRMED_NON_TRADING_DAY:
+        return None
+    return max((candidate for candidate in rules.trading_dates() if candidate < day), default=None)

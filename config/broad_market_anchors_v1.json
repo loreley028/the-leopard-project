@@ -1,0 +1,10 @@
+{
+  "schema_version": "1.0.0",
+  "registry_version": "1.0.0",
+  "anchors": [
+    {"symbol": "sh510050", "exchange": "SH", "security_code": "510050", "security_name": "上证50ETF", "display_order": 1, "enabled": true},
+    {"symbol": "sh510300", "exchange": "SH", "security_code": "510300", "security_name": "沪深300ETF", "display_order": 2, "enabled": true},
+    {"symbol": "sh588000", "exchange": "SH", "security_code": "588000", "security_name": "科创50ETF", "display_order": 3, "enabled": true},
+    {"symbol": "sz159915", "exchange": "SZ", "security_code": "159915", "security_name": "创业板ETF", "display_order": 4, "enabled": true}
+  ]
+}

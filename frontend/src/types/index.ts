@@ -54,6 +54,7 @@ export interface MarketCoreShanghai {
 
 export interface MarketCoreProxyInstrument {
   symbol: string;
+  security_code: string;
   name: string;
   role: "etf" | "leader";
   coverage_type: string;
@@ -62,6 +63,16 @@ export interface MarketCoreProxyInstrument {
   history: MarketCoreHistoryRow[];
   coverage: MarketCoreCoverage;
   indicators: MarketCoreIndicators;
+}
+
+export interface MarketCoreBroadMarket {
+  market_core: "standalone_objective";
+  universe: "broad_market_anchors";
+  provider: string;
+  provider_role: string;
+  cache_hit: boolean;
+  provider_request_count: number;
+  anchors: MarketCoreProxyInstrument[];
 }
 
 export interface MarketCoreProxyGroup {
@@ -260,13 +271,19 @@ export interface PrimaryMarketObservation {
   daily_pct_change: number | null;
   return_10d: number | null;
   history_days: number;
-  history: RecentTradingDay[];
+  history: PrimaryMarketHistoryRow[];
   ma5: number | null;
   ma10: number | null;
   ma20: number | null;
   close_vs_ma5_pct: number | null;
   close_vs_ma10_pct: number | null;
   close_vs_ma20_pct: number | null;
+}
+
+export interface PrimaryMarketHistoryRow {
+  trading_date: string;
+  close: number;
+  daily_pct_change: number | null;
 }
 
 export type PathStatus = "avoid" | "strong_watch" | "watch" | "weak_watch" | "turn_hold" | "hold" | "turn_weak" | "exit" | "not_mentioned";
@@ -555,8 +572,8 @@ export interface PathMatrix {
       label: string;
       market_date: string | null;
       pct_change: number | null;
-      primary: { name: string; role: "etf" | "leader"; close: number; pct_change: number | null; trading_date: string } | null;
-      instruments: Array<{ name: string; role: "etf" | "leader"; close: number; pct_change: number | null; trading_date: string }>;
+      primary: { name: string; security_code: string; role: "etf" | "leader"; close: number; pct_change: number | null; trading_date: string } | null;
+      instruments: Array<{ name: string; security_code: string; role: "etf" | "leader"; close: number; pct_change: number | null; trading_date: string }>;
     };
   }> }>;
   status_contract: { statuses: Array<{ code: PathStatus; label: string; color: string; order: number }> };

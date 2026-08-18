@@ -10,6 +10,7 @@ from leopard_project.providers.tencent_standard_quote import StandardSecurityQuo
 from leopard_project.live_market_anchor_daily import capture_live_market_anchor_daily
 from leopard_project.security_proxy_daily import capture_fixed_security_proxy_daily, fixed_proxy_symbols
 from leopard_project.security_proxy_observation import SecurityProxyObservationService
+from leopard_project.broad_market_anchors import load_broad_market_anchors
 from leopard_project.web.app import WebSettings, create_app
 from leopard_project.web.database import create_session_factory
 from leopard_project.web.live_market_anchor import LiveShanghaiMarketAnchorService
@@ -108,7 +109,8 @@ def test_market_core_ma_uses_completed_eod_only_and_requires_full_windows(tmp_pa
     assert etf["indicators"]["ma5"] == 27.0
     assert etf["indicators"]["ma10"] == 24.5
     assert etf["indicators"]["ma20"] == 19.5
-    assert etf["live"]["current"] is None and etf["indicators"]["distance_to_ma5_pct"] is None
+    assert etf["live"]["current"] is None
+    assert etf["indicators"]["distance_to_ma5_pct"] == 7.407407407407407
 
 
 def test_zero_report_fastapi_market_endpoints_are_anonymous_and_have_no_report_id(tmp_path) -> None:
@@ -123,9 +125,12 @@ def test_zero_report_fastapi_market_endpoints_are_anonymous_and_have_no_report_i
     with TestClient(app) as client:
         shanghai = client.get("/api/v1/market/shanghai")
         proxies = client.get("/api/v1/market/proxies/cpo")
-    assert shanghai.status_code == 200 and proxies.status_code == 200
+        broad = client.get("/api/v1/market/broad")
+    assert shanghai.status_code == 200 and proxies.status_code == 200 and broad.status_code == 200
     assert shanghai.json()["coverage"]["available_days"] == 1
     assert len(proxies.json()["groups"][0]["instruments"]) == 4
+    assert [item["symbol"] for item in broad.json()["anchors"]] == [item.symbol for item in load_broad_market_anchors()]
+    assert all(item["security_code"].endswith((".SH", ".SZ")) for item in broad.json()["anchors"])
 
 
 def test_zero_report_eod_collectors_plan_shanghai_and_all_fixed_proxies_without_report_gate(tmp_path) -> None:

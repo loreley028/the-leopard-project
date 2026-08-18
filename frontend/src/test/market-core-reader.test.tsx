@@ -24,7 +24,7 @@ const staleShanghai: MarketCoreShanghai = {
 const proxyGroups: MarketCoreProxyGroup[] = [{
   proxy_set: "cpo", display_name: "CPO", status: "available",
   instruments: ["通信ETF", "中际旭创", "新易盛", "天孚通信"].map((name, index) => ({
-    symbol: ["sh515880", "sz300308", "sz300502", "sz300394"][index], name, role: index === 0 ? "etf" : "leader", coverage_type: index === 0 ? "partial" : "full",
+    symbol: ["sh515880", "sz300308", "sz300502", "sz300394"][index], security_code: ["515880.SH", "300308.SZ", "300502.SZ", "300394.SZ"][index], name, role: index === 0 ? "etf" : "leader", coverage_type: index === 0 ? "partial" : "full",
     live: { ...staleShanghai.live, status: "available", current: 10 + index, pre_close: 9 + index, pct_change: 1, quote_datetime: "2026-08-14T14:30:00+08:00", freshness: "fresh" },
     latest_completed: history.at(-1)!, history,
     coverage: staleShanghai.coverage,

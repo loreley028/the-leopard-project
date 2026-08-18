@@ -84,6 +84,7 @@ def test_backfill_excludes_same_day_intraday_bar_until_after_close(tmp_path, mon
     assert summary.provider_failures == {"sz300308": "insufficient_completed_history"}
 
 
-def test_market_core_symbols_is_shanghai_plus_23_fixed_proxies() -> None:
+def test_market_core_symbols_is_shanghai_plus_broad_anchors_and_fixed_proxies() -> None:
     values = market_core_symbols()
-    assert values[0] == "sh000001" and len(values) == len(set(values)) == 24
+    assert values[:5] == ("sh000001", "sh510050", "sh510300", "sh588000", "sz159915")
+    assert len(values) == len(set(values)) == 28

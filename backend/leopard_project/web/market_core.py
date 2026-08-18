@@ -19,6 +19,7 @@ from leopard_project.indicators import distance_from_average, moving_average
 from leopard_project.providers.tencent_standard_quote import TencentQuoteError, TencentQuoteErrorCode, TencentStandardSecurityQuoteProvider
 from leopard_project.security_proxy_daily import get_security_proxy_daily_histories
 from leopard_project.security_proxy_observation import APPROVED, SecurityProxyDefinition, SecurityProxyInstrument, load_security_proxy_registry
+from leopard_project.broad_market_anchors import BroadMarketAnchor, load_broad_market_anchors
 
 from .live_market_anchor import LiveShanghaiMarketAnchorService, SHANGHAI_COMPOSITE_NAME, SHANGHAI_COMPOSITE_SYMBOL
 from .models import LiveMarketAnchorDaily
@@ -145,7 +146,7 @@ class MarketCoreReadService:
             "error_code": None if fresh else ("stale_quote" if live.get("quote_status") == "available" else live.get("error_code")),
             "cache_hit": live.get("cache_hit", False),
         }
-        current = live_payload["current"]
+        current = live_payload["current"] if live_payload["current"] is not None else (rows[-1].close if rows else None)
         return {
             "market_core": "standalone_objective", "symbol": SHANGHAI_COMPOSITE_SYMBOL,
             "name": SHANGHAI_COMPOSITE_NAME, "live": live_payload,
@@ -212,15 +213,33 @@ class MarketCoreReadService:
             "groups": groups,
         }
 
-    def _instrument_payload(self, instrument: SecurityProxyInstrument, history: tuple[object, ...], batch: _CachedProxyBatch) -> dict:
+    def broad_market(self, session: Session, *, limit: int = 20) -> dict:
+        """Read independent broad-market ETFs without involving any report or proxy set."""
+        if limit < 1 or limit > 20:
+            raise ValueError("limit must be between 1 and 20")
+        anchors = load_broad_market_anchors()
+        symbols = tuple(item.symbol for item in anchors)
+        cache_key = ("market_core_broad", *symbols)
+        cached, cache_hit = self.cache.get_or_fetch(cache_key, lambda: (self._fetch_quotes(symbols),))
+        batch = cached[0]
+        histories = get_security_proxy_daily_histories(session, symbols, limit=limit)
+        return {
+            "market_core": "standalone_objective", "universe": "broad_market_anchors",
+            "provider": self.provider.provider_key, "provider_role": self.provider.provider_role,
+            "cache_hit": cache_hit, "provider_request_count": batch.provider_request_count if not cache_hit else 0,
+            "anchors": [self._instrument_payload(item, histories.get(item.symbol, ()), batch) for item in anchors],
+        }
+
+    def _instrument_payload(self, instrument: SecurityProxyInstrument | BroadMarketAnchor, history: tuple[object, ...], batch: _CachedProxyBatch) -> dict:
         quote = batch.quotes.get(instrument.symbol)
         now = _aware(self.now())
         quote_time = getattr(quote, "quote_datetime", None)
         fresh = quote is not None and isinstance(quote_time, datetime) and now - _aware(quote_time) <= LIVE_FRESHNESS
-        current = getattr(quote, "current", None) if fresh else None
+        live_current = getattr(quote, "current", None) if fresh else None
+        indicator_current = live_current if live_current is not None else (history[-1].close if history else None)
         live = {
             "status": "available" if fresh else "unavailable",
-            "current": _as_float(current), "pre_close": _as_float(getattr(quote, "pre_close", None)) if fresh else None,
+            "current": _as_float(live_current), "pre_close": _as_float(getattr(quote, "pre_close", None)) if fresh else None,
             "pct_change": _as_float(getattr(quote, "pct_change", None)) if fresh else None,
             "quote_datetime": quote_time.isoformat() if fresh else None,
             "server_received_at": batch.server_received_at.isoformat() if fresh else None,
@@ -229,10 +248,13 @@ class MarketCoreReadService:
             "error_code": None if fresh else ("stale_quote" if quote is not None else batch.failures.get(instrument.symbol)),
         }
         return {
-            "symbol": instrument.symbol, "name": instrument.security_name, "role": instrument.proxy_role,
-            "coverage_type": instrument.coverage_type, "live": live,
+            "symbol": instrument.symbol, "name": instrument.security_name,
+            "role": instrument.proxy_role if isinstance(instrument, SecurityProxyInstrument) else "broad_market_etf",
+            "security_code": instrument.reader_code,
+            "coverage_type": instrument.coverage_type if isinstance(instrument, SecurityProxyInstrument) else "full",
+            "live": live,
             "latest_completed": self._latest_completed(history),
             "history": self._history_rows(history),
             "coverage": self._coverage(history),
-            "indicators": self._objective_averages(history, current),
+            "indicators": self._objective_averages(history, indicator_current),
         }

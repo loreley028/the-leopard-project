@@ -1,4 +1,4 @@
-import type { EnhancedReport, Interpretation, IntradayStatus, LiveMarketAnchor, LiveMarketAnchorHistory, MarketCoreProxies, MarketCoreShanghai, PathMatrix, Principal, Report, Sector, SectorAssessment, SectorResearch, ViewerObservation, ViewerSecurityProxyInstrument } from "../types";
+import type { EnhancedReport, Interpretation, IntradayStatus, LiveMarketAnchor, LiveMarketAnchorHistory, MarketCoreBroadMarket, MarketCoreProxies, MarketCoreShanghai, PathMatrix, Principal, Report, Sector, SectorAssessment, SectorResearch, ViewerObservation, ViewerSecurityProxyInstrument } from "../types";
 import { apiPath, appPath } from "../config/appBasePath";
 
 export class ApiError extends Error {
@@ -103,6 +103,7 @@ export const api = {
   marketAnchor: () => request<LiveMarketAnchor>("/market/anchor"),
   marketAnchorHistory: () => request<LiveMarketAnchorHistory>("/market/anchor/history"),
   marketShanghai: () => request<MarketCoreShanghai>("/market/shanghai"),
+  marketBroad: () => request<MarketCoreBroadMarket>("/market/broad"),
   marketProxies: (proxySet = "all") => request<MarketCoreProxies>(`/market/proxies/${encodeURIComponent(proxySet)}`),
   pathMatrix: (id: string, period = "20") => request<PathMatrix>(`/reports/${id}/path-matrix?periods=${encodeURIComponent(period)}`),
   reportAssessments: (id: string) => request<SectorAssessment[]>(`/reports/${id}/sector-assessments`),

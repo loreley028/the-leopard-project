@@ -12,6 +12,7 @@ from leopard_project.config import load_seed_bundle
 from leopard_project.market_paths import load_market_path_registry, market_path_for_key, report_topic_sector
 from leopard_project.providers.capabilities import load_provider_capabilities, provider_capability_summary
 from leopard_project.security_proxy_observation import APPROVED, load_security_proxy_registry
+from leopard_project.trading_calendar import report_market_date
 
 from .auth import Principal
 from .catalog import configured_groups
@@ -272,8 +273,8 @@ def register_enhanced_routes(
                     "detail_report_id": item.id,
                     "has_detailed_report": True,
                     "report_date": item.report_date.isoformat(),
-                    "market_as_of_date": item.market_as_of_date.isoformat() if item.market_as_of_date else None,
-                    "market_weekday": ["周一", "周二", "周三", "周四", "周五", "周六", "周日"][item.market_as_of_date.weekday()] if item.market_as_of_date else None,
+                    "market_as_of_date": report_market_date(item.report_date).isoformat() if report_market_date(item.report_date) else None,
+                    "market_weekday": ["周一", "周二", "周三", "周四", "周五", "周六", "周日"][report_market_date(item.report_date).weekday()] if report_market_date(item.report_date) else None,
                     "weekday": ["周一", "周二", "周三", "周四", "周五", "周六", "周日"][item.report_date.weekday()],
                     "is_weekend_report": item.report_date.weekday() >= 5,
                 } for item in fallback_reports],
@@ -291,11 +292,11 @@ def register_enhanced_routes(
                         "report_date": item.report_date.isoformat(),
                         **path_entry_payload(fallback_paths[item.id][sector.sector_key]),
                         "daily_return": None,
-                        "market_as_of_date": item.market_as_of_date.isoformat() if item.market_as_of_date else None,
+                        "market_as_of_date": report_market_date(item.report_date).isoformat() if report_market_date(item.report_date) else None,
                         "market_data_status": "unavailable",
                         "market_overlay": {
                             "kind": "unavailable", "label": "—",
-                            "market_date": item.market_as_of_date.isoformat() if item.market_as_of_date else None,
+                            "market_date": report_market_date(item.report_date).isoformat() if report_market_date(item.report_date) else None,
                             "pct_change": None, "instruments": [],
                         },
                     } for item in fallback_reports],
@@ -318,18 +319,15 @@ def register_enhanced_routes(
             SectorPathHistoryEntry.path_report_date.in_(available_dates)
         ))) if available_dates else []
         by_sector_date = {(item.sector_key, item.path_report_date): item for item in entries}
-        date_market = {
-            path_date: next((item.market_as_of_date for item in entries if item.path_report_date == path_date and item.market_as_of_date), None)
-            for path_date in available_dates
-        }
+        mapped_market_dates = {path_date: report_market_date(path_date) for path_date in available_dates}
         weekday_labels = ["周一", "周二", "周三", "周四", "周五", "周六", "周日"]
         columns = [{
             "report_id": reports[path_date].id if path_date in reports else f"path:{path_date.isoformat()}",
             "detail_report_id": reports[path_date].id if path_date in reports else None,
             "has_detailed_report": path_date in reports,
             "report_date": path_date.isoformat(),
-            "market_as_of_date": (reports[path_date].market_as_of_date if path_date in reports else date_market[path_date]).isoformat() if (reports[path_date].market_as_of_date if path_date in reports else date_market[path_date]) else None,
-            "market_weekday": weekday_labels[(reports[path_date].market_as_of_date if path_date in reports else date_market[path_date]).weekday()] if (reports[path_date].market_as_of_date if path_date in reports else date_market[path_date]) else None,
+            "market_as_of_date": mapped_market_dates[path_date].isoformat() if mapped_market_dates[path_date] else None,
+            "market_weekday": weekday_labels[mapped_market_dates[path_date].weekday()] if mapped_market_dates[path_date] else None,
             "weekday": weekday_labels[path_date.weekday()],
             "is_weekend_report": path_date.weekday() >= 5,
         } for path_date in available_dates]
@@ -345,11 +343,10 @@ def register_enhanced_routes(
             for instrument in definition.instruments
             if instrument.enabled
         }))
-        # Frozen historical rows created before Market Core may not carry a
-        # separate market_as_of_date.  Their own path report date is still the
-        # only permitted exact-date lookup key; it is never a request to use a
-        # previous or nearest market fact.
-        maximum_market_date = max((item.market_as_of_date or item.path_report_date for item in entries), default=None)
+        # The controlled calendar resolves each report date exactly once.  A
+        # later absent daily record stays absent; no data-date fallback is
+        # permitted after this mapping.
+        maximum_market_date = max((item for item in mapped_market_dates.values() if item is not None), default=None)
         proxy_rows = list(session.scalars(select(SecurityProxyDaily).where(
             SecurityProxyDaily.symbol.in_(proxy_symbols),
             SecurityProxyDaily.trading_date <= maximum_market_date,
@@ -361,14 +358,13 @@ def register_enhanced_routes(
             proxy_previous_close[(item.symbol, item.trading_date)] = previous_by_symbol.get(item.symbol)
             previous_by_symbol[item.symbol] = float(item.close)
 
-        def market_overlay(sector_key: str, entry: SectorPathHistoryEntry) -> dict:
+        def market_overlay(sector_key: str, entry: SectorPathHistoryEntry, market_date: date | None) -> dict:
             """Describe one fixed, exact-date Reader market observation.
 
             Reader cells use the registry's stable primary security only.  The
             remaining fixed securities survive in the detail payload and are
             never combined into a sector return.
             """
-            market_date = entry.market_as_of_date or entry.path_report_date
             definition = proxy_definitions.get(sector_key)
             if definition is None or market_date is None:
                 return {
@@ -389,6 +385,7 @@ def register_enhanced_routes(
             primary_pct = ((primary_close / primary_previous - 1) * 100) if primary_previous and primary_previous > 0 else None
             primary_payload = {
                 "name": primary.security_name, "role": primary.proxy_role,
+                "security_code": primary.reader_code,
                 "close": primary_close, "pct_change": primary_pct,
                 "trading_date": market_date.isoformat(),
             }
@@ -405,6 +402,7 @@ def register_enhanced_routes(
                 instruments.append({
                     "name": instrument.security_name,
                     "role": instrument.proxy_role,
+                    "security_code": instrument.reader_code,
                     "close": close,
                     "pct_change": pct_change,
                     "trading_date": market_date.isoformat(),
@@ -441,9 +439,9 @@ def register_enhanced_routes(
                     "manually_modified": False,
                     "revision_id": entry.source_report_id,
                     "daily_return": float(entry.frozen_daily_pct_change) if entry.frozen_daily_pct_change is not None else None,
-                    "market_as_of_date": entry.market_as_of_date.isoformat() if entry.market_as_of_date else None,
+                    "market_as_of_date": mapped_market_dates[path_date].isoformat() if mapped_market_dates[path_date] else None,
                     "market_data_status": entry.market_data_status,
-                    "market_overlay": market_overlay(sector.sector_key, entry),
+                    "market_overlay": market_overlay(sector.sector_key, entry, mapped_market_dates[path_date]),
                 } for path_date in available_dates],
             })
         return {

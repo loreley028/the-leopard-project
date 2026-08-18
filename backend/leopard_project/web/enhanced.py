@@ -840,7 +840,10 @@ class EnhancedReportService:
                 start_bar = by_date.get(active_start.market_as_of_date) if active_start.market_as_of_date else None
                 active = {
                     "interval_type": kind,
-                    "status": "active" if start_bar and latest_bar else "market_insufficient",
+                    # A holding interval is a Report Fact.  Missing optional
+                    # market bars can suppress its return calculation, never
+                    # the report-timeline interval itself.
+                    "status": "active",
                     "calculation_status": "complete" if start_bar and latest_bar else "market_insufficient",
                     "start_report_date": active_start.path_report_date.isoformat(),
                     "start_market_as_of_date": active_start.market_as_of_date.isoformat() if active_start.market_as_of_date else None,

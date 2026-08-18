@@ -15,6 +15,7 @@ from leopard_project.web.path_history import _exact_market_payload
 from leopard_project.config import load_seed_bundle
 from leopard_project.security_proxy_observation import load_security_proxy_registry
 from leopard_project.web.primary_market_observation import primary_for_exact_date, primary_history
+from leopard_project.trading_calendar import report_market_date
 
 
 def _settings(tmp_path) -> WebSettings:
@@ -47,6 +48,18 @@ def test_exact_date_only_attaches_matching_market_fact() -> None:
     requested = date(2026, 8, 10)
     exact = _bar(requested)
     assert _exact_market_payload(requested_market_date=requested, snapshot=None, bar=exact) == (requested, 1.01, "eod_complete")
+
+
+def test_weekend_report_maps_previous_controlled_trade_day() -> None:
+    assert report_market_date(date(2026, 8, 2)) == date(2026, 7, 31)
+
+
+def test_holiday_report_maps_previous_controlled_trade_day() -> None:
+    assert report_market_date(date(2026, 10, 7)) == date(2026, 9, 30)
+
+
+def test_weekday_report_maps_same_day() -> None:
+    assert report_market_date(date(2026, 8, 11)) == date(2026, 8, 11)
 
 
 def test_path_matrix_get_is_read_only_and_uses_uploaded_report_fallback(tmp_path) -> None:
@@ -103,7 +116,7 @@ def test_matrix_uses_same_primary_across_dates_and_never_displays_proxy_ratio(tm
     assert cpo_cell["market_overlay"]["label"] == "通信ETF +10.00%"
     assert cpo_cell["market_overlay"]["market_date"] == day.isoformat()
     assert cpo_cell["market_overlay"]["primary"] | {"pct_change": None} == {
-        "name": "通信ETF", "role": "etf", "close": 11.0,
+        "name": "通信ETF", "security_code": "515880.SH", "role": "etf", "close": 11.0,
         "pct_change": None, "trading_date": day.isoformat(),
     }
     assert cpo_cell["market_overlay"]["primary"]["pct_change"] == pytest.approx(10.0)

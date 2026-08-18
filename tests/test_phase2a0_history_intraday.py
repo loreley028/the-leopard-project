@@ -131,7 +131,8 @@ def test_full_pdf_restores_34_periods_independent_of_two_detailed_reports(tmp_pa
         assert history_only["has_detailed_report"] is False
         broad = client.get("/api/v1/sectors/pcb/research?path_periods=60&market_days=20").json()
         assert broad["strict_holding_interval"] is None
-        assert broad["broad_holding_interval"]["status"] == "market_insufficient"
+        assert broad["broad_holding_interval"]["status"] == "active"
+        assert broad["broad_holding_interval"]["calculation_status"] == "market_insufficient"
         assert len(broad["recent_path_entries"]) == 34
 
 
@@ -410,7 +411,8 @@ def test_strict_and_broad_holding_end_status_contracts_use_full_path_ledger(tmp_
             assert result["strict_holding_interval"] is None
             assert result["historical_strict_intervals"][0]["end_status"] == ending
             if ending == "strong_watch":
-                assert result["broad_holding_interval"]["status"] == "market_insufficient"
+                assert result["broad_holding_interval"]["status"] == "active"
+                assert result["broad_holding_interval"]["calculation_status"] == "market_insufficient"
                 assert result["historical_broad_intervals"] == []
             else:
                 assert result["broad_holding_interval"] is None

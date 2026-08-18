@@ -10,6 +10,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from .live_market_anchor_daily import SHANGHAI_COMPOSITE_SYMBOL
+from .broad_market_anchors import load_broad_market_anchors
 from .providers.sina_public_daily import SinaDailyBar, SinaPublicDailyMarketProvider
 from .security_proxy_daily import fixed_proxy_symbols
 from .web.models import LiveMarketAnchorDaily, SecurityProxyDaily
@@ -30,7 +31,11 @@ class HistoricalBackfillSummary:
 
 
 def market_core_symbols() -> tuple[str, ...]:
-    return (SHANGHAI_COMPOSITE_SYMBOL, *fixed_proxy_symbols())
+    return tuple(dict.fromkeys((
+        SHANGHAI_COMPOSITE_SYMBOL,
+        *(item.symbol for item in load_broad_market_anchors()),
+        *fixed_proxy_symbols(),
+    )))
 
 
 def _close_matches(left: Decimal, right: Decimal) -> bool:
