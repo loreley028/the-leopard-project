@@ -78,7 +78,7 @@ export function SecurityProxyCard({ observation }: { observation: ViewerObservat
 function HoldingSummary({ label, interval }: { label: string; interval?: NonNullable<SectorResearch["strict_holding_interval"]> | null }) {
   if (!interval) return <p><strong>{label}：</strong>当前未进行。</p>;
   if (interval.status !== "active") return <p><strong>{label}：</strong>{interval.calculation_status === "market_insufficient" ? "起点行情不足" : "当前未进行"}。</p>;
-  return <div className="holding-summary"><p><strong>{label}：</strong>进行中，正式收益 {formatPct(interval.eod_return)}；起点报告 {interval.start_report_date} / 行情 {interval.start_market_as_of_date}。</p>{interval.intraday_reference_return != null && <p>盘中参考 {formatPct(interval.intraday_reference_return)}（不替代完整收盘正式收益）。</p>}</div>;
+  return <div className="holding-summary"><p><strong>{label}：</strong>{interval.start_report_date} → 至今。</p></div>;
 }
 
 function HoldingHistory({ label, items }: { label: string; items?: NonNullable<SectorResearch["historical_strict_intervals"]> }) {
