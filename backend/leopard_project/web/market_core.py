@@ -8,7 +8,7 @@ PDF, sector assessment, path entry, or defense line.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import date, datetime, timedelta, timezone
+from datetime import date, datetime, timezone
 from decimal import Decimal
 from typing import Callable, Iterable
 
@@ -24,10 +24,8 @@ from leopard_project.broad_market_anchors import BroadMarketAnchor, load_broad_m
 from .live_market_anchor import LiveShanghaiMarketAnchorService, SHANGHAI_COMPOSITE_NAME, SHANGHAI_COMPOSITE_SYMBOL
 from .models import LiveMarketAnchorDaily
 from .market_date_axis import market_core_completed_dates
+from .market_session import reader_quote_display
 from .security_proxy_viewer import SecurityProxyViewerCache
-
-
-LIVE_FRESHNESS = timedelta(minutes=15)
 
 
 @dataclass(frozen=True)
@@ -132,19 +130,26 @@ class MarketCoreReadService:
         live = self.live_anchor.observe_objective()
         quote_time = datetime.fromisoformat(live["quote_datetime"]) if live.get("quote_datetime") else None
         now = _aware(self.now())
-        fresh = live.get("quote_status") == "available" and quote_time is not None and now - _aware(quote_time) <= LIVE_FRESHNESS
+        display = reader_quote_display(
+            quote_available=live.get("quote_status") == "available",
+            quote_datetime=quote_time,
+            current=live.get("current"),
+            now=now,
+        )
         live_payload = {
-            "status": "available" if fresh else "unavailable",
+            "status": display.status,
             "symbol": SHANGHAI_COMPOSITE_SYMBOL,
             "name": live.get("index_name", SHANGHAI_COMPOSITE_NAME),
-            "current": live.get("current") if fresh else None,
-            "pre_close": live.get("pre_close") if fresh else None,
-            "pct_change": live.get("pct_change") if fresh else None,
-            "quote_datetime": live.get("quote_datetime") if fresh else None,
-            "server_received_at": live.get("server_received_at") if fresh else None,
-            "freshness": "fresh" if fresh else ("stale" if live.get("quote_status") == "available" else "unavailable"),
+            "current": live.get("current") if display.status == "available" else None,
+            "pre_close": live.get("pre_close") if display.status == "available" else None,
+            "pct_change": live.get("pct_change") if display.status == "available" else None,
+            "quote_datetime": live.get("quote_datetime") if display.status == "available" else None,
+            "server_received_at": live.get("server_received_at") if display.status == "available" else None,
+            "freshness": display.freshness,
+            "display_mode": display.display_mode,
+            "session_state": display.session_state,
             "provider": live.get("provider"),
-            "error_code": None if fresh else ("stale_quote" if live.get("quote_status") == "available" else live.get("error_code")),
+            "error_code": display.error_code if live.get("quote_status") == "available" else live.get("error_code"),
             "cache_hit": live.get("cache_hit", False),
         }
         current = live_payload["current"] if live_payload["current"] is not None else (rows[-1].close if rows else None)
@@ -238,18 +243,25 @@ class MarketCoreReadService:
         quote = batch.quotes.get(instrument.symbol)
         now = _aware(self.now())
         quote_time = getattr(quote, "quote_datetime", None)
-        fresh = quote is not None and isinstance(quote_time, datetime) and now - _aware(quote_time) <= LIVE_FRESHNESS
-        live_current = getattr(quote, "current", None) if fresh else None
+        display = reader_quote_display(
+            quote_available=quote is not None,
+            quote_datetime=quote_time if isinstance(quote_time, datetime) else None,
+            current=getattr(quote, "current", None),
+            now=now,
+        )
+        live_current = getattr(quote, "current", None) if display.status == "available" else None
         indicator_current = live_current if live_current is not None else (history[-1].close if history else None)
         live = {
-            "status": "available" if fresh else "unavailable",
-            "current": _as_float(live_current), "pre_close": _as_float(getattr(quote, "pre_close", None)) if fresh else None,
-            "pct_change": _as_float(getattr(quote, "pct_change", None)) if fresh else None,
-            "quote_datetime": quote_time.isoformat() if fresh else None,
-            "server_received_at": batch.server_received_at.isoformat() if fresh else None,
-            "freshness": "fresh" if fresh else ("stale" if quote is not None else "unavailable"),
+            "status": display.status,
+            "current": _as_float(live_current), "pre_close": _as_float(getattr(quote, "pre_close", None)) if display.status == "available" else None,
+            "pct_change": _as_float(getattr(quote, "pct_change", None)) if display.status == "available" else None,
+            "quote_datetime": quote_time.isoformat() if display.status == "available" else None,
+            "server_received_at": batch.server_received_at.isoformat() if display.status == "available" else None,
+            "freshness": display.freshness,
+            "display_mode": display.display_mode,
+            "session_state": display.session_state,
             "provider": self.provider.provider_key,
-            "error_code": None if fresh else ("stale_quote" if quote is not None else batch.failures.get(instrument.symbol)),
+            "error_code": display.error_code if quote is not None else batch.failures.get(instrument.symbol),
         }
         return {
             "symbol": instrument.symbol, "name": instrument.security_name,

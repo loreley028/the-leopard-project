@@ -3,7 +3,8 @@ import type { MarketCoreBroadMarket, MarketCoreHistoryRow, MarketCoreIndicators,
 import { formatPct, formatSecurityPrice, formatShanghaiDateTime } from "../../utils/format";
 
 const tone = (value: number | null | undefined) => value == null || value === 0 ? "a-share-neutral" : value > 0 ? "a-share-positive" : "a-share-negative";
-const liveMessage = (quote: MarketCoreLiveQuote) => quote.freshness === "stale" ? "当前实时行情已结束" : "当前实时行情暂不可用";
+const liveMessage = (quote: MarketCoreLiveQuote) => quote.display_mode === "same_day_session_latest" ? "当前为非连续交易时段，已显示当日最新行情" : quote.freshness === "stale" ? "当前实时行情已结束" : "当前实时行情暂不可用";
+const liveLabel = (quote: MarketCoreLiveQuote) => quote.display_mode === "same_day_session_latest" ? "当日最新行情" : "当前行情";
 
 export function MarketCoreIndicatorsView({ indicators }: { indicators: MarketCoreIndicators }) {
   const rows: Array<[string, number | null, number | null]> = [
@@ -40,10 +41,10 @@ export function MarketCoreShanghaiReader({ market, includeHistory = true }: { ma
   return <section className="reader-market-anchor" aria-label="客观市场锚点">
     <div className="reader-market-anchor-head"><div><p className="eyebrow">客观市场锚点</p><h3>{market.name}</h3><small className="reader-security-code">000001.SH</small></div><span>独立于报告</span></div>
     <div className="reader-live-summary">
-      <div><small>当前行情</small><strong>{live.status === "available" ? formatSecurityPrice(live.current) : "—"}</strong><em className={tone(live.pct_change)}>{live.status === "available" && live.pct_change != null ? formatPct(live.pct_change) : "—"}</em></div>
+      <div><small>{liveLabel(live)}</small><strong>{live.status === "available" ? formatSecurityPrice(live.current) : "—"}</strong><em className={tone(live.pct_change)}>{live.status === "available" && live.pct_change != null ? formatPct(live.pct_change) : "—"}</em></div>
       <div><small>最近完整收盘</small><strong>{latest ? formatSecurityPrice(latest.close) : "—"}</strong><em>{latest?.trading_date ?? "—"}</em></div>
     </div>
-    {live.status === "available" ? <p className="reader-market-time">行情时间：{formatShanghaiDateTime(live.quote_datetime)}</p> : <p className="reader-market-time">{liveMessage(live)}；最近完整收盘、历史与均线继续可用。</p>}
+    {live.status === "available" ? <p className="reader-market-time">{live.display_mode === "same_day_session_latest" ? `${liveMessage(live)}；` : ""}行情时间：{formatShanghaiDateTime(live.quote_datetime)}</p> : <p className="reader-market-time">{liveMessage(live)}；最近完整收盘、历史与均线继续可用。</p>}
     <MarketCoreIndicatorsView indicators={indicators} />
     {includeHistory && <><CompletedHistoryTable history={market.history} label="最近10个完整交易日上证行情" />
       <p className="reader-market-coverage">已积累 {coverage.available_days} 个真实完成交易日。数据说明：当前行情来自腾讯公开行情；历史日线来自新浪公开行情。</p></>}
@@ -56,7 +57,7 @@ function BroadAnchorCard({ instrument }: { instrument: MarketCoreBroadMarket["an
   return <article className="broad-market-card">
     <h4>{instrument.name}</h4><small className="reader-security-code">{instrument.security_code}</small>
     <strong>{formatSecurityPrice(visiblePrice)}</strong><em className={tone(visiblePct)}>{visiblePct == null ? "—" : formatPct(visiblePct)}</em>
-    <small>{instrument.live.status === "available" ? `行情时间：${formatShanghaiDateTime(instrument.live.quote_datetime)}` : `最近完整收盘：${instrument.latest_completed?.trading_date ?? "—"}`}</small>
+    <small>{instrument.live.status === "available" ? `${instrument.live.display_mode === "same_day_session_latest" ? "当日最新行情 · " : ""}行情时间：${formatShanghaiDateTime(instrument.live.quote_datetime)}` : `最近完整收盘：${instrument.latest_completed?.trading_date ?? "—"}`}</small>
     <div className="broad-market-ma"><span className={tone(instrument.indicators.distance_to_ma5_pct)}>MA5 {instrument.indicators.distance_to_ma5_pct == null ? "—" : formatPct(instrument.indicators.distance_to_ma5_pct)}</span><span className={tone(instrument.indicators.distance_to_ma10_pct)}>MA10 {instrument.indicators.distance_to_ma10_pct == null ? "—" : formatPct(instrument.indicators.distance_to_ma10_pct)}</span><span className={tone(instrument.indicators.distance_to_ma20_pct)}>MA20 {instrument.indicators.distance_to_ma20_pct == null ? "—" : formatPct(instrument.indicators.distance_to_ma20_pct)}</span></div>
   </article>;
 }
@@ -89,7 +90,7 @@ function ProxyInstrument({ instrument }: { instrument: MarketCoreProxyGroup["ins
     <header><div><small className="proxy-role">{instrument.role === "etf" ? "代理ETF" : "核心公司"}</small><h4>{instrument.name}</h4><small className="reader-security-code">{instrument.security_code}</small>{instrument.coverage_type === "partial" && <small>部分覆盖</small>}</div>
       <div className="reader-proxy-live"><strong>{instrument.live.status === "available" ? formatSecurityPrice(instrument.live.current) : "—"}</strong><em className={tone(instrument.live.pct_change)}>{instrument.live.status === "available" && instrument.live.pct_change != null ? formatPct(instrument.live.pct_change) : "—"}</em></div>
     </header>
-    <p className="reader-proxy-time">{instrument.live.status === "available" ? `行情时间：${formatShanghaiDateTime(instrument.live.quote_datetime)}` : `${liveMessage(instrument.live)}；展示最近完整收盘。`}</p>
+    <p className="reader-proxy-time">{instrument.live.status === "available" ? `${instrument.live.display_mode === "same_day_session_latest" ? `${liveMessage(instrument.live)}；` : ""}行情时间：${formatShanghaiDateTime(instrument.live.quote_datetime)}` : `${liveMessage(instrument.live)}；展示最近完整收盘。`}</p>
     <p className="reader-proxy-completed">最近完整收盘：{instrument.latest_completed ? `${instrument.latest_completed.trading_date} · ${formatSecurityPrice(instrument.latest_completed.close)}` : "—"}</p>
     <SecurityProxySparkline closes={recent} />
     <MarketCoreIndicatorsView indicators={instrument.indicators} />

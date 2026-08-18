@@ -1,7 +1,7 @@
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
-import { MarketCoreProxyObservation, MarketCoreShanghaiReader } from "../components/market/MarketCoreReader";
-import type { MarketCoreHistoryRow, MarketCoreProxyGroup, MarketCoreShanghai } from "../types";
+import { BroadMarketOverview, MarketCoreProxyObservation, MarketCoreShanghaiReader } from "../components/market/MarketCoreReader";
+import type { MarketCoreBroadMarket, MarketCoreHistoryRow, MarketCoreProxyGroup, MarketCoreShanghai } from "../types";
 
 const history: MarketCoreHistoryRow[] = Array.from({ length: 20 }, (_, index) => ({
   trading_date: `2026-07-${String(index + 1).padStart(2, "0")}`,
@@ -34,6 +34,24 @@ const proxyGroups: MarketCoreProxyGroup[] = [{
 }];
 
 describe("Market Core reader surfaces", () => {
+  it("keeps same-day lunch quotes visible and labels them as the latest session quote", () => {
+    const lunchShanghai: MarketCoreShanghai = {
+      ...staleShanghai,
+      live: { ...staleShanghai.live, status: "available", current: 3926.96, pre_close: 3910, pct_change: .43, quote_datetime: "2026-08-18T11:30:00+08:00", freshness: "session_latest", display_mode: "same_day_session_latest", session_state: "lunch_break", error_code: null },
+    };
+    const broad: MarketCoreBroadMarket = {
+      market_core: "standalone_objective", date_axis_kind: "market_trading_day", trading_date_axis: history.slice(-10).map(item => item.trading_date),
+      universe: "broad_market_anchors", provider: "tencent_standard_security_quote", provider_role: "diagnostic_provider", cache_hit: false, provider_request_count: 1,
+      anchors: proxyGroups[0].instruments.map(item => ({ ...item, live: { ...item.live, freshness: "session_latest", display_mode: "same_day_session_latest", session_state: "lunch_break" } })),
+    };
+    render(<><MarketCoreShanghaiReader market={lunchShanghai} /><BroadMarketOverview shanghai={lunchShanghai} broad={broad} /></>);
+    expect(screen.getByText("当日最新行情")).toBeVisible();
+    expect(screen.getByText(/当前为非连续交易时段，已显示当日最新行情/)).toBeVisible();
+    expect(screen.getAllByText(/当日最新行情 · 行情时间/)).toHaveLength(4);
+    expect(screen.getByText("3,926.96")).toBeVisible();
+    expect(screen.queryByText("当前实时行情已结束")).not.toBeInTheDocument();
+  });
+
   it("keeps completed history and all moving averages visible after a stale live quote", () => {
     render(<MarketCoreShanghaiReader market={staleShanghai} />);
     expect(screen.getByText(/当前实时行情已结束/)).toBeVisible();

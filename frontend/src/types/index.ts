@@ -20,7 +20,9 @@ export interface MarketCoreLiveQuote {
   pct_change: number | null;
   quote_datetime: string | null;
   server_received_at: string | null;
-  freshness: "fresh" | "stale" | "unavailable";
+  freshness: "fresh" | "session_latest" | "stale" | "unavailable";
+  display_mode?: "live" | "same_day_session_latest" | "unavailable";
+  session_state?: "continuous" | "lunch_break" | "after_close" | "before_open" | "non_trading_day";
   provider: string | null;
   error_code: string | null;
 }

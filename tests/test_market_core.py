@@ -112,6 +112,51 @@ def test_market_core_uses_fixed_server_side_cpo_symbols_and_batches_at_twenty(tm
     assert all(item["live"]["status"] == "available" for item in result["groups"][0]["instruments"])
 
 
+def test_market_core_keeps_same_day_lunch_quotes_visible_without_relaxing_continuous_freshness(tmp_path) -> None:
+    sessions = create_session_factory(_settings(tmp_path).database_url)
+    lunch = datetime(2026, 8, 18, 4, 30, tzinfo=timezone.utc)  # 12:30 Asia/Shanghai
+    quote_time = datetime(2026, 8, 18, 11, 30, tzinfo=timezone(timedelta(hours=8)))
+    provider = StubProvider(quote_time)
+    anchor = LiveShanghaiMarketAnchorService(provider=provider, enabled=True, now=lambda: lunch)
+    with sessions() as session:
+        _seed_completed(session, 5)
+        service = MarketCoreReadService(provider=provider, live_anchor=anchor, enabled=True, now=lambda: lunch)
+        shanghai = service.shanghai(session)
+        cpo = service.proxies(session, proxy_set="cpo")
+    assert shanghai["live"]["status"] == "available"
+    assert shanghai["live"]["freshness"] == "session_latest"
+    assert shanghai["live"]["display_mode"] == "same_day_session_latest"
+    assert shanghai["live"]["session_state"] == "lunch_break"
+    assert shanghai["live"]["current"] == 10.2
+    assert all(item["live"]["display_mode"] == "same_day_session_latest" for item in cpo["groups"][0]["instruments"])
+
+
+def test_market_core_keeps_same_day_after_close_quotes_visible_but_refuses_old_or_continuous_stale_quotes(tmp_path) -> None:
+    sessions = create_session_factory(_settings(tmp_path).database_url)
+    quote_time = datetime(2026, 8, 18, 11, 30, tzinfo=timezone(timedelta(hours=8)))
+    after_close = datetime(2026, 8, 18, 8, 0, tzinfo=timezone.utc)  # 16:00 Asia/Shanghai
+    after_provider = StubProvider(quote_time)
+    after_anchor = LiveShanghaiMarketAnchorService(provider=after_provider, enabled=True, now=lambda: after_close)
+    with sessions() as session:
+        _seed_completed(session, 5)
+        after_service = MarketCoreReadService(provider=after_provider, live_anchor=after_anchor, enabled=True, now=lambda: after_close)
+        after_shanghai = after_service.shanghai(session)
+        broad = after_service.broad_market(session)
+    assert after_shanghai["live"]["status"] == "available"
+    assert after_shanghai["live"]["session_state"] == "after_close"
+    assert all(anchor["live"]["status"] == "available" and anchor["live"]["freshness"] == "session_latest" for anchor in broad["anchors"])
+
+    continuous = datetime(2026, 8, 18, 2, 30, tzinfo=timezone.utc)  # 10:30 Asia/Shanghai
+    old_provider = StubProvider(datetime(2026, 8, 17, 15, 0, tzinfo=timezone(timedelta(hours=8))))
+    old_anchor = LiveShanghaiMarketAnchorService(provider=old_provider, enabled=True, now=lambda: continuous)
+    with sessions() as session:
+        old_service = MarketCoreReadService(provider=old_provider, live_anchor=old_anchor, enabled=True, now=lambda: continuous)
+        stale = old_service.shanghai(session)
+    assert stale["live"]["status"] == "unavailable"
+    assert stale["live"]["freshness"] == "stale"
+    assert stale["live"]["error_code"] == "stale_quote"
+
+
 def test_market_core_ma_uses_completed_eod_only_and_requires_full_windows(tmp_path) -> None:
     sessions = create_session_factory(_settings(tmp_path).database_url)
     with sessions() as session:
