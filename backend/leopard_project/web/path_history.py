@@ -116,6 +116,7 @@ def sync_path_history(session: Session, report: Report, *, commit: bool = True) 
         authority_reports.append(report)
     authority_reports.sort(key=lambda item: (item.report_date or date.min, item.created_at, item.id))
     canonical_cells: dict[tuple[str, date], tuple[str, Report]] = {}
+    source_cells: list[tuple[str, date, str, Report]] = []
     for source in authority_reports:
         source_metadata = json.loads(source.interpretation_meta_json or "{}")
         source_matrix = source_metadata.get("pdf_history_matrix") or {}
@@ -137,11 +138,33 @@ def sync_path_history(session: Session, report: Report, *, commit: bool = True) 
         for sector_key, source_row in source_by_sector.items():
             for path_date, status in zip(source_resolved_dates, source_row.get("statuses") or []):
                 if status != "blank" and status in valid_statuses:
+                    source_cells.append((sector_key, path_date, status, source))
                     # Sorted later reports intentionally replace earlier
                     # report-local snapshots for the same historical cell.
                     canonical_cells[(sector_key, path_date)] = (status, source)
     if not canonical_cells:
         return PathHistorySyncResult(len(resolved_dates), len(rows), 0, 0, 0, "not_reliable", [])
+
+    # Preserve an explicit audit trail even when an earlier snapshot never
+    # became the ledger value (for example, importing an older PDF after an
+    # already-published newer baseline).  The audit is report-fact-only.
+    superseded_snapshots = [
+        {
+            "report_date": path_date.isoformat(),
+            "sector_key": sector_key,
+            "sector_name": valid_sectors[sector_key].sector_name,
+            "old_value": status,
+            "old_source_report_id": source.id,
+            "old_source_pdf_sha256": source.file.sha256 if source.file else "",
+            "new_value": canonical_status,
+            "canonical_source_report_id": canonical_source.id,
+            "canonical_source_pdf_sha256": canonical_source.file.sha256 if canonical_source.file else "",
+            "resolution_reason": "newer_formal_history_baseline",
+        }
+        for sector_key, path_date, status, source in source_cells
+        for canonical_status, canonical_source in [canonical_cells[(sector_key, path_date)]]
+        if source.id != canonical_source.id and status != canonical_status
+    ]
 
     canonical_dates = {path_date for _, path_date in canonical_cells}
     detailed_reports = {
@@ -247,7 +270,7 @@ def sync_path_history(session: Session, report: Report, *, commit: bool = True) 
 
     difference_count = len(differences)
     status = "initialized" if not existing else "appended" if inserted else "verified_same"
-    if superseded:
+    if superseded or superseded_snapshots:
         status = "canonical_reconciled"
     if difference_count:
         status = "needs_attention" if difference_count <= 10 else "blocking_difference"
@@ -263,17 +286,20 @@ def sync_path_history(session: Session, report: Report, *, commit: bool = True) 
             unchanged_count=unchanged,
             difference_count=difference_count,
             status=status,
-            differences_json=json.dumps([*differences, *superseded], ensure_ascii=False),
+            differences_json=json.dumps([*differences, *superseded_snapshots, *superseded], ensure_ascii=False),
         ))
     else:
         audit.inserted_count = inserted
         audit.unchanged_count = unchanged
         audit.difference_count = difference_count
         audit.status = status
-        audit.differences_json = json.dumps([*differences, *superseded], ensure_ascii=False)
+        audit.differences_json = json.dumps([*differences, *superseded_snapshots, *superseded], ensure_ascii=False)
     if commit:
         session.commit()
-    return PathHistorySyncResult(len(resolved_dates), len(rows), inserted, unchanged, difference_count, status, [*differences, *superseded])
+    return PathHistorySyncResult(
+        len(resolved_dates), len(rows), inserted, unchanged, difference_count, status,
+        [*differences, *superseded_snapshots, *superseded],
+    )
 
 
 def ensure_latest_path_history(session: Session, through: date | None = None) -> PathHistorySyncResult | None:
