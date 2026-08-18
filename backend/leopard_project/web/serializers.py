@@ -34,6 +34,8 @@ def _display_short_time(value) -> str | None:
 
 def report_payload(report: Report, *, admin: bool = False) -> dict:
     explicit_assessment_count = sum(1 for entry in report.assessments if entry.explicitly_mentioned)
+    interpretation_meta = json.loads(report.interpretation_meta_json or "{}")
+    field_provenance = interpretation_meta.get("field_provenance", {})
     payload = {
         "id": report.id,
         "title": report.title,
@@ -61,6 +63,10 @@ def report_payload(report: Report, *, admin: bool = False) -> dict:
         "core_view": report.core_view,
         "market_path": report.market_path,
         "risk_warning": report.risk_warning,
+        "reader_fact_provenance": {
+            "core_characterization": field_provenance.get("core_view", {}),
+            "execution_conclusion": field_provenance.get("market_path", {}),
+        },
         "focus_sectors": json.loads(report.focus_sectors_json),
         "explicit_assessment_count": explicit_assessment_count,
         "created_at": report.created_at.isoformat(),
@@ -76,7 +82,6 @@ def report_payload(report: Report, *, admin: bool = False) -> dict:
         "data_notice": "研究辅助数据，非生产级行情服务。",
     }
     if admin:
-        interpretation_meta = json.loads(report.interpretation_meta_json or "{}")
         payload.update({
             "raw_text": report.raw_text,
             "parse_note": report.parse_note,
@@ -85,7 +90,7 @@ def report_payload(report: Report, *, admin: bool = False) -> dict:
             "interpretation": interpretation_meta,
             "attention_items": interpretation_meta.get("attention_items", []),
             "mapping_summary": interpretation_meta.get("mapping_summary", {}),
-            "field_provenance": interpretation_meta.get("field_provenance", {}),
+            "field_provenance": field_provenance,
             "unmapped_terms": [
                 {"id": item.id, "term": item.term, "status": item.status, "resolved_sector_key": item.resolved_sector_key}
                 for item in report.unmapped_terms

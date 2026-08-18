@@ -46,8 +46,11 @@ function ReportOverview({ enhanced, market, broad }: { enhanced: EnhancedReport;
   return <div className="report-overview-grid">
     <IslandCard title="核心观点">
       <div className="core-insight-panel">
-        <section className="core-judgment-panel"><p className="eyebrow">猎豹核心判断</p><p className="core-view-summary">{report.core_view}</p></section>
         <MarketCoreShanghaiReader market={market} includeHistory={false} />
+        <section className="report-priority-facts" aria-label="报告核心定性和执行结论">
+          <div><p className="eyebrow">核心定性</p><p>{report.core_view || "报告未单列核心定性。"}</p>{report.reader_fact_provenance?.core_characterization?.source_page && <small>来源：PDF 第 {report.reader_fact_provenance.core_characterization.source_page} 页</small>}</div>
+          <div><p className="eyebrow">执行结论</p><p>{report.market_path || "报告未单列执行结论。"}</p>{report.reader_fact_provenance?.execution_conclusion?.source_page && <small>来源：PDF 第 {report.reader_fact_provenance.execution_conclusion.source_page} 页</small>}</div>
+        </section>
         <section className="defense-line-panel" aria-label="猎豹攻防线">
           <div className="defense-level"><span>猎豹攻防点<small>来自 {report.report_date ?? "—"} 报告</small></span><strong>{defense.defense_line_value == null ? "报告未单列" : point(defense.defense_line_value)}</strong></div>
           {defense.defense_line_value != null && <div className="defense-live-position">

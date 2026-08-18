@@ -140,6 +140,7 @@ export interface Report {
   core_view: string;
   market_path: string;
   risk_warning: string;
+  reader_fact_provenance?: Record<string, { source_page?: number | null; source_reference?: string; source_text_excerpt?: string; extraction_method?: string }>;
   focus_sectors: string[];
   explicit_assessment_count?: number;
   created_at: string;
@@ -587,7 +588,7 @@ export interface PathMatrix {
   caption: string;
   dates: Array<{ trading_date: string; weekday: string }>;
   groups: Array<{ group_order: number; group_name: string; sector_count: number }>;
-  rows: Array<{ sector_key: string; sector_name: string; group_name: string; group_order: number; overall_order: number; cells: Array<Omit<PathEntry, "path_status" | "path_status_label" | "path_status_color" | "revision_id"> & {
+  rows: Array<{ sector_key: string; sector_name: string; group_name: string; group_order: number; overall_order: number; market_available?: boolean; cells: Array<Omit<PathEntry, "path_status" | "path_status_label" | "path_status_color" | "revision_id"> & {
     trading_date: string;
     report_present: boolean;
     report_id: string | null;
