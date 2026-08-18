@@ -148,6 +148,24 @@ def test_legacy_history_shape_is_bound_to_its_lifecycle_window() -> None:
     assert _history_shape_matches_report_date(shape, date(2026, 8, 2)) is False
 
 
+@pytest.mark.parametrize("filename", [
+    "大盘猎豹8月2日直播总结-V2.6板块复核版(2).pdf",
+    "大盘猎豹8月3日直播总结-V2.6版(4).pdf",
+    "大盘猎豹8月4日直播总结-V2.6版(3).pdf",
+])
+def test_v26_execution_conclusion_is_preserved_as_market_path(filename: str) -> None:
+    source = Path("/Users/cailei/Downloads/猎豹pef") / filename
+    if not source.exists():
+        pytest.skip("user-provided historical acceptance PDF is not present")
+    payload = source.read_bytes()
+    fields, *_ = parse_report_text(
+        extract_text_layer(payload), "v26-market-path", source.name,
+        extract_layout_text(payload), extract_positioned_pages(payload),
+    )
+    assert fields["market_path"].startswith(("3832", "3833"))
+    assert not any(item["kind"] == "market_path" for item in fields["interpretation_meta"]["attention_items"])
+
+
 def test_explicit_unknown_sector_candidate_is_preserved_without_mapping() -> None:
     fields, _, _, terms = parse_report_text(
         "大盘猎豹 2026年8月16日直播总结 V2.9\n新增候选：工程机械。\n板块观点详细汇总\n",

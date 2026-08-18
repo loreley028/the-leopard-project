@@ -259,13 +259,13 @@ def _main_fields(text: str) -> tuple[dict[str, str], dict[str, dict[str, Any]]]:
             max_chars=1000,
         )
     market_match = re.search(
-        r"(?ms)^\s*(?:行情结论|大盘结论|大盘路径|指数路径)\s*[：:]\s*(.+?)(?=^\s*(?:数据与历史说明|一[、.．]|二[、.．]|风险提示))",
+        r"(?ms)^\s*(?:行情结论|大盘结论|大盘路径|指数路径|执行结论)\s*[：:]\s*(.+?)(?=^\s*(?:数据与历史说明|一[、.．]|二[、.．]|风险提示))",
         text,
     )
     market = _compact(market_match.group(1)) if market_match else ""
     market_span = market_match.span(1) if market_match else None
     if not market:
-        market, market_span = _explicit_field(text, ("行情结论", "大盘结论", "大盘路径", "指数路径"))
+        market, market_span = _explicit_field(text, ("行情结论", "大盘结论", "大盘路径", "指数路径", "执行结论"))
     if not market:
         market, market_span = _bounded_field(
             text,
