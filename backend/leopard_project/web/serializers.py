@@ -142,7 +142,7 @@ def sector_payloads(repo: ReportRepository) -> list[dict]:
         mention = latest.get(report_key)
         path_history = enhanced.path_history(report_key, through=published[0].report_date if published else None)
         path = path_history[0] if path_history else None
-        market = None if market_key == "hang_seng_tech" else enhanced.latest_market(market_key)
+        legacy_market = None if market_key == "hang_seng_tech" else enhanced.latest_market(market_key)
         unsupported = market_path.support_status.value == "unsupported"
         capability = capabilities.get(market_key)
         data_status = (
@@ -191,10 +191,8 @@ def sector_payloads(repo: ReportRepository) -> list[dict]:
             or current_effective in {"turn_hold", "hold", "strong_watch"}
             else "low" if is_low_attention else "normal"
         )
-        recent_days = [] if unsupported else enhanced.recent_complete_days(market_key)
-        if market is not None:
-            market["recent_10_trading_days"] = recent_days
         primary_market = primary_history(repo.session, primary_definitions[market_key]) if market_key in primary_definitions else None
+        recent_days = primary_market["history"] if primary_market is not None else []
         output.append({
             "sector_key": market_key,
             "sector_name": market_path.display_name,
@@ -215,13 +213,19 @@ def sector_payloads(repo: ReportRepository) -> list[dict]:
             "reported_status": path.path_status if path else "not_mentioned",
             "effective_status": current_effective,
             "effective_status_label": path_statuses()[current_effective]["label"] if current_effective else "暂无",
-            "latest_market": market,
-            "latest_complete_market": market,
+            "latest_market": None,
+            "latest_complete_market": None,
             "primary_market": primary_market,
             "intraday_snapshot": snapshot,
             "intraday_status": intraday_status,
             "intraday_last_attempt_at": _display_short_time(latest_run.started_at) if latest_run else None,
             "recent_10_trading_days": recent_days,
+            "date_axis_kinds": {
+                "sector_market_history": "market_trading_day",
+                "board_recent10_status": "report_date",
+                "holding_range": "report_date",
+            },
+            "legacy_market_audit": legacy_market,
             "recent_path": recent_path,
             "recent_mention_count": recent_mention_count,
             "attention_level": attention_level,

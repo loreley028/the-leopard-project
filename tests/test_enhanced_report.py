@@ -12,7 +12,7 @@ from sqlalchemy import select
 from leopard_project.web.app import WebSettings, create_app
 from leopard_project.web.database import create_session_factory
 from leopard_project.web.enhanced import EnhancedReportService, calculate_market_metrics, validate_path_status
-from leopard_project.web.models import Report, ReportFile, ReportStatus, SectorAssessment, SectorDailyBar
+from leopard_project.web.models import Report, ReportFile, ReportStatus, SectorAssessment, SectorDailyBar, SecurityProxyDaily
 from leopard_project.web.services import WebDomainError
 
 
@@ -203,6 +203,8 @@ def test_not_mentioned_keeps_latest_explicit_view(enhanced_web) -> None:
             "rows": [{"sector_key": "semiconductor", "statuses": ["watch"] * 9 + ["not_mentioned"]}],
         }
         report.interpretation_meta_json = json.dumps(metadata)
+        session.add(SecurityProxyDaily(symbol="sz159995", trading_date=date(2026, 7, 10), close=Decimal("10"), open=None, high=None, low=None, amount_yuan=None, quote_datetime=None, fetched_at=datetime.now(timezone.utc), source="test"))
+        session.add(SecurityProxyDaily(symbol="sz159995", trading_date=date(2026, 7, 13), close=Decimal("11"), open=None, high=None, low=None, amount_yuan=None, quote_datetime=None, fetched_at=datetime.now(timezone.utc), source="test"))
         session.commit()
     second_entries = client.get(f"/api/v1/reports/{second}/enhanced").json()["path_entries"]
     second_entry_id = next(item["id"] for item in second_entries if item["sector_key"] == "semiconductor")

@@ -47,10 +47,11 @@ def primary_history(session: Session, definition: SecurityProxyDefinition, *, li
         return None
     rows = tuple(reversed(session.scalars(select(SecurityProxyDaily).where(
         SecurityProxyDaily.symbol == primary.symbol,
-    ).order_by(desc(SecurityProxyDaily.trading_date)).limit(21)).all()))
+    ).order_by(desc(SecurityProxyDaily.trading_date)).limit(max(21, limit + 1))).all()))
     if not rows:
         return {
-            "symbol": primary.symbol, "name": primary.security_name, "role": primary.proxy_role,
+            "symbol": primary.symbol, "name": primary.security_name, "security_code": primary.reader_code, "role": primary.proxy_role,
+            "date_axis_kind": "market_trading_day",
             "trade_date": None, "close": None, "daily_pct_change": None, "return_10d": None,
             "history": [], "history_days": 0, "ma5": None, "ma10": None, "ma20": None,
             "close_vs_ma5_pct": None, "close_vs_ma10_pct": None, "close_vs_ma20_pct": None,
@@ -65,7 +66,8 @@ def primary_history(session: Session, definition: SecurityProxyDefinition, *, li
     current = closes[-1]
     ma5, ma10, ma20 = (moving_average(closes, window) for window in (5, 10, 20))
     return {
-        "symbol": primary.symbol, "name": primary.security_name, "role": primary.proxy_role,
+        "symbol": primary.symbol, "name": primary.security_name, "security_code": primary.reader_code, "role": primary.proxy_role,
+        "date_axis_kind": "market_trading_day",
         "trade_date": rows[-1].trading_date.isoformat(), "close": float(current),
         "daily_pct_change": history[-1]["daily_pct_change"],
         "return_10d": _pct(Decimal(str(history[-1]["close"])), Decimal(str(history[0]["close"]))) if len(history) >= 2 else None,

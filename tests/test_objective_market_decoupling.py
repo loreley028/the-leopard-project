@@ -168,6 +168,30 @@ def test_matrix_uses_controlled_trading_days_and_maps_weekend_report_overlay(tmp
     assert weekend_overlay["market_overlay"]["market_date"] == mapped_day.isoformat()
 
 
+def test_matrix_market_axis_extends_beyond_latest_report_and_keeps_empty_report_overlay(tmp_path) -> None:
+    settings = _settings(tmp_path)
+    sessions = create_session_factory(settings.database_url)
+    report_day, later_day, prior_day = date(2026, 8, 11), date(2026, 8, 12), date(2026, 8, 10)
+    cpo = next(item for item in load_security_proxy_registry() if item.market_path_key == "cpo")
+    primary = cpo.primary_observation
+    assert primary is not None
+    with sessions() as session:
+        session.add(Report(id="market-axis", title="published", report_date=report_day, report_date_confirmed=True, status="published", is_current=True, created_by="admin", data_origin="real_upload"))
+        session.add_all([
+            SecurityProxyDaily(symbol=primary.symbol, trading_date=prior_day, close=Decimal("10"), open=None, high=None, low=None, amount_yuan=None, quote_datetime=None, fetched_at=datetime.now(timezone.utc), source="test"),
+            SecurityProxyDaily(symbol=primary.symbol, trading_date=report_day, close=Decimal("11"), open=None, high=None, low=None, amount_yuan=None, quote_datetime=None, fetched_at=datetime.now(timezone.utc), source="test"),
+            SecurityProxyDaily(symbol=primary.symbol, trading_date=later_day, close=Decimal("12"), open=None, high=None, low=None, amount_yuan=None, quote_datetime=None, fetched_at=datetime.now(timezone.utc), source="test"),
+        ])
+        session.commit()
+    with TestClient(create_app(settings, sessions)) as client:
+        matrix = client.get("/api/v1/reports/market-axis/path-matrix?periods=10").json()
+    assert matrix["date_axis_kind"] == "market_trading_day"
+    assert [item["trading_date"] for item in matrix["dates"]][-1] == later_day.isoformat()
+    cpo_cell = next(item for item in next(row for row in matrix["rows"] if row["sector_key"] == "cpo")["cells"] if item["trading_date"] == later_day.isoformat())
+    assert cpo_cell["report_present"] is False
+    assert cpo_cell["path_status"] is None
+
+
 def test_primary_market_exact_date_only_and_no_primary_truthful_empty(tmp_path) -> None:
     settings = _settings(tmp_path)
     sessions = create_session_factory(settings.database_url)

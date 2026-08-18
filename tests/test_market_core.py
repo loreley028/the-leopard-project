@@ -15,6 +15,7 @@ from leopard_project.web.app import WebSettings, create_app
 from leopard_project.web.database import create_session_factory
 from leopard_project.web.live_market_anchor import LiveShanghaiMarketAnchorService
 from leopard_project.web.market_core import MarketCoreReadService
+from leopard_project.web.market_date_axis import market_core_completed_dates
 from leopard_project.web.models import LiveMarketAnchorDaily, SecurityProxyDaily
 
 
@@ -82,6 +83,19 @@ def test_market_core_is_report_independent_and_reports_actual_history_coverage(t
     etf = proxies["groups"][0]["instruments"][0]
     assert etf["coverage"]["available_days"] == 1 and etf["indicators"]["ma20"] is None
     assert all("report" not in key for key in shanghai) and all("report" not in key for key in proxies)
+
+
+def test_broad_market_dates_from_market_core_without_report_rows(tmp_path) -> None:
+    sessions = create_session_factory(_settings(tmp_path).database_url)
+    with sessions() as session:
+        _seed_completed(session, 5)
+        assert session.execute(text("SELECT count(*) FROM reports")).scalar_one() == 0
+        service = MarketCoreReadService(provider=StubProvider(), live_anchor=_anchor(StubProvider()), enabled=False, now=lambda: NOW)
+        broad = service.broad_market(session)
+        axis = market_core_completed_dates(session)
+    assert broad["date_axis_kind"] == "market_trading_day"
+    assert broad["trading_date_axis"] == [day.isoformat() for day in axis[-10:]]
+    assert broad["trading_date_axis"][-1] == "2026-07-24"
 
 
 def test_market_core_uses_fixed_server_side_cpo_symbols_and_batches_at_twenty(tmp_path) -> None:

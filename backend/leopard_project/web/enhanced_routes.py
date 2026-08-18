@@ -59,6 +59,7 @@ from .live_market_anchor import LiveShanghaiMarketAnchorService
 from leopard_project.live_market_anchor_daily import recent_defense_line_validations
 from .path_history import matrix_dates
 from .primary_market_observation import primary_history
+from .market_date_axis import market_core_completed_dates
 
 
 def register_enhanced_routes(
@@ -256,7 +257,10 @@ def register_enhanced_routes(
             Report.report_date <= report.report_date,
         ).order_by(Report.report_date, Report.published_at)))
         calendar = load_calendar()
-        maximum_market_date = report_market_date(report.report_date)
+        # Market Core is the date-axis left table. Reports can only overlay a
+        # controlled mapped date; they must never truncate the objective range.
+        market_dates = market_core_completed_dates(session)
+        maximum_market_date = market_dates[-1] if market_dates else None
         entries = list(session.scalars(select(SectorPathHistoryEntry).where(
             SectorPathHistoryEntry.path_report_date.in_(report_dates)
         ))) if report_dates else []
@@ -305,16 +309,7 @@ def register_enhanced_routes(
             previous_by_symbol[item.symbol] = float(item.close)
 
         mapped_entry_days = {entry.path_report_date: report_market_date(entry.path_report_date) for entry in entries}
-        first_candidate_date = min(
-            [item.trading_date for item in proxy_rows]
-            + [item for item in mapped_entry_days.values() if item is not None]
-            + [mapped for item in published_reports if (mapped := report_market_date(item.report_date)) is not None],
-            default=None,
-        )
-        all_trading_dates = sorted(
-            item for item in calendar.trading_dates()
-            if first_candidate_date is not None and maximum_market_date is not None and first_candidate_date <= item <= maximum_market_date
-        ) if calendar is not None else []
+        all_trading_dates = list(market_dates)
         available_dates = all_trading_dates if selected_period == "all" else all_trading_dates[-int(selected_period):]
         source_report_ids = {entry.source_report_id for entry in entries}
         reports_by_id = {
@@ -450,6 +445,7 @@ def register_enhanced_routes(
             "period": selected_period,
             "default_period": "20",
             "available_period_count": len(all_trading_dates),
+            "date_axis_kind": "market_trading_day",
             "dates": columns,
             "groups": configured_groups(),
             "rows": rows,
@@ -582,10 +578,10 @@ def register_enhanced_routes(
                 } for (path_date, status), effective_value in zip(selected, selected_effective)]))
         unsupported = market_path.support_status.value == "unsupported"
         intervals = service.holding_intervals_for_sector(report_key, reports[0].report_date if reports else None)
-        latest_market = None if unsupported else service.latest_market(market_key)
-        recent_days = [] if unsupported else service.recent_complete_days(market_key)
-        if latest_market is not None:
-            latest_market["recent_10_trading_days"] = recent_days
+        # Keep the old board table available only as a compatibility/audit
+        # payload. Reader history, current completed observation and MA values
+        # all come from one fixed Market Core primary symbol below.
+        legacy_market = None if unsupported else service.latest_market(market_key)
         intraday_snapshot = None if unsupported else service.latest_intraday(market_key)
         runtime_status = intraday.status()
         latest_intraday_result = latest_intraday_item_status(session, market_key)
@@ -599,6 +595,8 @@ def register_enhanced_routes(
             resolved_intraday_status = "provider_failed"
         primary_definition = next((item for item in load_security_proxy_registry() if item.market_path_key == market_key and item.status == APPROVED), None)
         primary_market = primary_history(session, primary_definition) if primary_definition is not None else None
+        primary_chart = primary_history(session, primary_definition, limit=market_days) if primary_definition is not None else None
+        recent_days = primary_market["history"] if primary_market is not None else []
         pref = session.get(SectorResearchPreference, market_key)
         is_pinned = bool(pref and pref.is_pinned_for_research)
         last_ten = all_path_rows[:10]
@@ -623,10 +621,16 @@ def register_enhanced_routes(
                 and latest_report_entry.explicitly_mentioned
                 and latest_report_entry.path_status != "not_mentioned"
             ) if reports else None,
-            "current_latest_market": latest_market,
-            "latest_complete_market": latest_market,
+            "current_latest_market": None,
+            "latest_complete_market": None,
             "primary_market": primary_market,
             "recent_10_trading_days": recent_days,
+            "date_axis_kinds": {
+                "sector_market_history": "market_trading_day",
+                "board_recent10_status": "report_date",
+                "holding_range": "report_date",
+            },
+            "legacy_market_audit": legacy_market,
             "intraday_snapshot": intraday_snapshot,
             "intraday_status": resolved_intraday_status,
             "intraday_session": runtime_status,
@@ -647,7 +651,7 @@ def register_enhanced_routes(
             "historical_broad_intervals": [] if report_key == "hotel_catering" else intervals["historical_broad_intervals"],
             "is_low_attention": is_low_attention,
             "is_pinned_for_research": is_pinned,
-            "market_history": [] if unsupported else service.market_history(market_key, market_days),
+            "market_history": [] if primary_chart is None else primary_chart["history"],
             "market_days": market_days,
             "history": detailed_history,
             "detailed_history": detailed_history,

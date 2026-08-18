@@ -23,6 +23,7 @@ from leopard_project.broad_market_anchors import BroadMarketAnchor, load_broad_m
 
 from .live_market_anchor import LiveShanghaiMarketAnchorService, SHANGHAI_COMPOSITE_NAME, SHANGHAI_COMPOSITE_SYMBOL
 from .models import LiveMarketAnchorDaily
+from .market_date_axis import market_core_completed_dates
 from .security_proxy_viewer import SecurityProxyViewerCache
 
 
@@ -149,6 +150,7 @@ class MarketCoreReadService:
         current = live_payload["current"] if live_payload["current"] is not None else (rows[-1].close if rows else None)
         return {
             "market_core": "standalone_objective", "symbol": SHANGHAI_COMPOSITE_SYMBOL,
+            "date_axis_kind": "market_trading_day",
             "name": SHANGHAI_COMPOSITE_NAME, "live": live_payload,
             "latest_completed": self._latest_completed(rows),
             "history": self._history_rows(rows),
@@ -223,8 +225,10 @@ class MarketCoreReadService:
         cached, cache_hit = self.cache.get_or_fetch(cache_key, lambda: (self._fetch_quotes(symbols),))
         batch = cached[0]
         histories = get_security_proxy_daily_histories(session, symbols, limit=limit)
+        trading_date_axis = [day.isoformat() for day in market_core_completed_dates(session)[-10:]]
         return {
             "market_core": "standalone_objective", "universe": "broad_market_anchors",
+            "date_axis_kind": "market_trading_day", "trading_date_axis": trading_date_axis,
             "provider": self.provider.provider_key, "provider_role": self.provider.provider_role,
             "cache_hit": cache_hit, "provider_request_count": batch.provider_request_count if not cache_hit else 0,
             "anchors": [self._instrument_payload(item, histories.get(item.symbol, ()), batch) for item in anchors],
