@@ -49,7 +49,7 @@ function ReportOverview({ enhanced, market, broad }: { enhanced: EnhancedReport;
         <section className="core-judgment-panel"><p className="eyebrow">猎豹核心判断</p><p className="core-view-summary">{report.core_view}</p></section>
         <MarketCoreShanghaiReader market={market} includeHistory={false} />
         <section className="defense-line-panel" aria-label="猎豹攻防线">
-          <div className="defense-level"><span>猎豹攻防点</span><strong>{defense.defense_line_value == null ? "报告未单列" : point(defense.defense_line_value)}</strong></div>
+          <div className="defense-level"><span>猎豹攻防点<small>来自 {report.report_date ?? "—"} 报告</small></span><strong>{defense.defense_line_value == null ? "报告未单列" : point(defense.defense_line_value)}</strong></div>
           {defense.defense_line_value != null && <div className="defense-live-position">
             <span>当前相对攻防线</span><strong className={signedTone(distancePoints)}>{signedPoint(distancePoints)}</strong>
             <em className={signedTone(distancePct)}>{pct(distancePct)}</em>
