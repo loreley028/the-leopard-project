@@ -350,6 +350,9 @@ def _extract_defense_line_candidates(text: str, layout_text: str = "") -> list[d
     for match in re.finditer(rf"(?:核心(?:攻防线|成本线|线))\s*(?:由)?\s*{number}\s*点?\s*(?:继续)?上移至\s*{number}\s*点?", text):
         add(match, 2, "primary", "high", "core_line_moved")
         add(match, 1, "secondary", "high", "core_line_moved")
+    for match in re.finditer(rf"(?:核心(?:攻防线|成本线|线))\s*(?:从|由)\s*{number}\s*点?\s*(?:继续)?下调(?:到|至)\s*{number}\s*点?", text):
+        add(match, 2, "primary", "high", "core_line_moved")
+        add(match, 1, "secondary", "high", "core_line_moved")
     for match in re.finditer(rf"{number}\s*点?\s*(?:成为|作为)第一层(?:纪律线|防线)", text):
         add(match, 1, "primary", "high", "first_layer")
     for match in re.finditer(rf"{number}\s*点?[^。；，]{0,24}(?:退居|作为)[^。；，]{0,16}第二层(?:地板|防线)", text):
@@ -1236,12 +1239,22 @@ def _parse_positioned_history_matrix(positioned_pages: list[dict[str, Any]]) -> 
         1 for item in display_rows
         if _normalized_sector_token(item["display_name"]) in active_supplemental and item["active"]
     )
-    expected_display = int(registry["display_row_count"])
-    expected_active = int(registry["active_object_count"])
+    accepted_shapes = [
+        {
+            "display_row_count": int(registry["display_row_count"]),
+            "active_object_count": int(registry["active_object_count"]),
+            "canonical_row_count": len(bundle.sectors),
+        },
+        *registry.get("accepted_historical_shapes", []),
+    ]
+    accepted_shape = next((
+        shape for shape in accepted_shapes
+        if len(display_rows) == int(shape["display_row_count"])
+        and active_objects == int(shape["active_object_count"])
+        and len(ordered) == int(shape.get("canonical_row_count", len(bundle.sectors)))
+    ), None)
     structural_ok = (
-        len(display_rows) == expected_display
-        and active_objects == expected_active
-        and len(ordered) == len(bundle.sectors)
+        accepted_shape is not None
         and len(dates) >= 20
         and not any(item.get("merge_conflicts") for item in ordered)
     )
@@ -1251,6 +1264,7 @@ def _parse_positioned_history_matrix(positioned_pages: list[dict[str, Any]]) -> 
         "display_rows": display_rows,
         "display_row_count": len(display_rows),
         "active_object_count": active_objects,
+        "accepted_structure": accepted_shape,
         "canonical_row_count": len(ordered),
         "row_count": len(ordered),
         "quality_status": "verified_structure" if structural_ok else "needs_attention",
@@ -1373,18 +1387,26 @@ def parse_v23_assessments(
     text: str,
     layout_text: str = "",
     positioned_pages: list[dict[str, Any]] | None = None,
+    *,
+    template_version: str | None = None,
 ) -> list[dict[str, Any]]:
     # Uploaded V2.9 PDFs do not consistently print their version label in the
     # text layer.  The positioned parser is itself the contract check: it only
     # returns rows when it finds the native five-column geometry and an
     # explicit sector-plus-judgement cell.  Earlier templates use different
     # column positions and therefore safely fall through to their own parser.
-    v29_positioned_records = _parse_v29_positioned_assessments(positioned_pages or [])
-    if v29_positioned_records:
-        return _validate_v29_positioned_assessment_set(v29_positioned_records)
-    v29_records = _parse_v29_layout_assessments(layout_text) if layout_text else []
-    if v29_records:
-        return _validate_assessment_set(v29_records)
+    # Versioned V2.4/V2.6 tables can look broadly similar to V2.9 at a few
+    # coordinates, but they do not share its native five-column contract.
+    # A confirmed legacy version must therefore never enter the V2.9 parser.
+    # The ``None`` path remains for old files whose decorative version label is
+    # absent: only then can native geometry provide the compatibility route.
+    if template_version in {None, "V2.9"}:
+        v29_positioned_records = _parse_v29_positioned_assessments(positioned_pages or [])
+        if v29_positioned_records:
+            return _validate_v29_positioned_assessment_set(v29_positioned_records)
+        v29_records = _parse_v29_layout_assessments(layout_text) if layout_text else []
+        if v29_records:
+            return _validate_assessment_set(v29_records)
     positioned_records = _parse_positioned_assessments(positioned_pages or [])
     if positioned_records:
         return _validate_assessment_set(positioned_records)
@@ -1461,6 +1483,97 @@ def parse_v23_assessments(
     return _validate_assessment_set(output)
 
 
+def _report_template_version(text: str, history_matrix: dict[str, Any]) -> str:
+    compact_document = re.sub(r"\s+", "", text)
+    v24_signature = (
+        "本场未更新" in text
+        and len(history_matrix.get("dates", [])) >= 35
+        and "只新增7/27" in compact_document
+    )
+    # Chinese version suffixes (for example ``V2.9版``) do not create an ASCII
+    # word boundary after the minor number.
+    version_match = re.search(r"V\s*(\d+(?:[.]\d+)*)", text, re.I)
+    return f"V{version_match.group(1)}" if version_match else ("V2.4" if v24_signature else "unknown")
+
+
+def _configured_report_display_names() -> set[str]:
+    registry = json.loads((CONFIG_DIR / "v29_history_matrix_registry_v1.json").read_text(encoding="utf-8"))
+    return {
+        _normalized_sector_token(item.sector_name)
+        for item in load_seed_bundle().sectors
+    } | {
+        _normalized_sector_token(str(value))
+        for value in registry.get("supplemental_display_rows", [])
+    }
+
+
+def _history_shape_matches_report_date(history_matrix: dict[str, Any], report_date: date | None) -> bool:
+    """Bind a legacy display shape to its explicitly configured lifecycle window."""
+    shape = history_matrix.get("accepted_structure")
+    if not shape or not shape.get("effective_from"):
+        return True
+    if report_date is None:
+        return False
+    effective_from = date.fromisoformat(str(shape["effective_from"]))
+    effective_through = date.fromisoformat(str(shape["effective_through"])) if shape.get("effective_through") else None
+    return report_date >= effective_from and (effective_through is None or report_date <= effective_through)
+
+
+def _extract_sector_candidates(
+    text: str,
+    *,
+    report_date: date | None,
+    filename: str,
+) -> list[dict[str, Any]]:
+    """Keep explicit new-sector candidates as audit facts, never as mappings.
+
+    This intentionally recognizes only the report's own candidate language.
+    It neither fuzzy-matches a term nor promotes it into the active catalog.
+    """
+    known = _configured_report_display_names()
+    found: list[tuple[str, str, int]] = []
+    term_pattern = r"[A-Za-z0-9\u4e00-\u9fff/＋+·-]{2,16}"
+    # The historical PDFs use a few explicit, bounded phrasings.  Keep these
+    # patterns deliberately narrow: narrative mentions such as “66 个正式小板块”
+    # must never become candidate records.
+    candidate_patterns = (
+        rf"新增候选[：:]\s*(?P<names>{term_pattern})",
+        rf"(?P<names>{term_pattern}(?:[、，,和及]\s*{term_pattern})*)\s*列为新增候选",
+        rf"(?P<names>{term_pattern})\s*仍作为新增候选",
+        rf"[“\"](?P<names>{term_pattern})[”\"]\s*作为新增候选",
+    )
+    for pattern in candidate_patterns:
+        for match in re.finditer(pattern, text):
+            found.append((match.group("names"), match.group(0), match.start("names")))
+
+    candidates: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for raw_names, evidence, offset in found:
+        normalized_raw = re.sub(r"^(?:另有|其中|原稿给出|本场)?", "", _compact(raw_names))
+        for term in re.split(r"[、，,和及\s]+", normalized_raw):
+            term = re.split(r"(?:本场|仍|列为|作为|仅记为|保留为|——|—)", term, maxsplit=1)[0]
+            term = term.strip(" ：:；;、，,。")
+            if not term or term.isdigit() or term.startswith("个") or len(term) > 16 or _normalized_sector_token(term) in known:
+                continue
+            # Candidate prose can include explanatory clauses after the name.
+            if not re.fullmatch(r"[A-Za-z0-9\u4e00-\u9fff/＋+·-]{2,16}", term):
+                continue
+            key = _normalized_sector_token(term)
+            if key in seen:
+                continue
+            seen.add(key)
+            candidates.append({
+                "raw_name": term,
+                "normalized_name": key,
+                "status": "candidate_only",
+                "report_date": report_date.isoformat() if report_date else None,
+                "source_pdf": filename,
+                "source_page": _source_page(text, offset),
+                "evidence": _compact(evidence)[:900],
+            })
+    return candidates
+
+
 def parse_report_text(
     text: str,
     report_id: str,
@@ -1493,8 +1606,15 @@ def parse_report_text(
         "validation_flags": ["date_conflict"] if date_result["conflict"] else [],
         "manually_modified": False,
     }
-    assessments = parse_v23_assessments(text, layout_text, positioned_pages)
     history_matrix = parse_pdf_history_matrix(layout_text, positioned_pages) if layout_text else {"dates": [], "rows": [], "quality_status": "needs_attention"}
+    if not _history_shape_matches_report_date(history_matrix, date_result["value"]):
+        history_matrix = {
+            **history_matrix,
+            "quality_status": "needs_attention",
+            "validation_flags": sorted(set(history_matrix.get("validation_flags", []) + ["history_shape_outside_lifecycle_window"])),
+        }
+    template_version = _report_template_version(text, history_matrix)
+    assessments = parse_v23_assessments(text, layout_text, positioned_pages, template_version=template_version)
     history_latest = {
         item["sector_key"]: item["statuses"][-1]
         for item in history_matrix.get("rows", [])
@@ -1554,17 +1674,21 @@ def parse_report_text(
                 status="probable",
             ))
     terms.extend(probable_terms)
-    attention: list[dict[str, Any]] = []
-    compact_document = re.sub(r"\s+", "", text)
-    v24_signature = (
-        "本场未更新" in text
-        and len(history_matrix.get("dates", [])) >= 35
-        and "只新增7/27" in compact_document
+    sector_candidates = _extract_sector_candidates(
+        text,
+        report_date=date_result["value"],
+        filename=filename,
     )
-    # Chinese version suffixes (for example ``V2.9版``) do not create an ASCII
-    # word boundary after the minor number.
-    version_match = re.search(r"V\s*(\d+(?:[.]\d+)*)", text, re.I)
-    template_version = f"V{version_match.group(1)}" if version_match else ("V2.4" if v24_signature else "unknown")
+    terms.extend(
+        UnmappedTerm(
+            report_id=report_id,
+            term=item["raw_name"],
+            source_text=json.dumps(item, ensure_ascii=False),
+            status="candidate",
+        )
+        for item in sector_candidates
+    )
+    attention: list[dict[str, Any]] = []
     if template_version == "unknown" and "板块观点详细汇总" in text:
         attention.append({"kind": "unknown_template", "severity": "warning", "message": "未识别规范版本文字；已按结构兼容模式解析"})
     if date_result["confidence"] == "low":
@@ -1640,6 +1764,7 @@ def parse_report_text(
         if any(item.get("kind") == "assessment_parse_quality" for item in attention)
         else "verified_structure"
     )
+    compact_document = re.sub(r"\s+", "", text)
     freeze_match = re.search(
         r"历史(?:观点|路径)?冻结至\s*(?:(20\d{2})\s*[-年/.]\s*)?(\d{1,2})\s*[-月/.]\s*(\d{1,2})",
         compact_document,
@@ -1674,6 +1799,7 @@ def parse_report_text(
             "attention_items": attention,
             "assessment_records": assessments,
             "pdf_history_matrix": history_matrix,
+            "sector_candidates": sector_candidates,
             "matrix_statistics": {
                 "display_rows": _labelled_int(text, ("display_rows", "显示行数", "展示行数")),
                 "active_objects": _labelled_int(text, ("active_objects", "有效对象", "活动对象")),
@@ -1692,6 +1818,7 @@ def parse_report_text(
             "mapping_summary": {
                 "confirmed": len(mentions),
                 "probable": len(probable_terms),
+                "candidate": len(sector_candidates),
                 "unmapped": sum(term.status == "unresolved" for term in terms),
                 "conflict": 0,
             },

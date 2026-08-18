@@ -21,6 +21,32 @@
     "储能",
     "核电"
   ],
+  "accepted_historical_shapes": [
+    {
+      "effective_from": "2026-07-30",
+      "effective_through": "2026-07-30",
+      "display_row_count": 68,
+      "active_object_count": 68,
+      "canonical_row_count": 66,
+      "rationale": "电池/锂电池拆分后的过渡展示结构；旧合并历史行保留，新增两条独立行。"
+    },
+    {
+      "effective_from": "2026-08-02",
+      "effective_through": "2026-08-03",
+      "display_row_count": 73,
+      "active_object_count": 70,
+      "canonical_row_count": 66,
+      "rationale": "三条历史承接行保留，电池/锂电池、创新药/医药、光伏/储能拆分完成，计算机设备独立；核电尚未计入正式活跃对象。"
+    },
+    {
+      "effective_from": "2026-08-04",
+      "effective_through": null,
+      "display_row_count": 74,
+      "active_object_count": 71,
+      "canonical_row_count": 66,
+      "rationale": "核电自 2026-08-03 起成为独立正式行后的最终 V2.9 结构。"
+    }
+  ],
   "continuation_rows": {
     "创新药": "创新药/医药",
     "电池": "电池/锂电池",

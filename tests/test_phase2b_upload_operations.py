@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import subprocess
 import sys
+from datetime import date
 from pathlib import Path
 
 import pytest
@@ -11,7 +12,7 @@ from starlette.testclient import TestClient
 from leopard_project.web.app import WebSettings, create_app
 from leopard_project.web.database import create_session_factory
 from leopard_project.web.models import SectorPathHistoryEntry
-from leopard_project.web.services import extract_layout_text, extract_positioned_pages, extract_text_layer, parse_report_text
+from leopard_project.web.services import _history_shape_matches_report_date, extract_layout_text, extract_positioned_pages, extract_text_layer, parse_report_text
 
 
 def pseudo_pdf(text: str) -> bytes:
@@ -116,6 +117,89 @@ def test_real_v29_pdf_layout_has_74_display_rows_71_active_and_66_canonical_rows
     assert matrix["quality_status"] == "verified_structure"
     assert (matrix["display_row_count"], matrix["active_object_count"], matrix["row_count"]) == (74, 71, 66)
     assert all("blank" not in row["statuses"] for row in matrix["rows"])
+
+
+@pytest.mark.parametrize(("filename", "expected_date", "expected_template", "expected_shape"), [
+    ("大盘猎豹7月30日直播总结-V2.4板块拆分修正版(5).pdf", "2026-07-30", "V2.4", (68, 68, 66)),
+    ("大盘猎豹8月2日直播总结-V2.6板块复核版(2).pdf", "2026-08-02", "V2.6", (73, 70, 66)),
+    ("大盘猎豹8月3日直播总结-V2.6版(4).pdf", "2026-08-03", "V2.6", (73, 70, 66)),
+    ("大盘猎豹8月4日直播总结-V2.6版(3).pdf", "2026-08-04", "V2.6", (74, 71, 66)),
+])
+def test_real_historical_pdf_matrix_shapes_are_explicitly_accepted(
+    filename: str, expected_date: str, expected_template: str, expected_shape: tuple[int, int, int],
+) -> None:
+    source = Path("/Users/cailei/Downloads/猎豹pef") / filename
+    if not source.exists():
+        pytest.skip("user-provided historical acceptance PDF is not present")
+    payload = source.read_bytes()
+    fields, *_ = parse_report_text(
+        extract_text_layer(payload), "historical-shape", source.name, extract_layout_text(payload), extract_positioned_pages(payload),
+    )
+    matrix = fields["interpretation_meta"]["pdf_history_matrix"]
+    assert fields["candidate_report_date"].isoformat() == expected_date
+    assert fields["interpretation_meta"]["template_version"] == expected_template
+    assert (matrix["display_row_count"], matrix["active_object_count"], matrix["row_count"]) == expected_shape
+    assert matrix["quality_status"] == "verified_structure"
+
+
+def test_legacy_history_shape_is_bound_to_its_lifecycle_window() -> None:
+    shape = {"accepted_structure": {"effective_from": "2026-07-30", "effective_through": "2026-07-30"}}
+    assert _history_shape_matches_report_date(shape, date(2026, 7, 30)) is True
+    assert _history_shape_matches_report_date(shape, date(2026, 8, 2)) is False
+
+
+def test_explicit_unknown_sector_candidate_is_preserved_without_mapping() -> None:
+    fields, _, _, terms = parse_report_text(
+        "大盘猎豹 2026年8月16日直播总结 V2.9\n新增候选：工程机械。\n板块观点详细汇总\n",
+        "candidate-audit",
+        "candidate.pdf",
+    )
+    candidate = fields["interpretation_meta"]["sector_candidates"]
+    assert candidate == [{
+        "raw_name": "工程机械", "normalized_name": "工程机械", "status": "candidate_only",
+        "report_date": "2026-08-16", "source_pdf": "candidate.pdf", "source_page": 1,
+        "evidence": "新增候选：工程机械",
+    }]
+    assert [(item.term, item.status) for item in terms] == [("工程机械", "candidate")]
+    assert fields["interpretation_meta"]["mapping_summary"]["candidate"] == 1
+
+
+@pytest.mark.parametrize(("filename", "expected_candidates"), [
+    ("大盘猎豹7月29日直播总结-V2.4版(8).pdf", ["脑机接口", "航空机场", "乳业"]),
+    ("大盘猎豹7月30日直播总结-V2.4板块拆分修正版(5).pdf", ["脑机接口"]),
+    ("大盘猎豹8月2日直播总结-V2.6板块复核版(2).pdf", ["跨境支付"]),
+    # 核电已经有显式的正式展示行，因此不得降格或重复记为候选。
+    ("大盘猎豹8月3日直播总结-V2.6版(4).pdf", []),
+    ("大盘猎豹8月16日直播总结-V2.9版(4).pdf", ["工程机械"]),
+])
+def test_real_historical_pdf_candidates_remain_audit_only(
+    filename: str, expected_candidates: list[str],
+) -> None:
+    source = Path("/Users/cailei/Downloads/猎豹pef") / filename
+    if not source.exists():
+        pytest.skip("user-provided historical acceptance PDF is not present")
+    payload = source.read_bytes()
+    fields, _, mentions, terms = parse_report_text(
+        extract_text_layer(payload), "historical-candidates", source.name,
+        extract_layout_text(payload), extract_positioned_pages(payload),
+    )
+    candidates = fields["interpretation_meta"]["sector_candidates"]
+    assert [item["normalized_name"] for item in candidates] == expected_candidates
+    assert all(item["status"] == "candidate_only" for item in candidates)
+    assert not {item["normalized_name"] for item in candidates} & {item.sector_name for item in mentions}
+    assert [(item.term, item.status) for item in terms if item.status == "candidate"] == [
+        (item["raw_name"], "candidate") for item in candidates
+    ]
+
+
+def test_v29_downward_defense_line_move_keeps_new_line_as_primary() -> None:
+    fields, *_ = parse_report_text(
+        "大盘猎豹 2026年8月16日直播总结 V2.9\n核心攻防线从 3900 点下调到 3896.49 点。",
+        "defense-line-down",
+    )
+    defense = fields["interpretation_meta"]["defense_lines"]
+    assert defense["primary_defense_line"] == 3896.49
+    assert defense["secondary_defense_line"] == 3900.0
 
 
 def test_real_v29_uploads_gap_import_then_appends_without_review(automatic_web) -> None:
