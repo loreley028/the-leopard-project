@@ -245,7 +245,7 @@ def _report_title(text: str) -> tuple[str, tuple[int, int] | None]:
 
 def _main_fields(text: str) -> tuple[dict[str, str], dict[str, dict[str, Any]]]:
     core_match = re.search(
-        r"(?ms)^\s*(?:核心定性|核心观点|核心结论)\s*[：:]\s*(.+?)(?=^\s*(?:行情结论|大盘结论|数据与历史说明|一[、.．]))",
+        r"(?ms)^\s*(?:核心定性|核心观点|核心结论)\s*[：:]\s*(.+?)(?=^\s*(?:行情结论|大盘结论|执行结论|数据与历史说明|一[、.．]))",
         text,
     )
     core = _compact(core_match.group(1)) if core_match else ""

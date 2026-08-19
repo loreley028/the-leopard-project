@@ -129,6 +129,39 @@ def test_matrix_uses_same_primary_across_dates_and_never_displays_proxy_ratio(tm
     assert "官方" not in cpo_cell["market_overlay"]["label"]
 
 
+def test_matrix_keeps_verified_report_local_ledger_over_stale_detail_overlay(tmp_path) -> None:
+    settings = _settings(tmp_path)
+    sessions = create_session_factory(settings.database_url)
+    day = date(2026, 8, 10)
+    with sessions() as session:
+        report = Report(
+            id="report-local", title="published", report_date=day, report_date_confirmed=True,
+            status="published", is_current=True, created_by="admin", data_origin="real_upload",
+        )
+        session.add(report)
+        EnhancedReportService(session).ensure_structure(report)
+        session.add(SectorPathHistoryEntry(
+            sector_key="semiconductor", sector_name="半导体", path_report_date=day,
+            path_status="hold", source_report_id=report.id, detail_report_id=report.id,
+            market_as_of_date=None, frozen_daily_pct_change=None,
+            market_data_status="unavailable", source_pdf_sha256="f" * 64,
+            source_kind="report_local_pdf",
+        ))
+        primary = next(item for item in load_security_proxy_registry() if item.market_path_key == "cpo").primary_observation
+        assert primary is not None
+        session.add(SecurityProxyDaily(
+            symbol=primary.symbol, trading_date=day, close=Decimal("10"), open=None,
+            high=None, low=None, amount_yuan=None, quote_datetime=None,
+            fetched_at=datetime.now(timezone.utc), source="test",
+        ))
+        session.commit()
+    with TestClient(create_app(settings, sessions)) as client:
+        matrix = client.get(f"/api/v1/reports/{report.id}/path-matrix?periods=10").json()
+    cell = next(item for item in next(row for row in matrix["rows"] if row["sector_key"] == "semiconductor")["cells"] if item["trading_date"] == day.isoformat())
+    assert cell["path_status"] == "hold"
+    assert cell["revision_id"] == report.id
+
+
 def test_matrix_uses_controlled_trading_days_and_maps_weekend_report_overlay(tmp_path) -> None:
     settings = _settings(tmp_path)
     sessions = create_session_factory(settings.database_url)

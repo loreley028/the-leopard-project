@@ -268,10 +268,20 @@ def register_enhanced_routes(
         # A detailed published report remains a valid report-fact overlay even
         # when its date is absent from the frozen full-PDF ledger.  It does not
         # create a report-date column: it only overlays its mapped trade day.
+        # The frozen path ledger is the authoritative Report-fact record when
+        # it owns the same sector and report date.  Legacy detail entries are
+        # still useful for reports whose matrix could not be recovered, but
+        # must never overwrite a verified report-local matrix cell.
+        frozen_report_cells = {
+            (entry.sector_key, entry.path_report_date)
+            for entry in entries
+        }
         fallback_entries = []
         service = EnhancedReportService(session)
         for published_report in published_reports:
             for path in service.path_entries(published_report.id):
+                if (path.sector_key, published_report.report_date) in frozen_report_cells:
+                    continue
                 fallback_entries.append(SimpleNamespace(
                     id=path.id,
                     sector_key=path.sector_key,

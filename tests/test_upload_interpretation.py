@@ -7,7 +7,7 @@ from starlette.testclient import TestClient
 
 from leopard_project.web.app import WebSettings, create_app
 from leopard_project.web.database import create_session_factory
-from leopard_project.web.services import detect_report_date, parse_report_text
+from leopard_project.web.services import _main_fields, detect_report_date, parse_report_text
 
 
 def pseudo_pdf(text: str) -> bytes:
@@ -44,6 +44,13 @@ B2. 重点观察区
 # The compact pseudo-PDF intentionally omits the 66-row matrix. Tests that
 # exercise the happy publication path therefore omit the matrix section label.
 PUBLISHABLE_TEXT = V23_TEXT.replace("六、板块历史路径图\n", "")
+
+
+def test_core_characterization_stops_before_execution_conclusion() -> None:
+    fields, provenance = _main_fields("""核心定性：趋势仍在，但高位回踩需要承接。\n执行结论：3917之上按进攻框架处理。\n数据与历史说明\n""")
+    assert fields["core_view"] == "趋势仍在，但高位回踩需要承接。"
+    assert fields["market_path"] == "3917之上按进攻框架处理。"
+    assert provenance["core_view"]["source_page"] == 1
 
 
 @pytest.fixture()
