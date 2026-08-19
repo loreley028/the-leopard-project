@@ -10,6 +10,7 @@ from dataclasses import dataclass
 from datetime import date, timedelta, datetime, timezone
 from pathlib import Path
 from uuid import uuid4
+from zoneinfo import ZoneInfo
 from fastapi import Cookie, Depends, FastAPI, File, Form, Query, Request, Response, UploadFile
 from fastapi.responses import FileResponse, JSONResponse, Response
 from sqlalchemy import func, select
@@ -41,9 +42,11 @@ from .live_market_anchor import LiveMarketAnchorCache, LiveShanghaiMarketAnchorS
 from .market_core import MarketCoreReadService
 from leopard_project.providers.tencent_standard_quote import TencentStandardSecurityQuoteProvider
 from leopard_project.security_proxy_observation import SecurityProxyObservationService
+from leopard_project.live_market_anchor_daily import SHANGHAI_COMPOSITE_SYMBOL
 
 
 COOKIE_NAME = "leopard_session"
+SHANGHAI = ZoneInfo("Asia/Shanghai")
 
 
 def _png_chunk(kind: bytes, data: bytes) -> bytes:
@@ -784,6 +787,17 @@ def create_app(settings: WebSettings | None = None, session_factory: sessionmake
             session.scalar(select(func.max(SecurityProxyDaily.trading_date))),
         ]
         data_snapshot_date = max((item for item in snapshot_dates if item is not None), default=None)
+        from leopard_project.historical_market_daily import expected_latest_completed_trading_day
+        from leopard_project.security_proxy_daily import market_core_security_symbols
+        expected = expected_latest_completed_trading_day(datetime.now(SHANGHAI))
+        symbols = market_core_security_symbols()
+        current_symbols = set(session.scalars(select(SecurityProxyDaily.symbol).where(
+            SecurityProxyDaily.symbol.in_(symbols), SecurityProxyDaily.trading_date == expected,
+        )))
+        shanghai_fresh = session.scalar(select(LiveMarketAnchorDaily.id).where(
+            LiveMarketAnchorDaily.symbol == SHANGHAI_COMPOSITE_SYMBOL,
+            LiveMarketAnchorDaily.trading_date == expected,
+        )) is not None
         return {
             "build_commit": settings.build_commit,
             "data_snapshot_date": data_snapshot_date.isoformat() if data_snapshot_date else None,
@@ -792,6 +806,11 @@ def create_app(settings: WebSettings | None = None, session_factory: sessionmake
             "latest_security_proxy_eod_date": session.scalar(select(func.max(SecurityProxyDaily.trading_date))),
             "capture_mode": "host_systemd_timer",
             "capture_schedule": "Mon-Fri 15:20 Asia/Shanghai; controlled calendar may skip",
+            "market_history_status": {
+                "expected_latest_completed": expected.isoformat(),
+                "shanghai": "fresh" if shanghai_fresh else "stale_history",
+                "security_coverage": {"through_expected": len(current_symbols), "required": len(symbols)},
+            },
         }
 
     specification_dir = settings.upload_dir.parent / "specifications"

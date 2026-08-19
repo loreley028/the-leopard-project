@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 
 from .indicators import distance_from_average, moving_average
 from .providers.tencent_standard_quote import TencentStandardSecurityQuoteProvider
+from .broad_market_anchors import load_broad_market_anchors
 from .security_proxy_observation import SecurityProxyDefinition, load_security_proxy_registry
 from .trading_calendar import CalendarStatus, evaluate_cn_a_day
 from .web.models import SecurityProxyDaily
@@ -70,6 +71,22 @@ def fixed_proxy_symbols(registry: Sequence[SecurityProxyDefinition] | None = Non
         for item in path.instruments
         if item.enabled
     ))
+
+
+def market_core_security_symbols(registry: Sequence[SecurityProxyDefinition] | None = None) -> tuple[str, ...]:
+    """Return the post-close security universe for Market Core.
+
+    The four broad-market ETFs are objective Market Core anchors, not sector
+    proxy selections.  They share the same completed-security table solely so
+    the 15:20 capture advances every Reader market surface independently of
+    report publication.  Test or diagnostic callers that inject a registry
+    retain their explicitly supplied universe.
+    """
+
+    fixed = fixed_proxy_symbols(registry)
+    if registry is not None:
+        return fixed
+    return tuple(dict.fromkeys((*(item.symbol for item in load_broad_market_anchors()), *fixed)))
 
 
 def _shanghai(value: datetime) -> datetime | None:
@@ -161,7 +178,7 @@ def capture_fixed_security_proxy_daily(
     if not enable_provider:
         raise PermissionError("explicit provider enablement is required")
     fetched_at = _capture_window(target_trading_date, now())
-    symbols = fixed_proxy_symbols(registry)
+    symbols = market_core_security_symbols(registry)
     existing = _existing_symbols(session, symbols, target_trading_date)
     requested = tuple(symbol for symbol in symbols if symbol not in existing)
     failures: dict[str, str] = {}

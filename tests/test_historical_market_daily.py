@@ -4,9 +4,14 @@ from datetime import date, datetime
 from decimal import Decimal
 
 import pytest
-from sqlalchemy import select
+from sqlalchemy import select, text
 
-from leopard_project.historical_market_daily import backfill_market_history, market_core_symbols
+from leopard_project.historical_market_daily import (
+    backfill_market_history,
+    expected_latest_completed_trading_day,
+    market_core_symbols,
+    refresh_market_history_to_latest_completed,
+)
 from leopard_project.providers.sina_public_daily import SinaDailyBar
 from leopard_project.web.database import create_session_factory
 from leopard_project.web.models import LiveMarketAnchorDaily, SecurityProxyDaily
@@ -88,3 +93,42 @@ def test_market_core_symbols_is_shanghai_plus_broad_anchors_and_fixed_proxies() 
     values = market_core_symbols()
     assert values[:5] == ("sh000001", "sh510050", "sh510300", "sh588000", "sz159915")
     assert len(values) == len(set(values)) == 28
+
+
+def test_expected_latest_completed_day_20260819_is_20260818() -> None:
+    assert expected_latest_completed_trading_day(datetime(2026, 8, 19, 10, 0)) == date(2026, 8, 18)
+
+
+def test_refresh_fills_only_expected_market_day_and_is_idempotent(tmp_path, monkeypatch) -> None:
+    expected = date(2026, 8, 18)
+    monkeypatch.setattr("leopard_project.historical_market_daily.market_core_symbols", lambda: ("sh000001", "sz300308"))
+
+    class RefreshProvider:
+        provider_key = "sina_public_daily_http"
+        def __init__(self): self.calls = []
+        def fetch_history(self, symbol, *, days, allow_network=False):
+            assert days == 20 and allow_network is True
+            self.calls.append(symbol)
+            return (
+                SinaDailyBar(date(2026, 8, 17), Decimal("10"), Decimal("11"), Decimal("9"), Decimal("10"), Decimal("100")),
+                SinaDailyBar(expected, Decimal("11"), Decimal("12"), Decimal("10"), Decimal("11"), Decimal("100")),
+                SinaDailyBar(date(2026, 8, 19), Decimal("12"), Decimal("13"), Decimal("11"), Decimal("12"), Decimal("100")),
+            )
+
+    provider = RefreshProvider(); factory = sessions(tmp_path)
+    with factory() as session:
+        # The refresh is independent of Report Facts: no report exists in this
+        # database while the Market Core exact-date rows are populated.
+        assert session.execute(text("SELECT COUNT(*) FROM reports")).scalar_one() == 0
+        first = refresh_market_history_to_latest_completed(
+            session, provider=provider, enable_provider=True, now=datetime(2026, 8, 19, 10, 0),
+        )
+        second = refresh_market_history_to_latest_completed(
+            session, provider=provider, enable_provider=True, now=datetime(2026, 8, 19, 10, 0),
+        )
+        assert session.scalar(select(LiveMarketAnchorDaily).where(LiveMarketAnchorDaily.trading_date == expected)) is not None
+        assert session.scalar(select(SecurityProxyDaily).where(SecurityProxyDaily.trading_date == expected)) is not None
+        assert session.scalar(select(LiveMarketAnchorDaily).where(LiveMarketAnchorDaily.trading_date == date(2026, 8, 19))) is None
+        assert session.scalar(select(SecurityProxyDaily).where(SecurityProxyDaily.trading_date == date(2026, 8, 19))) is None
+    assert first.expected_latest_completed_trading_day == expected and first.inserted == 2 and first.conflicts == 0
+    assert second.inserted == 0 and second.skip_existing_same == 2 and second.conflicts == 0

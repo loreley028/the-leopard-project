@@ -314,3 +314,7 @@ def test_operations_status_is_read_only_and_has_empty_state(automatic_web) -> No
     assert response.json()["latest_live_market_anchor_eod_date"] is None
     assert response.json()["latest_security_proxy_eod_date"] is None
     assert response.json()["capture_mode"] == "host_systemd_timer"
+    freshness = response.json()["market_history_status"]
+    assert freshness["expected_latest_completed"]
+    assert freshness["shanghai"] == "stale_history"
+    assert freshness["security_coverage"] == {"through_expected": 0, "required": 27}

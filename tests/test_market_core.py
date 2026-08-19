@@ -227,5 +227,5 @@ def test_zero_report_eod_collectors_plan_shanghai_and_all_fixed_proxies_without_
         )
         assert session.execute(text("SELECT COUNT(*) FROM reports")).scalar_one() == 0
     assert anchor.requested_count == 1 and anchor.inserted_count == 1
-    assert proxies.candidate_count == len(fixed_proxy_symbols()) == 23
-    assert proxies.inserted_count == 23 and proxies.provider_batch_count == 2
+    assert proxies.candidate_count == 27
+    assert proxies.inserted_count == 27 and proxies.provider_batch_count == 2

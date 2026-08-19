@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime, time
+from datetime import date, datetime, time, timedelta
 from decimal import Decimal
 from zoneinfo import ZoneInfo
 
@@ -10,9 +10,9 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from .live_market_anchor_daily import SHANGHAI_COMPOSITE_SYMBOL
-from .broad_market_anchors import load_broad_market_anchors
 from .providers.sina_public_daily import SinaDailyBar, SinaPublicDailyMarketProvider
-from .security_proxy_daily import fixed_proxy_symbols
+from .security_proxy_daily import market_core_security_symbols
+from .trading_calendar import load_calendar
 from .web.models import LiveMarketAnchorDaily, SecurityProxyDaily
 
 
@@ -30,12 +30,41 @@ class HistoricalBackfillSummary:
     provider_failures: dict[str, str]
 
 
+@dataclass(frozen=True)
+class MarketHistoryRefreshSummary:
+    expected_latest_completed_trading_day: date
+    requested_symbols: int
+    inserted: int
+    skip_existing_same: int
+    conflicts: int
+    provider_failures: dict[str, str]
+
+
 def market_core_symbols() -> tuple[str, ...]:
     return tuple(dict.fromkeys((
         SHANGHAI_COMPOSITE_SYMBOL,
-        *(item.symbol for item in load_broad_market_anchors()),
-        *fixed_proxy_symbols(),
+        *market_core_security_symbols(),
     )))
+
+
+def expected_latest_completed_trading_day(now: datetime) -> date:
+    """Return the exact latest CN-A completed date from the controlled calendar.
+
+    Before the close buffer, the current trading day is deliberately excluded.
+    This calculation is Market Core only: it never reads reports, PDFs or
+    report dates.
+    """
+
+    calendar = load_calendar()
+    if calendar is None:
+        raise ValueError("calendar_unavailable")
+    local = now.astimezone(SHANGHAI) if now.tzinfo is not None else now.replace(tzinfo=SHANGHAI)
+    cutoff = local.date() if local.time().replace(tzinfo=None) >= COMPLETE_AFTER else local.date() - timedelta(days=1)
+    return max((day for day in calendar.trading_dates() if day <= cutoff), default=None) or _raise_no_completed_day()
+
+
+def _raise_no_completed_day() -> date:
+    raise ValueError("no_completed_trading_day")
 
 
 def _close_matches(left: Decimal, right: Decimal) -> bool:
@@ -152,3 +181,50 @@ def backfill_market_history(
             replaced += result == "replaced"
         session.commit()
     return HistoricalBackfillSummary(len(market_core_symbols()), inserted, skipped, conflicts, replaced, failures)
+
+
+def refresh_market_history_to_latest_completed(
+    session: Session,
+    *,
+    provider: SinaPublicDailyMarketProvider,
+    enable_provider: bool = False,
+    now: datetime | None = None,
+) -> MarketHistoryRefreshSummary:
+    """Fill only the exact latest completed Market Core day, fail-closed.
+
+    This explicit preview/acceptance operation does not create a scheduler and
+    does not depend on report upload.  Existing values are compared against
+    the source, conflicts are reported without replacement, and no earlier or
+    later date is written.
+    """
+
+    if not enable_provider:
+        raise PermissionError("explicit historical Provider enablement is required")
+    observed_at = now or datetime.now(SHANGHAI)
+    expected = expected_latest_completed_trading_day(observed_at)
+    inserted = skipped = conflicts = 0
+    failures: dict[str, str] = {}
+    for symbol in market_core_symbols():
+        try:
+            bars = provider.fetch_history(symbol, days=20, allow_network=True)
+        except Exception as exc:
+            failures[symbol] = getattr(exc, "code", type(exc).__name__)
+            continue
+        target_index = next((index for index, bar in enumerate(bars) if bar.trading_date == expected), None)
+        if target_index is None:
+            failures[symbol] = "expected_completed_date_missing"
+            continue
+        bar = bars[target_index]
+        result = (
+            _insert_anchor(session, bar, previous=bars[target_index - 1].close if target_index else None, replace=False)
+            if symbol == SHANGHAI_COMPOSITE_SYMBOL
+            else _insert_proxy(session, symbol, bar, replace=False)
+        )
+        if result == "no_previous_close":
+            failures[symbol] = "previous_close_missing"
+        else:
+            inserted += result == "inserted"
+            skipped += result == "skip_existing_same"
+            conflicts += result == "conflict"
+        session.commit()
+    return MarketHistoryRefreshSummary(expected, len(market_core_symbols()), inserted, skipped, conflicts, failures)
