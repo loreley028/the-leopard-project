@@ -181,7 +181,7 @@ def test_enhanced_parse_keeps_66_persisted_paths_and_exposes_74_report_rows(enha
     assert result["external_llm_calls"] == 0
     matrix = client.get(f"/api/v1/reports/{report_id}/path-matrix").json()
     assert len(matrix["rows"]) == 74
-    assert sum(row["market_available"] is False for row in matrix["rows"]) == 8
+    assert sum(row["market_available"] is False for row in matrix["rows"]) == 4
     hstech = next(row for row in matrix["rows"] if row["sector_key"] == "hang_seng_tech")
     assert hstech["cells"] == []  # draft is excluded from the published cross-period matrix
 

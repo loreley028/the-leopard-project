@@ -20,6 +20,7 @@ const cellAriaLabel = (sectorName: string, cell: Cell) => `${sectorName} 行情 
 export function IslandPathMatrix({ matrix, period, onPeriodChange }: { matrix: PathMatrix; period: string; onPeriodChange: (value: string) => void }) {
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState("all");
+  const [showDormant, setShowDormant] = useState(false);
   const [selected, setSelected] = useState<Cell>();
   const [research, setResearch] = useState<SectorResearch | null>(null);
   const viewport = useRef<HTMLDivElement>(null);
@@ -31,10 +32,10 @@ export function IslandPathMatrix({ matrix, period, onPeriodChange }: { matrix: P
     if (selected?.detail_report_id) void api.sectorResearch(selected.sector_key).then(setResearch).catch(() => setResearch(null));
   }, [selected]);
   const groups = useMemo(() => {
-    const rows = matrix.rows.filter(row => row.sector_name.includes(search.trim()) && (status === "all" || row.cells.some(cell => cell.path_status === status)));
+    const rows = matrix.rows.filter(row => row.sector_name.includes(search.trim()) && (showDormant || !row.is_dormant_20d || Boolean(search.trim())) && (status === "all" || row.cells.some(cell => cell.path_status === status)));
     const rowsByGroup = rows.reduce<Map<string, typeof rows>>((result, row) => { result.set(row.group_name, [...(result.get(row.group_name) ?? []), row]); return result; }, new Map());
     return matrix.groups.filter(item => rowsByGroup.has(item.group_name)).map(item => ({ ...item, rows: rowsByGroup.get(item.group_name) ?? [] }));
-  }, [matrix.groups, matrix.rows, search, status]);
+  }, [matrix.groups, matrix.rows, search, status, showDormant]);
   const [activeGroup, setActiveGroup] = useState(matrix.groups[0]?.group_name ?? "");
   useEffect(() => { if (!groups.some(item => item.group_name === activeGroup)) setActiveGroup(groups[0]?.group_name ?? ""); }, [groups, activeGroup]);
   useEffect(() => {
@@ -58,6 +59,7 @@ export function IslandPathMatrix({ matrix, period, onPeriodChange }: { matrix: P
       <fieldset><legend>查看交易日</legend>{["10", "20", "40", "all"].map(value => <button key={value} type="button" className={period === value ? "active" : ""} onClick={() => onPeriodChange(value)}>{value === "all" ? "全部" : `最近${value}个交易日`}</button>)}</fieldset>
       <label>搜索板块<input value={search} onChange={event => setSearch(event.target.value)} placeholder="输入板块名称" /></label>
       <label>状态筛选<select value={status} onChange={event => setStatus(event.target.value)}><option value="all">全部状态</option>{matrix.status_contract.statuses.map(item => <option key={item.code} value={item.code}>{item.label}</option>)}</select></label>
+      <label className="matrix-dormant-toggle"><input type="checkbox" checked={showDormant} onChange={event => setShowDormant(event.target.checked)} /> 显示20日未提板块{matrix.rows.some(row => row.is_dormant_20d) ? `（${matrix.rows.filter(row => row.is_dormant_20d).length}）` : ""}</label>
     </div>
     <nav className="group-jump-nav" aria-label="一级分组快捷导航">{groups.map(item => <button key={item.group_name} type="button" aria-current={activeGroup === item.group_name ? "true" : undefined} onClick={() => jumpToGroup(item.group_name)}>{item.group_name}<small>{item.rows.length}</small></button>)}</nav>
     <p className="matrix-caption">{matrix.caption}按受控完整交易日排列；颜色为当期报告路径标记，“未提”表示该期未单独更新。市场行情仅按该日期精确读取，不做行情数据回退。相关证券逐项表现请点击查看；不构成板块指数或综合收益。</p>

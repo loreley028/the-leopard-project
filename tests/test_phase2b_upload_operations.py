@@ -12,6 +12,7 @@ from starlette.testclient import TestClient
 from leopard_project.web.app import WebSettings, create_app
 from leopard_project.web.database import create_session_factory
 from leopard_project.web.models import SectorPathHistoryEntry
+from leopard_project.security_proxy_daily import market_core_security_symbols
 from leopard_project.web.services import _history_shape_matches_report_date, extract_layout_text, extract_positioned_pages, extract_text_layer, parse_report_text
 
 
@@ -317,4 +318,4 @@ def test_operations_status_is_read_only_and_has_empty_state(automatic_web) -> No
     freshness = response.json()["market_history_status"]
     assert freshness["expected_latest_completed"]
     assert freshness["shanghai"] == "stale_history"
-    assert freshness["security_coverage"] == {"through_expected": 0, "required": 27}
+    assert freshness["security_coverage"] == {"through_expected": 0, "required": len(market_core_security_symbols())}

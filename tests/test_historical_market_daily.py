@@ -12,6 +12,7 @@ from leopard_project.historical_market_daily import (
     market_core_symbols,
     refresh_market_history_to_latest_completed,
 )
+from leopard_project.security_proxy_daily import market_core_security_symbols
 from leopard_project.providers.sina_public_daily import SinaDailyBar
 from leopard_project.web.database import create_session_factory
 from leopard_project.web.models import LiveMarketAnchorDaily, SecurityProxyDaily
@@ -92,7 +93,7 @@ def test_backfill_excludes_same_day_intraday_bar_until_after_close(tmp_path, mon
 def test_market_core_symbols_is_shanghai_plus_broad_anchors_and_fixed_proxies() -> None:
     values = market_core_symbols()
     assert values[:5] == ("sh000001", "sh510050", "sh510300", "sh588000", "sz159915")
-    assert len(values) == len(set(values)) == 28
+    assert len(values) == len(set(values)) == len(market_core_security_symbols()) + 1
 
 
 def test_expected_latest_completed_day_20260819_is_20260818() -> None:

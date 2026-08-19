@@ -281,6 +281,8 @@ export interface Sector {
   historical_strict_intervals?: HoldingInterval[];
   historical_broad_intervals?: HoldingInterval[];
   is_low_attention?: boolean;
+  is_dormant_20d?: boolean;
+  dormant_report_overlay_count?: number;
   is_pinned_for_research?: boolean;
 }
 
@@ -588,7 +590,7 @@ export interface PathMatrix {
   caption: string;
   dates: Array<{ trading_date: string; weekday: string }>;
   groups: Array<{ group_order: number; group_name: string; sector_count: number }>;
-  rows: Array<{ sector_key: string; sector_name: string; group_name: string; group_order: number; overall_order: number; market_available?: boolean; cells: Array<Omit<PathEntry, "path_status" | "path_status_label" | "path_status_color" | "revision_id"> & {
+  rows: Array<{ sector_key: string; sector_name: string; group_name: string; group_order: number; overall_order: number; market_available?: boolean; is_dormant_20d?: boolean; dormant_report_overlay_count?: number; cells: Array<Omit<PathEntry, "path_status" | "path_status_label" | "path_status_color" | "revision_id"> & {
     trading_date: string;
     report_present: boolean;
     report_id: string | null;

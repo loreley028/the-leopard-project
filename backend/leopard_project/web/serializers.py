@@ -5,14 +5,17 @@ from datetime import date, datetime, timezone
 from zoneinfo import ZoneInfo
 
 from leopard_project.config import load_seed_bundle
+from leopard_project.dormant_sectors import classify_dormant_sector
 from leopard_project.market_paths import load_market_path_registry, report_topic_sector
 from leopard_project.providers.capabilities import load_provider_capabilities
+from leopard_project.report_registry import load_report_registry
 from leopard_project.security_proxy_observation import APPROVED, load_security_proxy_registry
 from sqlalchemy import desc, select
 
 from .models import MarketRefreshItem, MarketRefreshRun, Report, SectorDailyBar, SectorMention, SectorResearchPreference
 from .repository import ReportRepository
 from .primary_market_observation import primary_history
+from .market_date_axis import market_core_completed_dates
 
 
 SHANGHAI = ZoneInfo("Asia/Shanghai")
@@ -139,20 +142,29 @@ def sector_payloads(repo: ReportRepository) -> list[dict]:
                 latest[mention.sector_key] = mention
                 latest_dates[mention.sector_key] = report.report_date.isoformat()
     latest_report_keys = {item.sector_key for item in published[0].mentions} if published else set()
-    output: list[dict] = []
+    market_paths_by_parent: dict[str, list] = {}
     for market_path in registry.market_paths:
-        sector = report_topic_sector(market_path, bundle)
-        market_key = market_path.market_path_key
-        report_key = market_path.parent_report_topic
+        market_paths_by_parent.setdefault(market_path.parent_report_topic, []).append(market_path)
+    controlled_dates = market_core_completed_dates(repo.session)
+    output: list[dict] = []
+    for report_object in load_report_registry():
+        report_key = report_object.sector_key
+        candidates = market_paths_by_parent.get(report_key, [])
+        # The hotel/restaurant report topic keeps the pre-existing hotel path
+        # only for legacy snapshots. Its Reader market observation below is
+        # always the explicitly configured report-topic primary.
+        market_path = next((item for item in candidates if item.market_path_key == report_key), candidates[0] if candidates else None)
+        market_key = market_path.market_path_key if market_path is not None else report_key
         mention = latest.get(report_key)
         path_history = enhanced.path_history(report_key, through=published[0].report_date if published else None)
         path = path_history[0] if path_history else None
-        legacy_market = None if market_key == "hang_seng_tech" else enhanced.latest_market(market_key)
-        unsupported = market_path.support_status.value == "unsupported"
+        legacy_market = None if market_path is None or market_key == "hang_seng_tech" else enhanced.latest_market(market_key)
+        unsupported = report_key == "hang_seng_tech" or bool(market_path and market_path.support_status.value == "unsupported")
         capability = capabilities.get(market_key)
+        primary_definition = primary_definitions.get(report_key)
         data_status = (
-            "unsupported" if unsupported else "short_history" if market_key == "glass_substrate"
-            else "proxy" if market_path.mapping_type == "proxy"
+            "unsupported" if unsupported else "short_history" if report_key == "glass_substrate"
+            else "proxy" if primary_definition is not None
             else "unverified" if capability and not capability.selectable_candidates else "supported"
         )
         recent_path = [{
@@ -181,38 +193,31 @@ def sector_payloads(repo: ReportRepository) -> list[dict]:
         )
         if capability and not capability.selectable_candidates:
             intraday_status = "provider_failed"
-        last_ten = path_history[:10]
-        ten_not_mentioned = len(last_ten) == 10 and all(item.path_status == "not_mentioned" for item in last_ten)
-        # A global Provider outage is surfaced in the market status strip; it must
-        # not force all otherwise-low-attention rows into the default table.
-        special = data_status in {"proxy", "short_history", "unsupported", "unverified"}
-        is_pinned = market_key in pinned
-        is_low_attention = bool(
-            ten_not_mentioned and not intervals["strict_holding_interval"] and not intervals["broad_holding_interval"]
-            and current_effective not in {"turn_hold", "hold", "strong_watch"} and not special and not is_pinned
-        )
+        dormant = classify_dormant_sector(path_history, controlled_dates)
+        is_pinned = report_key in pinned
+        is_low_attention = report_object.lifecycle == "active" and dormant.is_dormant
         attention_level = (
             "high" if is_pinned or report_key in latest_report_keys or holding
             or current_effective in {"turn_hold", "hold", "strong_watch"}
             else "low" if is_low_attention else "normal"
         )
-        primary_market = primary_history(repo.session, primary_definitions[market_key]) if market_key in primary_definitions else None
+        primary_market = primary_history(repo.session, primary_definition) if primary_definition is not None else None
         recent_days = primary_market["history"] if primary_market is not None else []
         output.append({
-            "sector_key": market_key,
-            "sector_name": market_path.display_name,
+            "sector_key": report_key,
+            "sector_name": report_object.sector_name,
             "market_path_key": market_key,
             "parent_report_topic": report_key,
-            "report_topic_name": sector.sector_name,
-            "group_name": sector.category_level_1,
-            "group_order": sector.group_order,
-            "overall_order": market_path.overall_order,
+            "report_topic_name": report_object.sector_name,
+            "group_name": report_object.group_name,
+            "group_order": report_object.group_order,
+            "overall_order": report_object.display_order,
             "latest_view": mention.summary if mention else None,
-            "latest_view_date": latest_dates.get(sector.sector_key),
+            "latest_view_date": latest_dates.get(report_key),
             "mentioned_in_latest_published": report_key in latest_report_keys,
             "market_support_status": "unsupported" if unsupported else "supported",
             "data_status": data_status,
-            "market_status_detail": "港股跨市场行情暂未接入" if unsupported else market_path.display_detail if market_key in {"hotel", "catering"} else "历史较短，指标不足时显示历史不足" if market_key == "glass_substrate" else "研究辅助数据，非生产级行情服务。",
+            "market_status_detail": "港股跨市场行情暂未接入" if unsupported else "当前无可靠固定主观察标的" if report_key == "glass_substrate" else "研究辅助数据，非生产级行情服务。",
             "current_path_status": path.path_status if path else "not_mentioned",
             "current_path_status_label": path_statuses()[path.path_status]["label"] if path else "未提",
             "reported_status": path.path_status if path else "not_mentioned",
@@ -234,13 +239,15 @@ def sector_payloads(repo: ReportRepository) -> list[dict]:
             "recent_path": recent_path,
             "recent_mention_count": recent_mention_count,
             "attention_level": attention_level,
-            "active_holding_interval": None if report_key == "hotel_catering" else holding,
-            "historical_holding_intervals": [] if report_key == "hotel_catering" else intervals["historical_holding_intervals"],
-            "strict_holding_interval": None if report_key == "hotel_catering" else intervals["strict_holding_interval"],
-            "broad_holding_interval": None if report_key == "hotel_catering" else intervals["broad_holding_interval"],
-            "historical_strict_intervals": [] if report_key == "hotel_catering" else intervals["historical_strict_intervals"],
-            "historical_broad_intervals": [] if report_key == "hotel_catering" else intervals["historical_broad_intervals"],
+            "active_holding_interval": holding,
+            "historical_holding_intervals": intervals["historical_holding_intervals"],
+            "strict_holding_interval": intervals["strict_holding_interval"],
+            "broad_holding_interval": intervals["broad_holding_interval"],
+            "historical_strict_intervals": intervals["historical_strict_intervals"],
+            "historical_broad_intervals": intervals["historical_broad_intervals"],
             "is_low_attention": is_low_attention,
+            "is_dormant_20d": is_low_attention,
+            "dormant_report_overlay_count": dormant.overlay_count,
             "is_pinned_for_research": is_pinned,
             "status_changed": len(explicit_statuses) >= 2 and explicit_statuses[-1] != explicit_statuses[-2],
         })

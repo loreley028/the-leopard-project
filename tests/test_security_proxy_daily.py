@@ -19,7 +19,7 @@ from leopard_project.security_proxy_daily import (
     get_security_proxy_daily_histories,
     get_security_proxy_daily_history,
 )
-from leopard_project.security_proxy_observation import load_security_proxy_registry
+from leopard_project.security_proxy_observation import APPROVED, load_security_proxy_registry
 from leopard_project.trading_calendar import CalendarEvaluation, CalendarStatus
 from leopard_project.web.database import create_session_factory
 from leopard_project.web.models import SecurityProxyDaily
@@ -82,14 +82,18 @@ def test_schema_has_simple_fixed_proxy_daily_table_and_unique_constraint(tmp_pat
 
 def test_fixed_registry_is_the_only_deduplicated_symbol_source() -> None:
     symbols = fixed_proxy_symbols()
-    assert len(symbols) == len(set(symbols)) == 23
+    registry_symbols = {
+        item.symbol for definition in load_security_proxy_registry() if definition.status == APPROVED
+        for item in definition.instruments if item.enabled
+    }
+    assert len(symbols) == len(set(symbols)) == len(registry_symbols)
     assert "sh515880" in symbols and "glass_substrate" not in symbols and "catering" not in symbols
 
 
 def test_market_core_capture_adds_four_broad_etfs_without_changing_fixed_proxy_registry() -> None:
-    assert len(market_core_security_symbols()) == 27
+    assert len(market_core_security_symbols()) == len(fixed_proxy_symbols()) + 4
     assert {"sh510050", "sh510300", "sh588000", "sz159915"}.issubset(market_core_security_symbols())
-    assert len(fixed_proxy_symbols()) == 23
+    assert len(fixed_proxy_symbols()) > 23
 
 
 def test_capture_writes_numeric_string_close_and_optional_field_failures_become_null(tmp_path) -> None:

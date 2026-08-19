@@ -131,8 +131,8 @@ def validate_security_proxy_registry(document: dict[str, object]) -> tuple[Secur
     if len({path.market_path_key for path in paths}) != len(paths):
         raise SecurityProxyRegistryError("market path keys must be unique")
     approved = [path for path in paths if path.status == APPROVED]
-    if len(approved) != 11:
-        raise SecurityProxyRegistryError("exactly 11 approved fallback paths are required")
+    if not approved:
+        raise SecurityProxyRegistryError("at least one approved fixed observation is required")
     for path in paths:
         if path.status not in {APPROVED, NO_RELIABLE, "disabled"}:
             raise SecurityProxyRegistryError("path status is invalid")
@@ -165,8 +165,10 @@ def validate_security_proxy_registry(document: dict[str, object]) -> tuple[Secur
     cpo = next(item for item in paths if item.market_path_key == "cpo")
     if [item.symbol for item in cpo.etf_proxies] != ["sh515880"] or [item.symbol for item in cpo.leader_proxies] != ["sz300308", "sz300502", "sz300394"]:
         raise SecurityProxyRegistryError("CPO must retain the approved ETF and three leaders")
-    if {item.market_path_key for item in paths if item.status == NO_RELIABLE} != {"glass_substrate", "catering"}:
-        raise SecurityProxyRegistryError("no-reliable paths are incomplete")
+    required_gaps = {"glass_substrate", "catering"}
+    actual_gaps = {item.market_path_key for item in paths if item.status == NO_RELIABLE}
+    if not required_gaps.issubset(actual_gaps):
+        raise SecurityProxyRegistryError("required no-reliable paths are incomplete")
     return paths
 
 

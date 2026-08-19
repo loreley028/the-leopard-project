@@ -440,11 +440,13 @@ def test_low_attention_filter_search_and_admin_pin(tmp_path: Path) -> None:
         default_rows = client.get("/api/v1/sectors").json()
         all_rows = client.get("/api/v1/sectors?include_low_attention=true").json()
         search_rows = client.get("/api/v1/sectors?search=PCB").json()
-        assert len(all_rows) == 67
+        assert len(all_rows) == 74
         assert [item["group_order"] for item in all_rows] == sorted(item["group_order"] for item in all_rows)
         assert all(item["attention_level"] in {"high", "normal", "low"} for item in all_rows)
-        assert not any(item["sector_key"] == "pcb" for item in default_rows)
-        assert next(item for item in all_rows if item["sector_key"] == "pcb")["is_low_attention"] is True
+        # Ten report overlays alone no longer satisfy the M3.14 controlled
+        # 20-completed-trading-day rule when Market Core has no date universe.
+        assert any(item["sector_key"] == "pcb" for item in default_rows)
+        assert next(item for item in all_rows if item["sector_key"] == "pcb")["is_low_attention"] is False
         assert [item["sector_key"] for item in search_rows] == ["pcb"]
         assert client.get("/api/v1/sectors/pcb").status_code == 200
         assert client.post("/api/v1/auth/login", json={"username": "admin", "password": "admin-test-password"}).status_code == 200

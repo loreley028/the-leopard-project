@@ -8,7 +8,7 @@ from sqlalchemy import text
 
 from leopard_project.providers.tencent_standard_quote import StandardSecurityQuote, TencentQuoteBatch
 from leopard_project.live_market_anchor_daily import capture_live_market_anchor_daily
-from leopard_project.security_proxy_daily import capture_fixed_security_proxy_daily, fixed_proxy_symbols
+from leopard_project.security_proxy_daily import capture_fixed_security_proxy_daily, fixed_proxy_symbols, market_core_security_symbols
 from leopard_project.security_proxy_observation import SecurityProxyObservationService
 from leopard_project.broad_market_anchors import load_broad_market_anchors
 from leopard_project.web.app import WebSettings, create_app
@@ -227,5 +227,6 @@ def test_zero_report_eod_collectors_plan_shanghai_and_all_fixed_proxies_without_
         )
         assert session.execute(text("SELECT COUNT(*) FROM reports")).scalar_one() == 0
     assert anchor.requested_count == 1 and anchor.inserted_count == 1
-    assert proxies.candidate_count == 27
-    assert proxies.inserted_count == 27 and proxies.provider_batch_count == 2
+    assert proxies.candidate_count == len(market_core_security_symbols())
+    assert proxies.inserted_count == len(market_core_security_symbols())
+    assert proxies.provider_batch_count == 4

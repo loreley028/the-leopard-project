@@ -8,6 +8,7 @@ from pathlib import Path
 import pytest
 
 from leopard_project.config import CONFIG_DIR
+from leopard_project.report_registry import load_report_registry
 from leopard_project.providers.tencent_standard_quote import TencentStandardSecurityQuoteProvider, load_tencent_quote_config
 from leopard_project.security_proxy_observation import (
     APPROVED, FIXED_DISCLOSURE, SecurityProxyObservationService, SecurityProxyRegistryError,
@@ -34,10 +35,15 @@ def service(payload: bytes, *, calls: list[str] | None = None) -> SecurityProxyO
     return SecurityProxyObservationService(provider=provider, now=lambda: NOW)
 
 
-def test_registry_has_default_disabled_11_approved_and_two_explicit_gaps() -> None:
+def test_registry_covers_active_report_objects_with_explicit_semantic_gaps() -> None:
     document, paths = registry_document(), load_security_proxy_registry()
-    assert document["default_enabled"] is False and len([item for item in paths if item.status == APPROVED]) == 11
-    assert {item.market_path_key for item in paths if item.status != APPROVED} == {"glass_substrate", "catering"}
+    by_key = {item.market_path_key: item for item in paths}
+    active = [item for item in load_report_registry() if item.lifecycle == "active"]
+    assert document["default_enabled"] is False
+    assert sum(by_key[item.sector_key].status == APPROVED for item in active) == 69
+    assert {item.sector_key for item in active if by_key[item.sector_key].status != APPROVED} == {"glass_substrate", "hang_seng_tech"}
+    assert by_key["glass_substrate"].status == "no_reliable_security_proxy"
+    assert by_key["hang_seng_tech"].status == "disabled"
     assert all(not item.production_enabled and item.official_board_preferred and item.fallback_only for item in paths)
 
 
@@ -73,7 +79,9 @@ def test_primary_observation_is_static_and_only_approved_paths_define_one() -> N
         "optical_fiber_theme": "sh515880", "rare_earth": "sh516780", "innovative_drug_medicine": "sz159992",
         "semiconductor": "sz159995", "hotel": "sz159766",
     }
-    assert {key: item.primary_observation_symbol for key, item in paths.items() if item.status == APPROVED} == expected
+    assert {key: paths[key].primary_observation_symbol for key in expected} == expected
+    active = [item for item in load_report_registry() if item.lifecycle == "active"]
+    assert all(paths[item.sector_key].primary_observation is not None for item in active if item.sector_key not in {"glass_substrate", "hang_seng_tech"})
     assert paths["glass_substrate"].primary_observation is None
     assert paths["catering"].primary_observation is None
 

@@ -23,7 +23,7 @@ from .auth import AuthenticationError, Principal, SessionAuth
 from .database import create_session_factory
 from .models import (
     LiveMarketAnchorDaily, Report, ReportDay, ReportStatus, SecurityProxyDaily,
-    SectorDailyBar, SectorResearchPreference, SpecificationDocument,
+    SectorDailyBar, SectorPathHistoryEntry, SectorResearchPreference, SpecificationDocument,
 )
 from .schedule import ReportSchedulePolicy
 from .repository import ReportRepository
@@ -789,6 +789,10 @@ def create_app(settings: WebSettings | None = None, session_factory: sessionmake
         data_snapshot_date = max((item for item in snapshot_dates if item is not None), default=None)
         from leopard_project.historical_market_daily import expected_latest_completed_trading_day
         from leopard_project.security_proxy_daily import market_core_security_symbols
+        from leopard_project.security_proxy_observation import APPROVED, load_security_proxy_registry
+        from leopard_project.report_registry import load_report_registry
+        from leopard_project.dormant_sectors import classify_dormant_sector
+        from .market_date_axis import market_core_completed_dates
         expected = expected_latest_completed_trading_day(datetime.now(SHANGHAI))
         symbols = market_core_security_symbols()
         current_symbols = set(session.scalars(select(SecurityProxyDaily.symbol).where(
@@ -798,6 +802,17 @@ def create_app(settings: WebSettings | None = None, session_factory: sessionmake
             LiveMarketAnchorDaily.symbol == SHANGHAI_COMPOSITE_SYMBOL,
             LiveMarketAnchorDaily.trading_date == expected,
         )) is not None
+        active_objects = [item for item in load_report_registry() if item.lifecycle == "active"]
+        definitions = {item.market_path_key: item for item in load_security_proxy_registry() if item.status == APPROVED}
+        mapped_active = [item for item in active_objects if item.sector_key in definitions]
+        entries_by_sector = {
+            item.sector_key: []
+            for item in active_objects
+        }
+        for entry in session.scalars(select(SectorPathHistoryEntry).where(SectorPathHistoryEntry.sector_key.in_(entries_by_sector))):
+            entries_by_sector[entry.sector_key].append(entry)
+        completed_dates = market_core_completed_dates(session)
+        dormant_count = sum(classify_dormant_sector(entries_by_sector[item.sector_key], completed_dates).is_dormant for item in active_objects)
         return {
             "build_commit": settings.build_commit,
             "data_snapshot_date": data_snapshot_date.isoformat() if data_snapshot_date else None,
@@ -810,6 +825,14 @@ def create_app(settings: WebSettings | None = None, session_factory: sessionmake
                 "expected_latest_completed": expected.isoformat(),
                 "shanghai": "fresh" if shanghai_fresh else "stale_history",
                 "security_coverage": {"through_expected": len(current_symbols), "required": len(symbols)},
+                "report_active_sectors": len(active_objects),
+                "market_mapped": len(mapped_active),
+                "market_ready_through_expected": sum(
+                    definition.primary_observation_symbol in current_symbols
+                    for definition in (definitions[item.sector_key] for item in mapped_active)
+                ),
+                "unavailable": len(active_objects) - len(mapped_active),
+                "dormant_20d": dormant_count,
             },
         }
 
