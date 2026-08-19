@@ -8,6 +8,7 @@ from sqlalchemy import select, text
 
 from leopard_project.historical_market_daily import (
     backfill_market_history,
+    backfill_selected_market_history,
     expected_latest_completed_trading_day,
     market_core_symbols,
     refresh_market_history_to_latest_completed,
@@ -133,3 +134,54 @@ def test_refresh_fills_only_expected_market_day_and_is_idempotent(tmp_path, monk
         assert session.scalar(select(SecurityProxyDaily).where(SecurityProxyDaily.trading_date == date(2026, 8, 19))) is None
     assert first.expected_latest_completed_trading_day == expected and first.inserted == 2 and first.conflicts == 0
     assert second.inserted == 0 and second.skip_existing_same == 2 and second.conflicts == 0
+
+
+class PacedProvider:
+    provider_key = "sina_public_daily_http"
+
+    def __init__(self, *, limited_symbol: str | None = None) -> None:
+        self.calls: list[str] = []
+        self.limited_symbol = limited_symbol
+
+    def fetch_history(self, symbol, *, days, allow_network=False):
+        assert days == 45 and allow_network is True
+        self.calls.append(symbol)
+        if symbol == self.limited_symbol:
+            from leopard_project.providers.sina_public_daily import SinaDailyError
+            raise SinaDailyError("http_456")
+        return tuple(SinaDailyBar(date(2026, 7, 1).fromordinal(date(2026, 7, 1).toordinal() + index), Decimal(10 + index), Decimal(11 + index), Decimal(9 + index), Decimal(10 + index), Decimal(100)) for index in range(50))
+
+
+def test_selected_backfill_fetches_each_missing_symbol_once_and_is_idempotent(tmp_path) -> None:
+    provider = PacedProvider(); factory = sessions(tmp_path)
+    with factory() as session:
+        first = backfill_selected_market_history(session, provider=provider, symbols=("sz300308",), days=45, enable_provider=True, now=datetime(2026, 8, 19, 10, 0))
+        second = backfill_selected_market_history(session, provider=provider, symbols=("sz300308",), days=45, enable_provider=True, now=datetime(2026, 8, 19, 10, 0))
+    assert provider.calls == ["sz300308"]
+    assert first.inserted == 49 and first.conflicts == 0
+    assert second.inserted == 0 and second.completed_symbols == 1 and second.remaining_symbols == 0
+
+
+def test_selected_backfill_is_paced_and_stops_on_http_456_without_retry(tmp_path) -> None:
+    sleeps: list[float] = []; checkpoints: list[tuple[str, str]] = []
+    provider = PacedProvider(limited_symbol="sz300502")
+    with sessions(tmp_path)() as session:
+        result = backfill_selected_market_history(
+            session, provider=provider, symbols=("sz300308", "sz300502", "sz300394"), days=45,
+            enable_provider=True, paced_seconds=3, sleep=sleeps.append, checkpoint=lambda symbol, status: checkpoints.append((symbol, status)), now=datetime(2026, 8, 19, 10, 0),
+        )
+    assert provider.calls == ["sz300308", "sz300502"] and sleeps == [3]
+    assert result.blocked_symbol == "sz300502" and result.provider_failures == {"sz300502": "http_456"}
+    assert checkpoints == [("sz300308", "completed"), ("sz300502", "http_456")]
+
+
+def test_selected_backfill_resume_preflight_skips_completed_symbol(tmp_path) -> None:
+    factory = sessions(tmp_path)
+    with factory() as session:
+        first_provider = PacedProvider(limited_symbol="sz300502")
+        first = backfill_selected_market_history(session, provider=first_provider, symbols=("sz300308", "sz300502"), days=45, enable_provider=True, now=datetime(2026, 8, 19, 10, 0))
+        resumed_provider = PacedProvider()
+        resumed = backfill_selected_market_history(session, provider=resumed_provider, symbols=("sz300308", "sz300502"), days=45, enable_provider=True, now=datetime(2026, 8, 19, 10, 0))
+    assert first.blocked_symbol == "sz300502"
+    assert resumed_provider.calls == ["sz300502"]
+    assert resumed.completed_symbols == 2 and resumed.remaining_symbols == 0

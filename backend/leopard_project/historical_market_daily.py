@@ -4,6 +4,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import date, datetime, time, timedelta
 from decimal import Decimal
+from typing import Callable, Sequence
 from zoneinfo import ZoneInfo
 
 from sqlalchemy import select
@@ -38,6 +39,23 @@ class MarketHistoryRefreshSummary:
     skip_existing_same: int
     conflicts: int
     provider_failures: dict[str, str]
+
+
+@dataclass(frozen=True)
+class PacedHistoricalBackfillSummary:
+    """Preview-only, resumable history backfill result without raw responses."""
+
+    expected_latest_completed_trading_day: date
+    requested_symbols: int
+    completed_symbols: int
+    processed_symbols: int
+    remaining_symbols: int
+    inserted: int
+    skip_existing_same: int
+    conflicts: int
+    provider_failures: dict[str, str]
+    last_successful_symbol: str | None
+    blocked_symbol: str | None
 
 
 def market_core_symbols() -> tuple[str, ...]:
@@ -140,6 +158,113 @@ def _insert_proxy(session: Session, symbol: str, bar: SinaDailyBar, *, replace: 
         source=SinaPublicDailyMarketProvider.provider_key,
     ))
     return "inserted"
+
+
+def _history_preflight_complete(session: Session, symbol: str, *, expected: date, minimum_days: int) -> bool:
+    """Return true only when a symbol already has sufficient exact-date history."""
+
+    dates = set(session.scalars(select(SecurityProxyDaily.trading_date).where(SecurityProxyDaily.symbol == symbol)))
+    return len(dates) >= minimum_days and expected in dates
+
+
+def backfill_selected_market_history(
+    session: Session,
+    *,
+    provider: SinaPublicDailyMarketProvider,
+    symbols: Sequence[str],
+    days: int = 45,
+    minimum_completed_days: int = 40,
+    enable_provider: bool = False,
+    paced_seconds: float = 0,
+    checkpoint: Callable[[str, str], None] | None = None,
+    sleep: Callable[[float], None] | None = None,
+    now: datetime | None = None,
+) -> PacedHistoricalBackfillSummary:
+    """Apply validated daily bars once per missing symbol, sequentially and fail-closed.
+
+    This explicit preview helper does not retry. It checks SQLite before each
+    request, pauses only between sequential requests, and stops immediately on
+    HTTP 456. The optional checkpoint callback receives classifications only.
+    """
+
+    if not enable_provider:
+        raise PermissionError("explicit historical Provider enablement is required")
+    requested = tuple(dict.fromkeys(str(item).lower() for item in symbols))
+    if not requested:
+        raise ValueError("at least one symbol is required")
+    if days < minimum_completed_days:
+        raise ValueError("days must cover the required completed-history minimum")
+    observed_at = now or datetime.now(SHANGHAI)
+    expected = expected_latest_completed_trading_day(observed_at)
+    pause = sleep or (lambda _seconds: None)
+    inserted = skipped = conflicts = completed = processed = 0
+    failures: dict[str, str] = {}
+    last_successful: str | None = None
+    blocked: str | None = None
+
+    for index, symbol in enumerate(requested):
+        if _history_preflight_complete(session, symbol, expected=expected, minimum_days=minimum_completed_days):
+            completed += 1
+            processed += 1
+            last_successful = symbol
+            if checkpoint:
+                checkpoint(symbol, "already_complete")
+            continue
+        try:
+            bars = _completed_bars(provider.fetch_history(symbol, days=days, allow_network=True), observed_at)
+        except Exception as exc:  # Provider bodies are deliberately never retained.
+            code = str(getattr(exc, "code", type(exc).__name__))
+            failures[symbol] = code
+            processed += 1
+            if checkpoint:
+                checkpoint(symbol, code)
+            if code == "http_456":
+                blocked = symbol
+                break
+            if paced_seconds > 0 and index < len(requested) - 1:
+                pause(paced_seconds)
+            continue
+        if len(bars) < minimum_completed_days or not bars or bars[-1].trading_date != expected:
+            failures[symbol] = "insufficient_or_stale_completed_history"
+            processed += 1
+            if checkpoint:
+                checkpoint(symbol, failures[symbol])
+            if paced_seconds > 0 and index < len(requested) - 1:
+                pause(paced_seconds)
+            continue
+        symbol_inserted = symbol_skipped = 0
+        conflict = False
+        for bar in bars:
+            outcome = _insert_proxy(session, symbol, bar, replace=False)
+            symbol_inserted += outcome == "inserted"
+            symbol_skipped += outcome == "skip_existing_same"
+            if outcome == "conflict":
+                conflict = True
+                break
+        if conflict:
+            session.rollback()
+            conflicts += 1
+            failures[symbol] = "conflict"
+            processed += 1
+            blocked = symbol
+            if checkpoint:
+                checkpoint(symbol, "conflict")
+            break
+        session.commit()
+        inserted += symbol_inserted
+        skipped += symbol_skipped
+        completed += 1
+        processed += 1
+        last_successful = symbol
+        if checkpoint:
+            checkpoint(symbol, "completed")
+        if paced_seconds > 0 and index < len(requested) - 1:
+            pause(paced_seconds)
+
+    return PacedHistoricalBackfillSummary(
+        expected, len(requested), completed, processed, len(requested) - completed,
+        inserted, skipped, conflicts, failures, last_successful, blocked,
+    )
 
 
 def backfill_market_history(
