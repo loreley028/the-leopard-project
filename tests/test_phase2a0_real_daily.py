@@ -34,7 +34,10 @@ def client(tmp_path: Path, mode: str = "real_local") -> TestClient:
 
 def test_real_local_runtime_and_schedule_states(tmp_path: Path) -> None:
     web = client(tmp_path)
-    assert web.get("/api/v1/runtime").json()["data_mode"] == "real_local"
+    runtime = web.get("/api/v1/runtime").json()
+    assert runtime["data_mode"] == "real_local"
+    assert runtime["environment"] == "real_local"
+    assert runtime["build_commit"] == "unknown"
     days = web.get("/api/v1/admin/report-days?start=2026-07-24&end=2026-07-26").json()
     assert [item["state"] for item in days] == ["normally_no_report", "normally_no_report", "pending_upload"]
     assert web.post("/api/v1/admin/report-days/2026-07-24/skip", json={"reason": "确认无直播"}).json()["state"] == "skipped"

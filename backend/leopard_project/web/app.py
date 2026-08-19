@@ -239,7 +239,14 @@ def create_app(settings: WebSettings | None = None, session_factory: sessionmake
 
     @app.get("/api/v1/runtime")
     def runtime(current: Principal = Depends(principal)) -> dict:
-        return {"data_mode": settings.data_mode, "production_primary": None, "fixture_seeded": False, "security_proxy_viewer_enabled": settings.security_proxy_viewer_enabled}
+        return {
+            "data_mode": settings.data_mode,
+            "environment": os.getenv("LEOPARD_ENVIRONMENT", settings.data_mode),
+            "build_commit": settings.build_commit,
+            "production_primary": None,
+            "fixture_seeded": False,
+            "security_proxy_viewer_enabled": settings.security_proxy_viewer_enabled,
+        }
 
     @app.get("/api/v1/market/shanghai")
     def standalone_shanghai_market(
