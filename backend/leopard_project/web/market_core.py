@@ -20,6 +20,7 @@ from leopard_project.providers.tencent_standard_quote import TencentQuoteError, 
 from leopard_project.security_proxy_daily import get_security_proxy_daily_histories
 from leopard_project.security_proxy_observation import APPROVED, SecurityProxyDefinition, SecurityProxyInstrument, load_security_proxy_registry
 from leopard_project.broad_market_anchors import BroadMarketAnchor, load_broad_market_anchors
+from leopard_project.report_registry import load_report_registry
 
 from .live_market_anchor import LiveShanghaiMarketAnchorService, SHANGHAI_COMPOSITE_NAME, SHANGHAI_COMPOSITE_SYMBOL
 from .models import LiveMarketAnchorDaily
@@ -61,6 +62,7 @@ class MarketCoreReadService:
         enabled: bool = False,
         registry: tuple[SecurityProxyDefinition, ...] | None = None,
         cache: SecurityProxyViewerCache | None = None,
+        current_snapshot_cache: SecurityProxyViewerCache | None = None,
         now: Callable[[], datetime] = lambda: datetime.now(timezone.utc),
     ) -> None:
         self.provider = provider
@@ -68,6 +70,10 @@ class MarketCoreReadService:
         self.enabled = enabled
         self.registry = registry or load_security_proxy_registry()
         self.cache = cache or SecurityProxyViewerCache()
+        # The full Reader matrix deliberately refreshes less often than the
+        # Shanghai hero.  It remains process-local, single-flight, and never
+        # carries a database session across Tencent network I/O.
+        self.current_snapshot_cache = current_snapshot_cache or SecurityProxyViewerCache(ttl_seconds=60, error_ttl_seconds=30)
         self.now = now
 
     @staticmethod
@@ -181,8 +187,16 @@ class MarketCoreReadService:
                 symbol=SHANGHAI_COMPOSITE_SYMBOL, exchange="sh", security_code="000001",
                 security_name=SHANGHAI_COMPOSITE_NAME, display_order=0, enabled=True,
             ), *load_broad_market_anchors())
+        if scope == "matrix":
+            definitions = self._matrix_definitions()
+            return tuple(item for definition in definitions for item in definition.instruments if item.enabled)
         definitions = self._definitions(scope)
         return tuple(item for definition in definitions for item in definition.instruments if item.enabled)
+
+    def _matrix_definitions(self) -> tuple[SecurityProxyDefinition, ...]:
+        """Return the configured active Reader universe in report order."""
+        by_key = {item.market_path_key: item for item in self.registry}
+        return tuple(by_key[item.sector_key] for item in load_report_registry() if item.lifecycle == "active" and item.sector_key in by_key)
 
     def current_quotes(self, *, scope: str) -> dict:
         """Serve one short-lived, single-flight quote batch for an approved scope.
@@ -194,10 +208,11 @@ class MarketCoreReadService:
         instruments = self._current_instruments(scope)
         symbols = tuple(dict.fromkeys(item.symbol for item in instruments))
         cache_key = ("market_core_current", scope, *symbols)
-        cached, cache_hit = self.cache.get_or_fetch(cache_key, lambda: (self._fetch_quotes(symbols),))
+        cache = self.current_snapshot_cache if scope == "matrix" else self.cache
+        cached, cache_hit = cache.get_or_fetch(cache_key, lambda: (self._fetch_quotes(symbols),))
         batch = cached[0]
         now = _aware(self.now())
-        return {
+        payload = {
             "market_core": "standalone_objective",
             "scope": scope,
             "session_state": cn_a_session_state(now),
@@ -206,6 +221,34 @@ class MarketCoreReadService:
             "provider_request_count": batch.provider_request_count if not cache_hit else 0,
             "quotes": [self._current_quote_payload(item, batch, now) for item in instruments],
         }
+        if scope == "matrix":
+            payload.update({
+                "snapshot_ttl_seconds": self.current_snapshot_cache.ttl_seconds,
+                "sectors": self._matrix_current_sectors(batch, now),
+            })
+        return payload
+
+    def _matrix_current_sectors(self, batch: _CachedProxyBatch, now: datetime) -> list[dict]:
+        sectors: list[dict] = []
+        for definition in self._matrix_definitions():
+            primary = definition.primary_observation
+            stock = primary if primary and primary.proxy_role == "leader" else next(
+                (item for item in definition.leader_proxies if item.enabled), None,
+            )
+            visible = tuple(item for item in (primary, stock) if item is not None)
+            # A single-stock observation is intentionally shown only once.
+            visible = tuple(dict.fromkeys(visible))
+            quotes = [self._current_quote_payload(item, batch, now) for item in visible]
+            quote_times = [item["quote_datetime"] for item in quotes if item["quote_datetime"]]
+            sectors.append({
+                "sector_key": definition.market_path_key,
+                "sector_name": definition.display_name,
+                "market_status": "available" if definition.status == APPROVED else "unavailable",
+                "market_session": cn_a_session_state(now),
+                "quote_time": max(quote_times) if quote_times else None,
+                "instruments": quotes,
+            })
+        return sectors
 
     def _fetch_quotes(self, symbols: tuple[str, ...]) -> _CachedProxyBatch:
         received = _aware(self.now())

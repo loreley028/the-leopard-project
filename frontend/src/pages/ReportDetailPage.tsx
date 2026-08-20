@@ -6,7 +6,7 @@ import { IslandPathMatrix } from "../components/island/IslandPathMatrix";
 import { IslandStatusBadge } from "../components/island/IslandStatusBadge";
 import { BroadMarketOverview, MarketCoreShanghaiReader } from "../components/market/MarketCoreReader";
 import { PdfPagePreview } from "../components/PdfPagePreview";
-import type { DefenseLineValidation, EnhancedReport, MarketCoreBroadMarket, MarketCoreShanghai, MarketSnapshot, PathMatrix, ReportDefense, SectorAssessment } from "../types";
+import type { DefenseLineValidation, EnhancedReport, MarketCoreBroadMarket, MarketCoreCurrentQuotes, MarketCoreShanghai, MarketSnapshot, PathMatrix, ReportDefense, SectorAssessment } from "../types";
 import { formatPct } from "../utils/format";
 import { judgementDetail, pdfGroup } from "../utils/judgement";
 import { useMarketCurrentPolling } from "../hooks/useMarketCurrentPolling";
@@ -121,6 +121,7 @@ export function ReportDetailPage({ latest = false }: { latest?: boolean }) {
   const [marketCoreShanghai, setMarketCoreShanghai] = useState<MarketCoreShanghai | null>(null);
   const [broadMarket, setBroadMarket] = useState<MarketCoreBroadMarket | null>(null);
   const [matrix, setMatrix] = useState<PathMatrix | null>(null);
+  const [matrixCurrent, setMatrixCurrent] = useState<MarketCoreCurrentQuotes | null>(null);
   const [previewLoaded, setPreviewLoaded] = useState(false);
   useEffect(() => { if (latest) api.latestReport().then(item => setLatestReportId(item.id)).catch(() => setEnhanced(null)); }, [latest]);
   useEffect(() => { if (reportId) api.enhancedReport(reportId).then(setEnhanced).catch(() => setEnhanced(null)); }, [reportId]);
@@ -140,6 +141,8 @@ export function ReportDetailPage({ latest = false }: { latest?: boolean }) {
   }, []);
   useMarketCurrentPolling(refreshOverviewCurrent, Boolean(marketCoreShanghai || broadMarket));
   useEffect(() => { if (reportId) api.pathMatrix(reportId, period).then(setMatrix).catch(() => setMatrix(null)); }, [reportId, period]);
+  const refreshMatrixCurrent = useCallback(async () => { const result = await api.marketCurrent("matrix"); setMatrixCurrent(result); return result; }, []);
+  useMarketCurrentPolling(refreshMatrixCurrent, Boolean(matrix), 60_000);
   const grouped = useMemo(() => {
     const result = new Map<string, SectorAssessment[]>();
     for (const item of enhanced?.sector_assessments.filter(value => value.explicitly_mentioned) ?? []) {
@@ -158,7 +161,7 @@ export function ReportDetailPage({ latest = false }: { latest?: boolean }) {
     <header className="report-header"><div><IslandStatusBadge status={report.status} /><p className="eyebrow">直播总结动态加强版 · {chineseDate(report.report_date)}</p><h1>{report.title}</h1></div><div className="date-contract"><span>报告日期<strong>{report.report_date}</strong></span><span>报告核心观点<strong>攻防线与板块观点</strong></span></div></header>
     <nav className="report-tabs" aria-label="增强报告章节"><a href="#overview">报告概览</a><a href="#path">历史路径</a><a href="#assessments">板块观点</a><a href="#source">原始PDF</a></nav>
     <section id="overview"><h2>报告概览</h2><ReportOverview enhanced={enhanced} market={marketCoreShanghai} broad={broadMarket} /></section>
-    <section id="path"><h2>历史路径矩阵</h2>{matrix ? <IslandPathMatrix matrix={matrix} period={period} onPeriodChange={setPeriod} /> : <p>路径矩阵加载中…</p>}</section>
+    <section id="path"><h2>历史路径矩阵</h2>{matrix ? <IslandPathMatrix matrix={matrix} currentMarket={matrixCurrent} period={period} onPeriodChange={setPeriod} /> : <p>路径矩阵加载中…</p>}</section>
     <section id="assessments"><h2>{chineseDate(report.report_date)}板块观点详细汇总</h2><p className="muted">按原PDF分组展示五列主体；路径历史来自矩阵，详细观点历史来自已上传PDF，两者分别保存。</p>{GROUP_ORDER.map(group => grouped.get(group)?.length ? <AssessmentTable key={group} title={group} items={grouped.get(group)!} /> : null)}<details className="advanced-review"><summary>本期未提及 {unmentioned} 个板块</summary><p>“未提”只表示本期PDF没有明确观点，不代表既有观点失效。</p></details></section>
     <section id="source"><h2>原始PDF</h2>{previewLoaded ? <PdfPagePreview reportId={report.id} /> : <div className="pdf-preview-placeholder"><p>打开或刷新报告不会请求PDF；点击后仅加载内存渲染的逐页图片，不会写入下载目录。</p><button type="button" onClick={() => setPreviewLoaded(true)}>加载逐页预览</button></div>}<p><a href={publicResourcePath(report.pdf_download_url)}>下载原始PDF</a></p><p>{enhanced.data_notice} 来源追溯由Admin保留，Viewer正文不重复展示原文摘录。</p></section>
   </article>;

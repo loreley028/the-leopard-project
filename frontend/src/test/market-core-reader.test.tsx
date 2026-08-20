@@ -79,4 +79,18 @@ describe("Market Core reader surfaces", () => {
     expect(document.body).not.toHaveTextContent("平均收益");
     expect(document.body).not.toHaveTextContent("加权收益");
   });
+
+  it("uses A-share tones for Shanghai prices and renders broad completed days newest first", () => {
+    const current = { ...staleShanghai, live: { ...staleShanghai.live, status: "available" as const, current: 3926.96, pre_close: 3910, pct_change: .43, quote_datetime: "2026-08-18T14:30:00+08:00", freshness: "fresh" as const, display_mode: "live" as const, session_state: "afternoon_trading" as const, error_code: null } };
+    const broad: MarketCoreBroadMarket = {
+      market_core: "standalone_objective", date_axis_kind: "market_trading_day", trading_date_axis: history.slice(-10).map(item => item.trading_date),
+      universe: "broad_market_anchors", provider: "tencent_standard_security_quote", provider_role: "diagnostic_provider", cache_hit: false, provider_request_count: 1,
+      anchors: proxyGroups[0].instruments.map(item => ({ ...item, live: { ...item.live, freshness: "fresh", display_mode: "live", session_state: "afternoon_trading" } })),
+    };
+    render(<><MarketCoreShanghaiReader market={current} includeHistory={false} /><BroadMarketOverview shanghai={current} broad={broad} /></>);
+    expect(screen.getByText("3,926.96")).toHaveClass("a-share-positive");
+    const rows = Array.from(document.querySelectorAll(".aligned-broad-market-row:not(.aligned-broad-market-header)"));
+    expect(rows[0]).toHaveTextContent("07-20");
+    expect(rows.at(-1)).toHaveTextContent("07-11");
+  });
 });

@@ -177,6 +177,24 @@ def test_market_current_overview_batches_shanghai_and_four_broad_anchors_once(tm
     assert first["provider_request_count"] == 1 and second["cache_hit"] is True and second["provider_request_count"] == 0
 
 
+def test_matrix_current_snapshot_uses_one_deduplicated_configured_universe_and_two_stable_items() -> None:
+    provider = StubProvider()
+    service = MarketCoreReadService(provider=provider, live_anchor=_anchor(provider), enabled=True, now=lambda: NOW)
+    first = service.current_quotes(scope="matrix")
+    second = service.current_quotes(scope="matrix")
+    requested = tuple(symbol for batch in provider.calls for symbol in batch)
+    assert len(requested) == len(set(requested))
+    assert len(provider.calls) == 4  # 70 configured symbols, Tencent max batch 20
+    assert first["snapshot_ttl_seconds"] == 60
+    assert len(first["sectors"]) == 71
+    assert second["cache_hit"] is True and second["provider_request_count"] == 0
+    cpo = next(item for item in first["sectors"] if item["sector_key"] == "cpo")
+    assert [item["symbol"] for item in cpo["instruments"]] == ["sh515880", "sz300308"]
+    assert max(len(item["instruments"]) for item in first["sectors"]) <= 2
+    unavailable = {item["sector_key"] for item in first["sectors"] if item["market_status"] == "unavailable"}
+    assert unavailable == {"glass_substrate", "hang_seng_tech"}
+
+
 def test_market_core_ma_uses_completed_eod_only_and_requires_full_windows(tmp_path) -> None:
     sessions = create_session_factory(_settings(tmp_path).database_url)
     with sessions() as session:
@@ -206,12 +224,14 @@ def test_zero_report_fastapi_market_endpoints_are_anonymous_and_have_no_report_i
         proxies = client.get("/api/v1/market/proxies/cpo")
         broad = client.get("/api/v1/market/broad")
         current = client.get("/api/v1/market/current/overview")
-    assert shanghai.status_code == 200 and proxies.status_code == 200 and broad.status_code == 200 and current.status_code == 200
+        matrix_current = client.get("/api/v1/market/current/matrix")
+    assert shanghai.status_code == 200 and proxies.status_code == 200 and broad.status_code == 200 and current.status_code == 200 and matrix_current.status_code == 200
     assert shanghai.json()["coverage"]["available_days"] == 1
     assert len(proxies.json()["groups"][0]["instruments"]) == 4
     assert [item["symbol"] for item in broad.json()["anchors"]] == [item.symbol for item in load_broad_market_anchors()]
     assert all(item["security_code"].endswith((".SH", ".SZ")) for item in broad.json()["anchors"])
     assert [item["symbol"] for item in current.json()["quotes"]] == ["sh000001", *(item.symbol for item in load_broad_market_anchors())]
+    assert len(matrix_current.json()["sectors"]) == 71
 
 
 def test_zero_report_eod_collectors_plan_shanghai_and_all_fixed_proxies_without_report_gate(tmp_path) -> None:

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "../../routes/router";
 import { api } from "../../api/client";
-import type { PathMatrix, SectorResearch } from "../../types";
+import type { MarketCoreCurrentQuotes, PathMatrix, SectorResearch } from "../../types";
 import { formatPct } from "../../utils/format";
 import { IslandDialog } from "./IslandDialog";
 
@@ -17,7 +17,15 @@ const marketOverlayTitle = (cell: Cell) => {
 const reportStatus = (cell: Cell) => cell.report_present ? cell.path_status_label ?? "—" : "";
 const cellAriaLabel = (sectorName: string, cell: Cell) => `${sectorName} 行情 ${cell.trading_date} ${cell.report_present ? `报告 ${cell.report_date} ${reportStatus(cell)}` : "该交易日无对应报告观点"} ${marketOverlayLabel(cell)}`;
 
-export function IslandPathMatrix({ matrix, period, onPeriodChange }: { matrix: PathMatrix; period: string; onPeriodChange: (value: string) => void }) {
+const currentTone = (value: number | null) => value == null || value === 0 ? "a-share-neutral" : value > 0 ? "a-share-positive" : "a-share-negative";
+const currentSessionLabel = (state: string | undefined) => state === "morning_trading" || state === "afternoon_trading" ? "盘中" : state === "lunch_break" ? "午间" : "今日收盘";
+
+function CurrentMarketCell({ sector }: { sector: NonNullable<MarketCoreCurrentQuotes["sectors"]>[number] | undefined }) {
+  if (!sector || sector.market_status === "unavailable" || sector.instruments.length === 0) return <span className="matrix-current-unavailable">—</span>;
+  return <div className="matrix-current-cell"><small>{currentSessionLabel(sector.market_session)} {sector.quote_time ? sector.quote_time.slice(11, 16) : ""}</small>{sector.instruments.slice(0, 2).map(item => <span key={item.symbol}><b>{item.name}</b><em className={currentTone(item.pct_change)}>{item.pct_change == null ? "—" : formatPct(item.pct_change)}</em></span>)}</div>;
+}
+
+export function IslandPathMatrix({ matrix, currentMarket, period, onPeriodChange }: { matrix: PathMatrix; currentMarket: MarketCoreCurrentQuotes | null; period: string; onPeriodChange: (value: string) => void }) {
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState("all");
   const [showDormant, setShowDormant] = useState(false);
@@ -54,6 +62,7 @@ export function IslandPathMatrix({ matrix, period, onPeriodChange }: { matrix: P
     setActiveGroup(name);
   };
   const selectedHistory = selected?.detail_report_id ? research?.history.find(item => item.report_id === selected.detail_report_id) : undefined;
+  const currentBySector = useMemo(() => new Map((currentMarket?.sectors ?? []).map(item => [item.sector_key, item])), [currentMarket]);
   return <div className="path-matrix-shell">
     <div className="matrix-controls" aria-label="历史路径筛选">
       <fieldset><legend>查看交易日</legend>{["10", "20", "40", "all"].map(value => <button key={value} type="button" className={period === value ? "active" : ""} onClick={() => onPeriodChange(value)}>{value === "all" ? "全部" : `最近${value}个交易日`}</button>)}</fieldset>
@@ -64,10 +73,10 @@ export function IslandPathMatrix({ matrix, period, onPeriodChange }: { matrix: P
     <nav className="group-jump-nav" aria-label="一级分组快捷导航">{groups.map(item => <button key={item.group_name} type="button" aria-current={activeGroup === item.group_name ? "true" : undefined} onClick={() => jumpToGroup(item.group_name)}>{item.group_name}<small>{item.rows.length}</small></button>)}</nav>
     <p className="matrix-caption">{matrix.caption}按受控完整交易日排列；颜色为当期报告路径标记，“未提”表示该期未单独更新。市场行情仅按该日期精确读取，不做行情数据回退。相关证券逐项表现请点击查看；不构成板块指数或综合收益。</p>
     <div className="matrix-desktop matrix-viewport" ref={viewport}>
-      <table className="path-matrix" data-column-model="fixed"><colgroup><col className="matrix-sector-column" />{matrix.dates.map(item => <col className="matrix-date-column" key={item.trading_date} />)}</colgroup><caption className="sr-only">{matrix.caption}</caption><thead><tr><th className="sticky-sector" scope="col">板块</th>{matrix.dates.map((item, index) => <th className={index === matrix.dates.length - 1 ? "latest-column" : ""} scope="col" key={item.trading_date} title={`完整交易日 ${item.trading_date} ${item.weekday}`}><span className="matrix-date-header">{shortDate(item.trading_date)} <b>{shortWeekday(item.weekday)}</b></span></th>)}</tr></thead>
+      <table className="path-matrix" data-column-model="fixed"><colgroup><col className="matrix-sector-column" /><col className="matrix-current-column" />{matrix.dates.map(item => <col className="matrix-date-column" key={item.trading_date} />)}</colgroup><caption className="sr-only">{matrix.caption}</caption><thead><tr><th className="sticky-sector" scope="col">板块</th><th className="sticky-current matrix-current-heading" scope="col">当前行情<small>{currentMarket ? `${currentMarket.snapshot_ttl_seconds ?? 60}s 刷新` : "加载中"}</small></th>{matrix.dates.map((item, index) => <th className={index === matrix.dates.length - 1 ? "latest-column" : ""} scope="col" key={item.trading_date} title={`完整交易日 ${item.trading_date} ${item.weekday}`}><span className="matrix-date-header">{shortDate(item.trading_date)} <b>{shortWeekday(item.weekday)}</b></span></th>)}</tr></thead>
         <tbody>{groups.flatMap(({ group_name: group, rows: items }) => [
-          <tr className="matrix-group" data-group-name={group} ref={node => { if (node) desktopGroups.current.set(group, node); else desktopGroups.current.delete(group); }} key={`group-${group}`}><th className="sticky-sector matrix-group-label" scope="rowgroup">{group}</th><td colSpan={matrix.dates.length} aria-hidden="true" /></tr>,
-          ...items.map(row => <tr key={row.sector_key}><th className="sticky-sector" scope="row">{row.market_available === false ? <span>{row.sector_name}</span> : <Link to={`/sectors/${row.sector_key}`}>{row.sector_name}</Link>}</th>{row.cells.map((cell, index) => <td key={cell.trading_date} className={index === row.cells.length - 1 ? "latest-column" : ""}><button type="button" className={`path-cell ${cell.path_status ? `path-${cell.path_status}` : "path-no-report"}`} style={cell.path_status_color ? { backgroundColor: cell.path_status_color } : undefined} onClick={() => setSelected({ ...cell, sector_name: row.sector_name, sector_key: row.sector_key, market_available: row.market_available })} aria-label={cellAriaLabel(row.sector_name, cell)} title={marketOverlayTitle(cell)}><span>{reportStatus(cell)}</span><small className={`market-overlay-${cell.market_overlay?.kind ?? "unavailable"}`}>{marketOverlayLabel(cell)}</small></button></td>)}</tr>),
+          <tr className="matrix-group" data-group-name={group} ref={node => { if (node) desktopGroups.current.set(group, node); else desktopGroups.current.delete(group); }} key={`group-${group}`}><th className="sticky-sector matrix-group-label" scope="rowgroup">{group}</th><td className="sticky-current matrix-current-group" aria-hidden="true" /><td colSpan={matrix.dates.length} aria-hidden="true" /></tr>,
+          ...items.map(row => <tr key={row.sector_key}><th className="sticky-sector" scope="row">{row.market_available === false ? <span>{row.sector_name}</span> : <Link to={`/sectors/${row.sector_key}`}>{row.sector_name}</Link>}</th><td className="sticky-current"><CurrentMarketCell sector={currentBySector.get(row.sector_key)} /></td>{row.cells.map((cell, index) => <td key={cell.trading_date} className={index === row.cells.length - 1 ? "latest-column" : ""}><button type="button" className={`path-cell ${cell.path_status ? `path-${cell.path_status}` : "path-no-report"}`} style={cell.path_status_color ? { backgroundColor: cell.path_status_color } : undefined} onClick={() => setSelected({ ...cell, sector_name: row.sector_name, sector_key: row.sector_key, market_available: row.market_available })} aria-label={cellAriaLabel(row.sector_name, cell)} title={marketOverlayTitle(cell)}><span>{reportStatus(cell)}</span><small className={`market-overlay-${cell.market_overlay?.kind ?? "unavailable"}`}>{marketOverlayLabel(cell)}</small></button></td>)}</tr>),
         ])}</tbody>
       </table>
     </div>

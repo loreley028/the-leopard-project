@@ -111,6 +111,15 @@ export interface MarketCoreCurrentQuotes {
   cache_hit: boolean;
   provider_request_count: number;
   quotes: MarketCoreCurrentQuote[];
+  snapshot_ttl_seconds?: number;
+  sectors?: Array<{
+    sector_key: string;
+    sector_name: string;
+    market_status: "available" | "unavailable";
+    market_session: NonNullable<MarketCoreLiveQuote["session_state"]>;
+    quote_time: string | null;
+    instruments: MarketCoreCurrentQuote[];
+  }>;
 }
 
 export interface SectorMention {

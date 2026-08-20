@@ -41,8 +41,8 @@ export function MarketCoreShanghaiReader({ market, includeHistory = true }: { ma
   return <section className="reader-market-anchor" aria-label="客观市场锚点">
     <div className="reader-market-anchor-head"><div><p className="eyebrow">客观市场锚点</p><h3>{market.name}</h3><small className="reader-security-code">000001.SH</small></div><span>独立于报告</span></div>
     <div className="reader-live-summary">
-      <div><small>{liveLabel(live)}</small><strong>{live.status === "available" ? formatSecurityPrice(live.current) : "—"}</strong><em className={tone(live.pct_change)}>{live.status === "available" && live.pct_change != null ? formatPct(live.pct_change) : "—"}</em></div>
-      <div><small>最近完整收盘</small><strong>{latest ? formatSecurityPrice(latest.close) : "—"}</strong><em>{latest?.trading_date ?? "—"}</em></div>
+      <div><small>{liveLabel(live)}</small><strong className={tone(live.pct_change)}>{live.status === "available" ? formatSecurityPrice(live.current) : "—"}</strong><em className={tone(live.pct_change)}>{live.status === "available" && live.pct_change != null ? formatPct(live.pct_change) : "—"}</em></div>
+      <div><small>最近完整收盘</small><strong className={tone(latest?.pct_change)}>{latest ? formatSecurityPrice(latest.close) : "—"}</strong><em className={tone(latest?.pct_change)}>{latest?.trading_date ?? "—"}</em></div>
     </div>
     {live.status === "available" ? <p className="reader-market-time">{live.display_mode === "same_day_session_latest" ? `${liveMessage(live)}；` : ""}行情时间：{formatShanghaiQuoteDateTime(live.quote_datetime)}</p> : <p className="reader-market-time">{liveMessage(live)}；最近完整收盘、历史与均线继续可用。</p>}
     <MarketCoreIndicatorsView indicators={indicators} />
@@ -63,7 +63,7 @@ function BroadAnchorCard({ instrument }: { instrument: MarketCoreBroadMarket["an
 }
 
 function AlignedBroadMarketTable({ shanghai, broad }: { shanghai: MarketCoreShanghai; broad: MarketCoreBroadMarket }) {
-  const dates = broad.trading_date_axis;
+  const dates = [...broad.trading_date_axis].reverse();
   const assets = [{ name: shanghai.name, history: shanghai.history }, ...broad.anchors.map(item => ({ name: item.name, history: item.history }))];
   return <section className="aligned-broad-market" aria-label="最近10个完整交易日宽基市场">
     <div className="reader-completed-history-heading"><h4>最近10个完整交易日 · 宽基市场</h4><span>按交易日精确对齐</span></div>

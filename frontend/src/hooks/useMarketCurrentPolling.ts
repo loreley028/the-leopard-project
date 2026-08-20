@@ -16,6 +16,7 @@ export const shouldPollMarketCurrent = (session: ReaderMarketSession | null | un
 export function useMarketCurrentPolling(
   refresh: () => Promise<{ session_state: ReaderMarketSession } | null>,
   enabled = true,
+  intervalMs = MARKET_CURRENT_POLL_INTERVAL_MS,
 ) {
   const refreshRef = useRef(refresh);
   refreshRef.current = refresh;
@@ -31,12 +32,12 @@ export function useMarketCurrentPolling(
       if (disposed || !isVisible()) return;
       const result = await refreshRef.current().catch(() => null);
       if (!disposed && isVisible() && shouldPollMarketCurrent(result?.session_state)) {
-        timer = window.setTimeout(() => { void run(); }, MARKET_CURRENT_POLL_INTERVAL_MS);
+        timer = window.setTimeout(() => { void run(); }, intervalMs);
       }
     };
     const onVisibilityChange = () => { if (document.visibilityState === "visible") void run(); else clear(); };
     document.addEventListener("visibilitychange", onVisibilityChange);
     void run();
     return () => { disposed = true; clear(); document.removeEventListener("visibilitychange", onVisibilityChange); };
-  }, [enabled]);
+  }, [enabled, intervalMs]);
 }
