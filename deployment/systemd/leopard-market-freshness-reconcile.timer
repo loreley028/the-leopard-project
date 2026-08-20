@@ -1,0 +1,12 @@
+[Unit]
+Description=Reconcile The Leopard Project Market Core after capture and before open
+
+[Timer]
+OnCalendar=Mon..Fri *-*-* 09:10:00 Asia/Shanghai
+OnCalendar=Mon..Fri *-*-* 15:40:00 Asia/Shanghai
+Persistent=true
+Unit=leopard-market-freshness-reconcile.service
+AccuracySec=1min
+
+[Install]
+WantedBy=timers.target

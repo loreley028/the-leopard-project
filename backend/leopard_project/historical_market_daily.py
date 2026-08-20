@@ -314,6 +314,8 @@ def refresh_market_history_to_latest_completed(
     provider: SinaPublicDailyMarketProvider,
     enable_provider: bool = False,
     now: datetime | None = None,
+    symbols: Sequence[str] | None = None,
+    stop_on_rate_limit: bool = False,
 ) -> MarketHistoryRefreshSummary:
     """Fill only the exact latest completed Market Core day, fail-closed.
 
@@ -329,11 +331,15 @@ def refresh_market_history_to_latest_completed(
     expected = expected_latest_completed_trading_day(observed_at)
     inserted = skipped = conflicts = 0
     failures: dict[str, str] = {}
-    for symbol in market_core_symbols():
+    requested_symbols = tuple(dict.fromkeys(symbols or market_core_symbols()))
+    for symbol in requested_symbols:
         try:
             bars = provider.fetch_history(symbol, days=20, allow_network=True)
         except Exception as exc:
-            failures[symbol] = getattr(exc, "code", type(exc).__name__)
+            code = str(getattr(exc, "code", type(exc).__name__))
+            failures[symbol] = code
+            if stop_on_rate_limit and code == "http_456":
+                break
             continue
         target_index = next((index for index, bar in enumerate(bars) if bar.trading_date == expected), None)
         if target_index is None:
@@ -352,4 +358,4 @@ def refresh_market_history_to_latest_completed(
             skipped += result == "skip_existing_same"
             conflicts += result == "conflict"
         session.commit()
-    return MarketHistoryRefreshSummary(expected, len(market_core_symbols()), inserted, skipped, conflicts, failures)
+    return MarketHistoryRefreshSummary(expected, len(requested_symbols), inserted, skipped, conflicts, failures)

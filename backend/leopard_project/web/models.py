@@ -403,6 +403,24 @@ class LiveMarketAnchorDaily(Base):
     source: Mapped[str] = mapped_column(String(100))
 
 
+class MarketDailyAdvanceRun(Base):
+    """Auditable host-CLI Market Core advancement, never a Reader operation."""
+
+    __tablename__ = "market_daily_advance_runs"
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=new_id)
+    mode: Mapped[str] = mapped_column(String(30))
+    expected_trading_date: Mapped[date] = mapped_column(Date, index=True)
+    total_symbols: Mapped[int] = mapped_column(Integer)
+    ready_symbols: Mapped[int] = mapped_column(Integer, default=0)
+    missing_symbols: Mapped[int] = mapped_column(Integer, default=0)
+    conflicts: Mapped[int] = mapped_column(Integer, default=0)
+    status: Mapped[str] = mapped_column(String(30), default="running")
+    detail_json: Mapped[str] = mapped_column(Text, default="{}")
+    started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
 class SectorIndicatorSnapshot(Base):
     __tablename__ = "sector_indicator_snapshots"
     id: Mapped[str] = mapped_column(String(32), primary_key=True, default=new_id)

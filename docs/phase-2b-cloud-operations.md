@@ -8,20 +8,23 @@ unchanged.
 
 ## Post-close captures
 
-`deployment/scripts/run_daily_market_capture.sh` is deliberately a short host
-wrapper. It calls the two existing explicit CLI commands inside `leopard-api`:
+`deployment/scripts/run_daily_market_capture.sh` is a short host wrapper for
+`advance_market_core.py --mode advance`. At 15:20 on controlled trading days
+it first uses Tencent standard quotes for the registry-derived Market Core
+universe, then checks exact-date coverage. Only symbols still missing that
+exact completed day are repaired sequentially through Sina history. Neither
+path reads Reports or PDFs.
 
-1. `capture_live_market_anchor_daily.py` for `sh000001`.
-2. `capture_security_proxy_daily.py` for the fixed proxy registry.
-
-Install the two `deployment/systemd/leopard-daily-market-capture.*` templates
-only during a release deployment, then run `systemctl daemon-reload` and
-`systemctl enable --now leopard-daily-market-capture.timer`. The timer is
-weekday 15:20 Asia/Shanghai with `Persistent=true`. The capture CLIs retain the
-controlled calendar, post-close, no-overwrite and idempotency gates; the
-legacy in-process market automation must remain disabled; systemd
-does not retry failed Provider calls. Inspect outcomes with
-`journalctl -u leopard-daily-market-capture.service`.
+Install the `leopard-daily-market-capture.*` templates together with
+`leopard-market-freshness-reconcile.*`, then run `systemctl daemon-reload` and
+enable both timers. The primary advance runs weekdays at 15:20; reconciliation
+runs at 15:40 and 09:10 Asia/Shanghai. All timers use `Persistent=true`.
+The reconciliation does not re-capture a complete universe: it reads SQLite
+first and only requests missing exact-date symbols. HTTP 456 stops the current
+Sina pass without retry or overwrite; the next scheduled reconciliation may
+attempt the remaining gap. Inspect outcomes with `journalctl -u
+leopard-daily-market-capture.service` and `journalctl -u
+leopard-market-freshness-reconcile.service`.
 
 ## HTTPS gate
 

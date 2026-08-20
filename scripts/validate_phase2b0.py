@@ -24,8 +24,10 @@ def main() -> None:
     ))
     checks += require(ROOT / "deployment/scripts/run_daily_market_capture.sh", (
         "set -euo pipefail",
-        "capture_live_market_anchor_daily.py --enable-provider",
-        "capture_security_proxy_daily.py --enable-provider",
+        "advance_market_core.py",
+        "--mode advance",
+        "--enable-tencent-provider",
+        "--enable-sina-provider",
         "docker exec",
     ))
     checks += require(ROOT / "deployment/systemd/leopard-daily-market-capture.timer", (
@@ -35,7 +37,22 @@ def main() -> None:
     checks += require(ROOT / "deployment/systemd/leopard-daily-market-capture.service", (
         "Type=oneshot",
         "run_daily_market_capture.sh",
-        "TimeoutStartSec=180",
+        "TimeoutStartSec=300",
+    ))
+    checks += require(ROOT / "deployment/scripts/run_market_freshness_reconcile.sh", (
+        "advance_market_core.py",
+        "--mode reconcile",
+        "--enable-sina-provider",
+    ))
+    checks += require(ROOT / "deployment/systemd/leopard-market-freshness-reconcile.timer", (
+        "09:10:00 Asia/Shanghai",
+        "15:40:00 Asia/Shanghai",
+        "Persistent=true",
+    ))
+    checks += require(ROOT / "deployment/systemd/leopard-market-freshness-reconcile.service", (
+        "Type=oneshot",
+        "run_market_freshness_reconcile.sh",
+        "TimeoutStartSec=300",
     ))
     checks += require(ROOT / "deployment/nginx/leopard-public-https.conf", (
         "listen 80;",

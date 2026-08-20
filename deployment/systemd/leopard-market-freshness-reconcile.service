@@ -1,5 +1,5 @@
 [Unit]
-Description=The Leopard Project controlled post-close Market Core advance
+Description=The Leopard Project controlled Market Core freshness reconciliation
 Wants=docker.service
 After=docker.service network-online.target
 
@@ -8,7 +8,7 @@ Type=oneshot
 User=root
 Group=root
 Environment=TZ=Asia/Shanghai
-ExecStart=/opt/the-leopard-project/deployment/scripts/run_daily_market_capture.sh
+ExecStart=/opt/the-leopard-project/deployment/scripts/run_market_freshness_reconcile.sh
 TimeoutStartSec=300
 NoNewPrivileges=true
 PrivateTmp=true
