@@ -36,3 +36,4 @@ def test_manual_mapping_review_is_active_only_and_exported_without_registry_muta
     assert registry.read_bytes() == before
     assert "通信服务" in text and "电信ETF" in text
     assert "玻璃基板" in text and "恒生科技" in text
+    assert "MULTI_STOCK" in text

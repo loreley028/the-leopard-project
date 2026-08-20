@@ -199,6 +199,7 @@ def write_mapping_review_summary(output: Path, *, latest_completed_date: str) ->
         "",
         f"- ETF_ONLY（{len(summary_by_pattern['ETF_ONLY'])}）：{'、'.join(summary_by_pattern['ETF_ONLY']) or '—'}",
         f"- STOCK_ONLY（{len(summary_by_pattern['STOCK_ONLY'])}）：{'、'.join(summary_by_pattern['STOCK_ONLY']) or '—'}",
+        f"- MULTI_STOCK（{len(summary_by_pattern['MULTI_STOCK'])}）：{'、'.join(summary_by_pattern['MULTI_STOCK']) or '—'}",
         f"- ETF_PLUS_STOCKS（{len(summary_by_pattern['ETF_PLUS_STOCKS'])}）：{'、'.join(summary_by_pattern['ETF_PLUS_STOCKS']) or '—'}",
         f"- UNAVAILABLE（{len(summary_by_pattern['UNAVAILABLE'])}）：{'、'.join(summary_by_pattern['UNAVAILABLE']) or '—'}",
         "",
