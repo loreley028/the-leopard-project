@@ -43,6 +43,7 @@ from .market_core import MarketCoreReadService
 from leopard_project.providers.tencent_standard_quote import TencentStandardSecurityQuoteProvider
 from leopard_project.security_proxy_observation import SecurityProxyObservationService
 from leopard_project.live_market_anchor_daily import SHANGHAI_COMPOSITE_SYMBOL
+from leopard_project.daily_market_advance import market_freshness_status
 
 
 COOKIE_NAME = "leopard_session"
@@ -795,20 +796,22 @@ def create_app(settings: WebSettings | None = None, session_factory: sessionmake
             session.scalar(select(func.max(SecurityProxyDaily.trading_date))),
         ]
         data_snapshot_date = max((item for item in snapshot_dates if item is not None), default=None)
-        from leopard_project.historical_market_daily import expected_latest_completed_trading_day
         from leopard_project.security_proxy_daily import market_core_security_symbols
         from leopard_project.security_proxy_observation import APPROVED, load_security_proxy_registry
         from leopard_project.report_registry import load_report_registry
         from leopard_project.dormant_sectors import classify_dormant_sector
         from .market_date_axis import market_core_completed_dates
-        expected = expected_latest_completed_trading_day(datetime.now(SHANGHAI))
+        now = datetime.now(SHANGHAI)
+        expected = market_freshness_status(session, now=now)["expected_latest_completed"]
+        assert isinstance(expected, str)
+        expected_day = date.fromisoformat(expected)
         symbols = market_core_security_symbols()
         current_symbols = set(session.scalars(select(SecurityProxyDaily.symbol).where(
-            SecurityProxyDaily.symbol.in_(symbols), SecurityProxyDaily.trading_date == expected,
+            SecurityProxyDaily.symbol.in_(symbols), SecurityProxyDaily.trading_date == expected_day,
         )))
         shanghai_fresh = session.scalar(select(LiveMarketAnchorDaily.id).where(
             LiveMarketAnchorDaily.symbol == SHANGHAI_COMPOSITE_SYMBOL,
-            LiveMarketAnchorDaily.trading_date == expected,
+            LiveMarketAnchorDaily.trading_date == expected_day,
         )) is not None
         active_objects = [item for item in load_report_registry() if item.lifecycle == "active"]
         definitions = {item.market_path_key: item for item in load_security_proxy_registry() if item.status == APPROVED}
@@ -828,9 +831,9 @@ def create_app(settings: WebSettings | None = None, session_factory: sessionmake
             "latest_live_market_anchor_eod_date": session.scalar(select(func.max(LiveMarketAnchorDaily.trading_date))),
             "latest_security_proxy_eod_date": session.scalar(select(func.max(SecurityProxyDaily.trading_date))),
             "capture_mode": "host_systemd_timer",
-            "capture_schedule": "Mon-Fri 15:20 Asia/Shanghai; controlled calendar may skip",
+            "capture_schedule": "Mon-Fri 09:10 reconcile; 15:20 advance; 15:40 reconcile Asia/Shanghai",
             "market_history_status": {
-                "expected_latest_completed": expected.isoformat(),
+                **market_freshness_status(session, now=now),
                 "shanghai": "fresh" if shanghai_fresh else "stale_history",
                 "security_coverage": {"through_expected": len(current_symbols), "required": len(symbols)},
                 "report_active_sectors": len(active_objects),

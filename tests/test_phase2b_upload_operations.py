@@ -319,3 +319,9 @@ def test_operations_status_is_read_only_and_has_empty_state(automatic_web) -> No
     assert freshness["expected_latest_completed"]
     assert freshness["shanghai"] == "stale_history"
     assert freshness["security_coverage"] == {"through_expected": 0, "required": len(market_core_security_symbols())}
+    assert freshness["broad"] == {"through_expected": 0, "required": 4}
+    assert freshness["market_core"]["through_expected"] == 0
+    assert freshness["market_core"]["required"] == len(market_core_security_symbols()) + 1
+    assert freshness["last_daily_advance"] is None
+    assert freshness["last_reconciliation"] is None
+    assert freshness["next_scheduled"] is not None

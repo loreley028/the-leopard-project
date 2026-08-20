@@ -20,6 +20,7 @@ function reportDayRange() {
 export function AdminDashboardPage() {
   const [days, setDays] = useState<ReportDay[]>([]);
   const [operations, setOperations] = useState<Awaited<ReturnType<typeof api.adminOperationsStatus>> | null>(null);
+  const freshness = operations?.market_history_status;
   const load = useCallback(() => {
     const [start, end] = reportDayRange();
     return Promise.all([api.reportDays(start, end), api.adminOperationsStatus()]).then(([nextDays, nextOperations]) => {
@@ -43,6 +44,10 @@ export function AdminDashboardPage() {
         <div><span>最新发布报告</span><strong>{operations?.latest_published_report_date ?? "暂无已发布报告"}</strong></div>
         <div><span>最新上证 EOD</span><strong>{operations?.latest_live_market_anchor_eod_date ?? "尚未采集"}</strong></div>
         <div><span>最新代理证券 EOD</span><strong>{operations?.latest_security_proxy_eod_date ?? "尚未采集"}</strong></div>
+        <div><span>预期完整交易日</span><strong>{freshness?.expected_latest_completed ?? "读取中"}</strong></div>
+        <div><span>Market Core</span><strong>{freshness?.market_core ? `${freshness.market_core.through_expected}/${freshness.market_core.required}` : "读取中"}</strong></div>
+        <div><span>最近日终推进</span><strong>{freshness?.last_daily_advance ?? "尚无"}</strong></div>
+        <div><span>最近协调 / 下次</span><strong>{freshness?.last_reconciliation ?? "尚无"} / {freshness?.next_scheduled?.at ?? "—"}</strong></div>
       </div>
       <p className="muted">{operations?.capture_schedule ?? "正在读取每日采集状态…"}</p>
       <button type="button" onClick={() => void load()}>重新检查状态</button>

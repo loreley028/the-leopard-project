@@ -121,6 +121,15 @@ export const api = {
     latest_security_proxy_eod_date: string | null;
     capture_mode: string;
     capture_schedule: string;
+    market_history_status?: {
+      expected_latest_completed?: string;
+      shanghai?: string;
+      broad?: { through_expected: number; required: number };
+      market_core?: { through_expected: number; required: number; missing_symbols: string[] };
+      last_daily_advance?: string | null;
+      last_reconciliation?: string | null;
+      next_scheduled?: { at: string; mode: string } | null;
+    };
   }>("/admin/operations/status"),
   reportDays: (start: string, end: string) => request<Array<{ report_date: string; weekday: string; expected_status: string; state: string; skip_reason: string; reports: Report[] }>>(`/admin/report-days?start=${start}&end=${end}`),
   skipReportDay: (day: string, reason = "") => request(`/admin/report-days/${day}/skip`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ reason }) }),
