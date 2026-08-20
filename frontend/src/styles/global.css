@@ -201,7 +201,9 @@ button, a, input, textarea, [tabindex] { outline-offset: 4px; }
 .matrix-controls button { padding: .5rem .65rem; border: 0; border-radius: 8px; background: transparent; cursor: pointer; }
 .matrix-controls button.active { background: var(--text-bark); color: white; }
 .matrix-controls label, .sector-filters label { display: grid; gap: .25rem; min-width: 150px; font-size: .8rem; font-weight: 800; }
-.matrix-controls input, .matrix-controls select, .sector-filters input, .sector-filters select, .admin-path-grid select { min-height: 42px; padding: .4rem .6rem; border: 1px solid var(--border-soft); border-radius: 10px; background: white; }
+.matrix-controls input:not([type="checkbox"]), .matrix-controls select, .sector-filters input, .sector-filters select, .admin-path-grid select { min-height: 42px; padding: .4rem .6rem; border: 1px solid var(--border-soft); border-radius: 10px; background: white; }
+.matrix-controls .matrix-dormant-toggle { display: inline-flex; align-items: center; align-self: end; min-width: 0; gap: .45rem; min-height: 42px; }
+.matrix-controls .matrix-dormant-toggle input[type="checkbox"] { box-sizing: border-box; flex: 0 0 auto; width: 17px; height: 17px; min-height: 0; margin: 0; padding: 0; accent-color: var(--text-bark); }
 .path-matrix-shell { width: 100%; min-width: 0; padding: 1rem; overflow: hidden; border: 1px solid var(--border-soft); border-radius: var(--radius-card); background: var(--surface-cream); }
 .matrix-caption { margin: .2rem 0 .8rem; color: var(--text-muted); font-size: .82rem; }
 .matrix-viewport { width: 100%; max-width: 100%; max-height: 70vh; overflow: auto; border: 1px solid var(--border-soft); }
