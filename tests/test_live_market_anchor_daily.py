@@ -12,6 +12,7 @@ from sqlalchemy.exc import IntegrityError
 from leopard_project.live_market_anchor_daily import (
     LiveMarketAnchorDailyCaptureError,
     capture_live_market_anchor_daily,
+    defense_line_trend,
     next_controlled_cn_a_trading_day,
     recent_defense_line_validations,
 )
@@ -193,6 +194,24 @@ def test_validation_returns_latest_ten_in_descending_trade_day_order(tmp_path, m
     assert len(rows) == 10
     assert [item["trading_date"] for item in rows] == sorted((item["trading_date"] for item in rows), reverse=True)
     assert rows[0]["trading_date"] == "2026-01-12" and rows[-1]["trading_date"] == "2026-01-03"
+
+
+def test_defense_trend_uses_completed_trading_day_axis_and_never_falls_back(tmp_path, monkeypatch) -> None:
+    import leopard_project.live_market_anchor_daily as module
+    factory = sessions(tmp_path)
+    start = date(2026, 1, 1)
+    monkeypatch.setattr(module, "next_controlled_cn_a_trading_day", lambda value: value)
+    with factory() as session:
+        session.add(report(start, market_path="攻防线3800点"))
+        for offset in range(4):
+            day = date.fromordinal(start.toordinal() + offset)
+            session.add(daily(day, str(3800 + offset)))
+        session.commit()
+        rows = defense_line_trend(session, limit=4)
+    assert [item["trading_date"] for item in rows] == ["2026-01-01", "2026-01-02", "2026-01-03", "2026-01-04"]
+    assert rows[0]["available"] is True and rows[0]["distance_points"] == 0.0
+    assert all(item["available"] is False and item["defense_line_value"] is None for item in rows[1:])
+    assert all(item["data_mode"] == "completed_eod" for item in rows)
 
 
 def test_validation_is_descriptive_only_without_prediction_or_effectiveness_score(tmp_path) -> None:

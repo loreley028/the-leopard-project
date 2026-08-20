@@ -56,6 +56,8 @@ def _field_name(column: str) -> str:
 
 
 def _origin(definition: SecurityProxyDefinition) -> str:
+    if definition.version == "1.2.0":
+        return "M3.18 manual_registry_review"
     return "M3.14 newly_added" if definition.version == "1.1.0" else "existing"
 
 

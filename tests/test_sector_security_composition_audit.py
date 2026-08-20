@@ -3,7 +3,7 @@ from __future__ import annotations
 from collections import Counter
 
 from leopard_project.config import CONFIG_DIR
-from leopard_project.sector_security_composition_audit import build_composition_audit, write_composition_audit
+from leopard_project.sector_security_composition_audit import build_composition_audit, write_composition_audit, write_mapping_review_summary
 
 
 def test_full_composition_audit_has_exactly_71_active_objects_and_preserves_registry(tmp_path) -> None:
@@ -26,3 +26,13 @@ def test_composition_summary_and_reuse_export_match_detail_rows(tmp_path) -> Non
     assert max(int(item["used_by_sector_count"]) for item in reuse) >= 2
     paths = write_composition_audit(tmp_path, latest_completed_date="2026-08-20")
     assert all(path.exists() and path.read_text(encoding="utf-8-sig").splitlines()[0] for path in paths)
+
+
+def test_manual_mapping_review_is_active_only_and_exported_without_registry_mutation(tmp_path) -> None:
+    registry = CONFIG_DIR / "security_proxy_registry_v1.json"
+    before = registry.read_bytes()
+    output = write_mapping_review_summary(tmp_path / "sector_security_mapping_review.md", latest_completed_date="2026-08-20")
+    text = output.read_text(encoding="utf-8")
+    assert registry.read_bytes() == before
+    assert "通信服务" in text and "电信ETF" in text
+    assert "玻璃基板" in text and "恒生科技" in text

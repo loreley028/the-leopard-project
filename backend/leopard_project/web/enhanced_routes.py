@@ -58,7 +58,7 @@ from .market_ingestion import import_real_market, refresh_real_market
 from .intraday import IntradayRefreshCoordinator, intraday_policy, resolve_intraday_data_status
 from .market_automation import EodBackfillCoordinator
 from .live_market_anchor import LiveShanghaiMarketAnchorService
-from leopard_project.live_market_anchor_daily import recent_defense_line_validations
+from leopard_project.live_market_anchor_daily import defense_line_trend, recent_defense_line_validations
 from .path_history import matrix_dates
 from .primary_market_observation import primary_history
 from .market_date_axis import market_core_completed_dates
@@ -234,6 +234,7 @@ def register_enhanced_routes(
             "market_snapshots": list(snapshots.values()),
             "report_defense": report_defense,
             "recent_defense_line_validations": recent_defense_line_validations(session),
+            "defense_line_trend": defense_line_trend(session),
             "comparison": service.comparison(report),
             # Compatibility only.  The Viewer must never treat this legacy
             # report-snapshot count as a market-data quality gate.

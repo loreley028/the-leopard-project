@@ -249,4 +249,4 @@ def test_zero_report_eod_collectors_plan_shanghai_and_all_fixed_proxies_without_
     assert anchor.requested_count == 1 and anchor.inserted_count == 1
     assert proxies.candidate_count == len(market_core_security_symbols())
     assert proxies.inserted_count == len(market_core_security_symbols())
-    assert proxies.provider_batch_count == 4
+    assert proxies.provider_batch_count == (len(market_core_security_symbols()) + provider.max_batch_size - 1) // provider.max_batch_size

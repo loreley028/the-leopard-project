@@ -125,6 +125,29 @@ def test_innovative_medicine_returns_four_independent_instruments_without_aggreg
     assert "非板块指数" in observation.disclosure and FIXED_DISCLOSURE in registry_document()["disclosure"]
 
 
+def test_m317_manual_fixed_mapping_review_separates_confirmed_sector_observations() -> None:
+    paths = {item.market_path_key: item for item in load_security_proxy_registry()}
+    expected = {
+        "telecom_services": ["sh560690", "sh600941"],
+        "computer_sector": ["sh512720"],
+        "it_services": ["sz002065"],
+        "hotel_catering": ["sz159766", "sh600754"],
+        "medical_biology": ["sh512010"],
+        "internet_ecommerce": ["sz002315"],
+        "robotics": ["sh562500", "sz300024"],
+        "lithium_battery": ["sz159840", "sz300750"],
+        "energy_storage": ["sz159566", "sz300274"],
+        "glass_fiber": ["sh600176", "sh601636"],
+        "precious_metals": ["sh600547", "sz000426"],
+        "aerospace_equipment": ["sh600879"],
+    }
+    assert {key: [item.symbol for item in paths[key].instruments] for key in expected} == expected
+    assert [item.symbol for item in paths["communication_equipment"].instruments] == ["sh515880"]
+    assert [item.symbol for item in paths["computer_equipment"].instruments] == ["sz000977"]
+    assert [item.symbol for item in paths["innovative_drug"].instruments] == ["sz159992"]
+    assert [item.symbol for item in paths["gold_concept"].instruments] == ["sh600547"]
+
+
 def test_single_failure_partial_and_all_failure_unavailable_without_zero_fill() -> None:
     single = service(wire_record("sh515880").encode("gbk")).observe(["cpo"], enable_provider=True)[0]
     assert single.status == "partial" and single.instruments[0].quote_status == "available"

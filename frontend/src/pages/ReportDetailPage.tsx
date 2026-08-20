@@ -5,6 +5,7 @@ import { IslandCard } from "../components/island/IslandCard";
 import { IslandPathMatrix } from "../components/island/IslandPathMatrix";
 import { IslandStatusBadge } from "../components/island/IslandStatusBadge";
 import { BroadMarketOverview, MarketCoreShanghaiReader } from "../components/market/MarketCoreReader";
+import { DefenseDistanceTrend } from "../components/market/DefenseDistanceTrend";
 import { PdfPagePreview } from "../components/PdfPagePreview";
 import type { DefenseLineValidation, EnhancedReport, MarketCoreBroadMarket, MarketCoreCurrentQuotes, MarketCoreShanghai, MarketSnapshot, PathMatrix, ReportDefense, SectorAssessment } from "../types";
 import { formatPct } from "../utils/format";
@@ -65,8 +66,8 @@ function ReportOverview({ enhanced, market, broad }: { enhanced: EnhancedReport;
           </dl>
           <p className="defense-source">攻防线来源：{defenseSource ?? "报告未单列"}。报告观点与当前市场辅助按各自日期语义展示。</p>
         </section>
-        <section className="defense-validation-panel" aria-label="近10个交易日攻防验证">
-          <div className="defense-validation-heading"><div><p className="eyebrow">近10个交易日攻防验证</p><p>按前一份报告提出的攻防线，对照下一受控交易日上证指数实际收盘；不构成预测评分。</p></div><span>自然积累</span></div>
+        <section className="defense-validation-panel" aria-label="近10个交易日猎豹攻防点">
+          <div className="defense-validation-heading"><div><p className="eyebrow">近10个交易日猎豹攻防点</p><p>按前一份报告提出的攻防线，对照下一受控交易日上证指数实际收盘；不构成预测评分。</p></div><span>自然积累</span></div>
           <div className="defense-validation-table" role="table" aria-label="攻防验证明细">
             <div className="defense-validation-row defense-validation-header" role="row"><span>交易日</span><span>攻防线来源</span><span>攻防线</span><span>上证收盘</span><span>距攻防线</span><span>收盘位置</span></div>
             {validations.map(item => <div className="defense-validation-row" role="row" key={`${item.source_report_id}-${item.trading_date}`}>
@@ -80,6 +81,7 @@ function ReportOverview({ enhanced, market, broad }: { enhanced: EnhancedReport;
           </div>
           {validations.length === 0 && <p className="defense-validation-empty">攻防验证记录将随交易日自然积累。</p>}
           <p className="defense-validation-count">当前已积累 {validations.length} / 10 条完整验证记录。</p>
+          <DefenseDistanceTrend points={enhanced.defense_line_trend} />
         </section>
         <BroadMarketOverview shanghai={market} broad={broad} />
       </div>

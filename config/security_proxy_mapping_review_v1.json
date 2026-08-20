@@ -1,0 +1,19 @@
+{
+  "version": "1.0.0",
+  "effective_date": "2026-08-20",
+  "purpose": "人工维护固定ETF和代表公司观察组合；不参与运行时自动选标。",
+  "changes": [
+    {"sector_key": "telecom_services", "sector_name": "通信服务", "before": "通信ETF · 515880.SH", "after": "电信ETF · 560690.SH；中国移动 · 600941.SH", "reason": "与CPO、通信设备、光纤题材的通信ETF观察口径区分。"},
+    {"sector_key": "computer_sector", "sector_name": "计算机", "before": "浪潮信息 · 000977.SZ", "after": "计算机ETF · 512720.SH", "reason": "与计算机设备的浪潮信息观察口径区分。"},
+    {"sector_key": "it_services", "sector_name": "IT服务", "before": "同花顺 · 300033.SZ", "after": "东华软件 · 002065.SZ", "reason": "同花顺保留给互联网金融。"},
+    {"sector_key": "hotel_catering", "sector_name": "酒店餐饮", "before": "旅游ETF · 159766.SZ", "after": "旅游ETF · 159766.SZ；锦江酒店 · 600754.SH", "reason": "在酒店方向的部分覆盖ETF之外补充酒店代表公司，不替代餐饮。"},
+    {"sector_key": "medical_biology", "sector_name": "医药生物", "before": "创新药ETF · 159992.SZ", "after": "医药ETF · 512010.SH", "reason": "用医药卫生类综合观察口径与创新药主题分开。"},
+    {"sector_key": "internet_ecommerce", "sector_name": "互联网电商", "before": "小商品城 · 600415.SH", "after": "焦点科技 · 002315.SZ", "reason": "采用更直接的互联网电商代表公司。"},
+    {"sector_key": "robotics", "sector_name": "机器人", "before": "机器人 · 300024.SZ", "after": "机器人ETF · 562500.SH；机器人 · 300024.SZ", "reason": "ETF观察板块广度，代表公司观察风向。"},
+    {"sector_key": "lithium_battery", "sector_name": "锂电池", "before": "宁德时代 · 300750.SZ", "after": "锂电池ETF · 159840.SZ；宁德时代 · 300750.SZ", "reason": "与电池的综合观察方式区分。"},
+    {"sector_key": "energy_storage", "sector_name": "储能", "before": "阳光电源 · 300274.SZ", "after": "储能电池ETF · 159566.SZ；阳光电源 · 300274.SZ", "reason": "与光伏的单股观察方式区分。"},
+    {"sector_key": "glass_fiber", "sector_name": "玻璃玻纤", "before": "中材科技 · 002080.SZ", "after": "中国巨石 · 600176.SH；旗滨集团 · 601636.SH", "reason": "分别覆盖玻纤和玻璃方向。"},
+    {"sector_key": "precious_metals", "sector_name": "贵金属", "before": "山东黄金 · 600547.SH", "after": "山东黄金 · 600547.SH；兴业银锡 · 000426.SZ", "reason": "增加白银及贵金属方向，区别黄金概念。"},
+    {"sector_key": "aerospace_equipment", "sector_name": "航天装备", "before": "航发动力 · 600893.SH", "after": "航天电子 · 600879.SH", "reason": "从航空发动机观察调整为航天装备观察。"}
+  ]
+}

@@ -190,6 +190,21 @@ button, a, input, textarea, [tabindex] { outline-offset: 4px; }
 .defense-validation-row em { font-size: .7rem; font-style: normal; }
 .defense-validation-header { padding: 0 .65rem; background: transparent; color: var(--text-muted); font-size: .68rem; font-weight: 800; }
 .defense-validation-count, .report-risk-empty { margin: .65rem 0 0; color: var(--text-muted); font-size: .78rem; }
+.defense-distance-trend { margin-top: 1rem; padding-top: .95rem; border-top: 1px solid var(--border-soft); }
+.defense-distance-trend-heading { display: flex; justify-content: space-between; gap: .75rem; align-items: start; }
+.defense-distance-trend-heading p { margin: .18rem 0 0; color: var(--text-muted); font-size: .78rem; line-height: 1.45; }
+.defense-distance-trend-heading .eyebrow { margin: 0; color: var(--text-bark); }
+.defense-distance-trend-heading > span { flex: 0 0 auto; padding: .2rem .45rem; border-radius: 999px; background: rgb(255 250 240 / 80%); color: var(--text-muted); font-size: .72rem; font-weight: 800; }
+.defense-distance-chart { margin: .7rem 0 0; overflow: hidden; }
+.defense-distance-chart svg { display: block; width: 100%; height: auto; min-height: 170px; overflow: visible; }
+.defense-distance-chart figcaption { margin-top: .25rem; color: var(--text-muted); font-size: .72rem; line-height: 1.45; }
+.defense-distance-zero { stroke: #756c5d; stroke-dasharray: 4 4; stroke-width: 1; }
+.defense-distance-positive, .defense-distance-negative { stroke-width: 2.5; stroke-linecap: round; }
+.defense-distance-positive { stroke: var(--a-share-red); }
+.defense-distance-negative { stroke: var(--a-share-green); }
+.defense-distance-point-positive { fill: var(--a-share-red); stroke: #fffaf0; stroke-width: 1.5; }
+.defense-distance-point-negative { fill: var(--a-share-green); stroke: #fffaf0; stroke-width: 1.5; }
+.defense-distance-axis-label, .defense-distance-date { fill: var(--text-muted); font-size: 10px; }
 .assessment-list { display: grid; gap: 1rem; }
 .assessment-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .7rem; }
 .assessment-fields div { padding: .8rem; border-left: 3px solid #8eb6a0; background: rgb(255 255 255 / 50%); }
@@ -569,6 +584,7 @@ button, a, input, textarea, [tabindex] { outline-offset: 4px; }
   .defense-validation-header { display: none; }
   .defense-validation-row small { display: block; }
   .defense-validation-row strong { white-space: normal; }
+  .defense-distance-trend-heading { align-items: start; }
   .sectors-research, .sector-research-detail { min-width: 0; max-width: 100%; overflow-x: clip; }
   .sector-table-wrap { width: 100%; overflow-x: auto; }
   .recent-five-detail { grid-template-columns: 1fr; }

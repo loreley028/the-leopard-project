@@ -526,6 +526,7 @@ export interface EnhancedReport {
   market_snapshots: MarketSnapshot[];
   report_defense: ReportDefense;
   recent_defense_line_validations: DefenseLineValidation[];
+  defense_line_trend: DefenseLineTrendPoint[];
   comparison: { previous_report_id: string | null; previous_report_date?: string; status_changes: Array<{ sector_key: string; sector_name: string; from: PathStatus; to: PathStatus }>; counts: Record<string, number> };
   market_data_attached: boolean;
   data_notice: string;
@@ -541,6 +542,20 @@ export interface DefenseLineValidation {
   distance_points: number;
   distance_pct: number;
   close_position: "close_above_defense_line" | "close_below_defense_line" | "close_at_defense_line";
+}
+
+export interface DefenseLineTrendPoint {
+  trading_date: string;
+  available: boolean;
+  source_report_id: string | null;
+  source_report_date: string | null;
+  defense_line_value: number | null;
+  index_name: string;
+  index_close: number | null;
+  distance_points: number | null;
+  distance_pct: number | null;
+  close_position: DefenseLineValidation["close_position"] | null;
+  data_mode: "completed_eod";
 }
 
 export interface LiveMarketAnchor {

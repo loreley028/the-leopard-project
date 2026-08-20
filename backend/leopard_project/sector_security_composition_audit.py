@@ -8,10 +8,15 @@ from __future__ import annotations
 import csv
 from collections import defaultdict
 from pathlib import Path
+import json
 from typing import Iterable
 
+from .config import CONFIG_DIR
 from .report_registry import load_report_registry
 from .security_proxy_observation import APPROVED, SecurityProxyDefinition, SecurityProxyInstrument, load_security_proxy_registry
+
+
+MAPPING_REVIEW_PATH = CONFIG_DIR / "security_proxy_mapping_review_v1.json"
 
 
 DETAIL_COLUMNS = (
@@ -25,8 +30,19 @@ SUMMARY_COLUMNS = (
 )
 REUSE_COLUMNS = ("security_name", "human_code", "security_type", "used_by_sector_count", "used_by_sectors", "roles")
 
+REUSE_REVIEW_NOTES = {
+    "sh515880": "合理：仅用于通信设备、CPO和光纤题材；通信服务已改用电信ETF。",
+    "sz300750": "合理：锂电池增加锂电池ETF后，宁德时代只作为共同的代表公司。",
+    "sh600547": "合理：贵金属增加兴业银锡后，山东黄金不再是唯一观察标的。",
+    "sz159766": "合理：酒店餐饮增加锦江酒店后，旅游ETF仅保留部分旅游覆盖。",
+    "sz002475": "需持续人工审核：元器件与消费电子存在供应链交集。",
+    "sz300274": "合理：储能增加储能电池ETF后，阳光电源仅作为共同的代表公司。",
+}
+
 
 def _origin(definition: SecurityProxyDefinition) -> str:
+    if definition.version == "1.2.0":
+        return "M3.18 manual_registry_review"
     return "M3.14 newly_added" if definition.version == "1.1.0" else "existing"
 
 
@@ -142,3 +158,70 @@ def write_composition_audit(output_dir: Path, *, latest_completed_date: str, ten
     write_csv(paths[1], SUMMARY_COLUMNS, summaries)
     write_csv(paths[2], REUSE_COLUMNS, reuse)
     return paths
+
+
+def write_mapping_review_summary(output: Path, *, latest_completed_date: str) -> Path:
+    """Write a human-readable, config-backed record of manual mapping review.
+
+    It reports facts from the versioned fixed registry only.  No market
+    provider, database, or automatic selection path is involved.
+    """
+
+    details, summaries, reuse = build_composition_audit(latest_completed_date=latest_completed_date)
+    review = json.loads(MAPPING_REVIEW_PATH.read_text(encoding="utf-8"))
+    active_keys = {item["sector_key"] for item in summaries}
+    changes = list(review.get("changes", []))
+    if not changes or any(item.get("sector_key") not in active_keys for item in changes):
+        raise ValueError("mapping review must describe active registry sectors")
+    summary_by_pattern: dict[str, list[str]] = defaultdict(list)
+    for item in summaries:
+        summary_by_pattern[item["composition_pattern"]].append(item["sector_name"])
+    lines = [
+        "# 固定证券映射人工维护汇总",
+        "",
+        f"- 生效日期：{review.get('effective_date')}",
+        f"- 最新完整交易日：{latest_completed_date}",
+        "- 口径：仅人工维护的固定 registry；不包含 PDF 自动拆分、动态选标或自动替换。",
+        "",
+        "## 本轮修改",
+        "",
+    ]
+    for item in changes:
+        lines.extend((
+            f"### {item['sector_name']}",
+            f"- 修改前：{item['before']}",
+            f"- 修改后：{item['after']}",
+            f"- 原因：{item['reason']}",
+            "",
+        ))
+    lines.extend((
+        "## 当前组合形态",
+        "",
+        f"- ETF_ONLY（{len(summary_by_pattern['ETF_ONLY'])}）：{'、'.join(summary_by_pattern['ETF_ONLY']) or '—'}",
+        f"- STOCK_ONLY（{len(summary_by_pattern['STOCK_ONLY'])}）：{'、'.join(summary_by_pattern['STOCK_ONLY']) or '—'}",
+        f"- ETF_PLUS_STOCKS（{len(summary_by_pattern['ETF_PLUS_STOCKS'])}）：{'、'.join(summary_by_pattern['ETF_PLUS_STOCKS']) or '—'}",
+        f"- UNAVAILABLE（{len(summary_by_pattern['UNAVAILABLE'])}）：{'、'.join(summary_by_pattern['UNAVAILABLE']) or '—'}",
+        "",
+        "## 复用证券（事实）",
+        "",
+    ))
+    for item in reuse:
+        count = int(item["used_by_sector_count"])
+        if count > 1:
+            provider_symbol = next(
+                detail["provider_symbol"]
+                for detail in details
+                if detail["human_code"] == item["human_code"]
+            )
+            note = REUSE_REVIEW_NOTES.get(provider_symbol, "需持续人工审核：当前 registry 未设置自动替换规则。")
+            lines.append(
+                f"- {item['security_name']} · {item['human_code']}：{count} 个板块（{item['used_by_sectors']}）。{note}"
+            )
+    lines.extend((
+        "说明：复用结论来自本次版本化人工审核；不构成运行时自动选标或自动替换规则。",
+        f"配置组合明细：{len(details)} 条证券记录 / {len(summaries)} 个 active sector。",
+        "",
+    ))
+    output.parent.mkdir(parents=True, exist_ok=True)
+    output.write_text("\n".join(lines), encoding="utf-8")
+    return output

@@ -163,16 +163,13 @@ def next_controlled_cn_a_trading_day(report_date: date) -> date | None:
     return None
 
 
-def recent_defense_line_validations(session: Session, *, limit: int = 10) -> list[dict[str, object]]:
-    """Return actual next-trading-day closes for prior explicit report lines.
+def _defense_line_validation_rows(session: Session) -> list[dict[str, object]]:
+    """Return every exact-date validation supported by completed market data.
 
     Multiple non-trading-day reports can target the same controlled day.  The
     newest current published report wins for that day, so one actual close is
     never represented as competing validation rows.
     """
-
-    if limit < 1 or limit > 10:
-        raise ValueError("limit must be between 1 and 10")
     reports = session.scalars(select(Report).where(
         Report.status == ReportStatus.PUBLISHED.value,
         Report.is_current.is_(True),
@@ -216,4 +213,46 @@ def recent_defense_line_validations(session: Session, *, limit: int = 10) -> lis
             "distance_pct": float((close_value / defense.value - Decimal("1")) * Decimal("100")),
             "close_position": "close_above_defense_line" if distance > 0 else "close_below_defense_line" if distance < 0 else "close_at_defense_line",
         })
-    return sorted(result, key=lambda item: str(item["trading_date"]), reverse=True)[:limit]
+    return sorted(result, key=lambda item: str(item["trading_date"]), reverse=True)
+
+
+def recent_defense_line_validations(session: Session, *, limit: int = 10) -> list[dict[str, object]]:
+    """Return the latest exact-date validations for the compact Reader table."""
+
+    if limit < 1 or limit > 10:
+        raise ValueError("limit must be between 1 and 10")
+    return _defense_line_validation_rows(session)[:limit]
+
+
+def defense_line_trend(session: Session, *, limit: int = 30) -> list[dict[str, object]]:
+    """Return a 30-completed-trading-day axis with exact-date defense records.
+
+    The axis comes exclusively from completed Shanghai rows.  A date without a
+    validated report defense line stays unavailable instead of inheriting a
+    neighbouring report's line, so this read model never enables a market-data
+    fallback.
+    """
+
+    if limit < 1 or limit > 30:
+        raise ValueError("limit must be between 1 and 30")
+    dates = list(reversed(session.scalars(select(LiveMarketAnchorDaily.trading_date).where(
+        LiveMarketAnchorDaily.symbol == SHANGHAI_COMPOSITE_SYMBOL,
+    ).distinct().order_by(LiveMarketAnchorDaily.trading_date.desc()).limit(limit)).all()))
+    validated = {item["trading_date"]: item for item in _defense_line_validation_rows(session)}
+    result: list[dict[str, object]] = []
+    for trading_date in dates:
+        record = validated.get(trading_date.isoformat())
+        result.append({
+            "trading_date": trading_date.isoformat(),
+            "available": record is not None,
+            "source_report_id": record["source_report_id"] if record else None,
+            "source_report_date": record["source_report_date"] if record else None,
+            "defense_line_value": record["defense_line_value"] if record else None,
+            "index_name": record["index_name"] if record else SHANGHAI_COMPOSITE_NAME,
+            "index_close": record["index_close"] if record else None,
+            "distance_points": record["distance_points"] if record else None,
+            "distance_pct": record["distance_pct"] if record else None,
+            "close_position": record["close_position"] if record else None,
+            "data_mode": "completed_eod",
+        })
+    return result

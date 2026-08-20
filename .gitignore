@@ -31,6 +31,7 @@ var/pr7-visual-preview/
 var/pr7-visual-preview-fixed/
 var/pr7-ui-review-preview/
 var/provider-research/
+var/audit/
 var/*.db
 var/*.sqlite
 var/*.sqlite3
