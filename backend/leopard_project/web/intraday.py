@@ -519,7 +519,14 @@ class IntradayRefreshCoordinator:
                 **self._provider.cycle_stats,
             }
 
-    def status(self) -> dict:
+    def status(self, session: Session | None = None) -> dict:
+        """Return runtime facts with one short-lived database session.
+
+        Reader routes already have a request session.  Reusing it prevents a
+        status read from opening a nested provider-health session for every
+        request.  Background and Admin callers still receive the same payload
+        with an independently scoped session.
+        """
         now = self._now()
         local_trade_date = now.astimezone(ZoneInfo(self.policy["timezone"])).date().isoformat()
         rules = load_calendar()
@@ -532,11 +539,11 @@ class IntradayRefreshCoordinator:
             "calendar_warning": "calendar_source_unavailable",
             "calendar_days_remaining": None,
         }
-        with self.sessions() as session:
-            control = session.get(MarketAutomationControl, "intraday")
-            record = session.get(IntradayRefreshSession, self._session_id) if self._session_id else None
-            latest_run = session.scalar(select(MarketRefreshRun).where(MarketRefreshRun.mode == "intraday_refresh").order_by(desc(MarketRefreshRun.started_at)))
-            latest_snapshot = session.scalar(select(SectorIntradaySnapshot).order_by(desc(SectorIntradaySnapshot.observed_at)))
+        def payload(active_session: Session) -> dict:
+            control = active_session.get(MarketAutomationControl, "intraday")
+            record = active_session.get(IntradayRefreshSession, self._session_id) if self._session_id else None
+            latest_run = active_session.scalar(select(MarketRefreshRun).where(MarketRefreshRun.mode == "intraday_refresh").order_by(desc(MarketRefreshRun.started_at)))
+            latest_snapshot = active_session.scalar(select(SectorIntradaySnapshot).order_by(desc(SectorIntradaySnapshot.observed_at)))
             def display(value: datetime | None) -> str | None:
                 if value is None:
                     return None
@@ -575,13 +582,18 @@ class IntradayRefreshCoordinator:
                 "last_runtime_error": self._last_runtime_error,
                 "recovered_stale_sessions": self._recovered_sessions,
                 "owner_instance_id": self._instance_id,
-                "provider_health": self._provider.health,
+                "provider_health": self._provider.health_rows(active_session),
                 "provider_cycle_stats": self._provider.cycle_stats,
                 **calendar_meta,
             }
 
+        if session is not None:
+            return payload(session)
+        with self.sessions() as active_session:
+            return payload(active_session)
+
     def provider_health(self) -> list[dict]:
-        return self._provider.health
+        return self._provider.health_rows()
 
     def probe_provider(self, provider_key: str) -> dict:
         bundle = load_seed_bundle()

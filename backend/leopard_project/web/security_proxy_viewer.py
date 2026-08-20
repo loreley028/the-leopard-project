@@ -8,7 +8,7 @@ from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from typing import Callable, Iterable
 
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, sessionmaker
 
 from leopard_project.security_proxy_daily import build_security_proxy_trend_metrics, get_security_proxy_daily_histories
 from leopard_project.security_proxy_observation import SecurityProxyObservationService
@@ -51,7 +51,13 @@ class SecurityProxyViewerService:
     def __init__(self, *, observation_service: SecurityProxyObservationService, enabled: bool = False, cache: SecurityProxyViewerCache | None = None, now: Callable[[], datetime] = lambda: datetime.now(timezone.utc)) -> None:
         self.observation_service, self.enabled, self.cache, self.now = observation_service, enabled, cache or SecurityProxyViewerCache(), now
 
-    def observe(self, availability: OfficialBoardAvailability, *, session: Session | None = None) -> dict:
+    def observe(
+        self,
+        availability: OfficialBoardAvailability,
+        *,
+        session: Session | None = None,
+        session_factory: sessionmaker[Session] | None = None,
+    ) -> dict:
         base = {"market_path_key": availability.market_path_key, "official_board": asdict(availability), "security_proxy": None, "fallback_reason": None, "disclosure": None, "generated_at": self.now().isoformat()}
         if availability.available and availability.fresh:
             return {**base, "viewer_source_mode": "official_board"}
@@ -65,7 +71,17 @@ class SecurityProxyViewerService:
         key = tuple(sorted(item.symbol for item in definition.instruments if item.enabled))
         observations, cache_hit = self.cache.get_or_fetch(key, lambda: self.observation_service.observe([availability.market_path_key], enable_provider=True))
         observation = observations[0]
-        histories = get_security_proxy_daily_histories(session, (item.symbol for item in observation.instruments)) if session else {}
+        # Fetching a live quote may take seconds.  Never hold a SQLite
+        # connection during that network phase; open a short session only
+        # after the cache/provider work has completed.
+        symbols = tuple(item.symbol for item in observation.instruments)
+        if session is not None:
+            histories = get_security_proxy_daily_histories(session, symbols)
+        elif session_factory is not None:
+            with session_factory() as history_session:
+                histories = get_security_proxy_daily_histories(history_session, symbols)
+        else:
+            histories = {}
         instruments = [self._instrument_payload(item, histories.get(item.symbol, ())) for item in observation.instruments]
         completed_eod = any(item["data_mode"] == "completed_eod" for item in instruments)
         live = any(item["data_mode"] == "live" for item in instruments)

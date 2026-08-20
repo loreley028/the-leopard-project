@@ -616,7 +616,7 @@ def register_enhanced_routes(
         # all come from one fixed Market Core primary symbol below.
         legacy_market = None if unsupported or market_path is None else service.latest_market(market_key)
         intraday_snapshot = None if unsupported or market_path is None else service.latest_intraday(market_key)
-        runtime_status = intraday.status()
+        runtime_status = intraday.status(session=session)
         latest_intraday_result = latest_intraday_item_status(session, market_key)
         runtime_phase = runtime_status["market_phase"]
         resolved_intraday_status = resolve_intraday_data_status(

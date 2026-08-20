@@ -124,10 +124,12 @@ class MarketCoreReadService:
     def shanghai(self, session: Session, *, limit: int = 20) -> dict:
         if limit < 1 or limit > 20:
             raise ValueError("limit must be between 1 and 20")
+        live = self.live_anchor.observe_objective()
+        # Fetch outside the SQLite read lifetime.  A slow live provider must
+        # not keep a request connection checked out while it responds.
         rows = tuple(reversed(session.scalars(select(LiveMarketAnchorDaily).where(
             LiveMarketAnchorDaily.symbol == SHANGHAI_COMPOSITE_SYMBOL,
         ).order_by(desc(LiveMarketAnchorDaily.trading_date)).limit(limit)).all()))
-        live = self.live_anchor.observe_objective()
         quote_time = datetime.fromisoformat(live["quote_datetime"]) if live.get("quote_datetime") else None
         now = _aware(self.now())
         display = reader_quote_display(

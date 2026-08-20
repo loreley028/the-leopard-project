@@ -63,9 +63,9 @@ class ResearchIntradayProviderChain:
     def cycle_stats(self) -> dict[str, int]:
         return dict(self._stats)
 
-    @property
-    def health(self) -> list[dict]:
-        return self.breaker.rows() if self.breaker else []
+    def health_rows(self, session: Session | None = None) -> list[dict]:
+        """Use the caller's short-lived Reader session when available."""
+        return self.breaker.rows(session=session) if self.breaker else []
 
     def probe_provider(self, provider_key: str, mappings: dict[str, SectorMapping], as_of: datetime) -> dict:
         """Run exactly one configured representative request; never marks healthy by fiat."""

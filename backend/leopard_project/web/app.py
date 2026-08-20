@@ -288,25 +288,33 @@ def create_app(settings: WebSettings | None = None, session_factory: sessionmake
             raise WebDomainError("market_path_not_found", "Market path not found", 404)
         snapshot = EnhancedReportService(session).latest_intraday(market_path_key)
         status = resolve_intraday_data_status(
-            phase=intraday.status()["market_phase"], snapshot=snapshot, latest_result=None,
+            phase=intraday.status(session=session)["market_phase"], snapshot=snapshot, latest_result=None,
             now=datetime.now(timezone.utc), stale_after_minutes=intraday_policy()["stale_after_minutes"], unsupported=False,
         )
         fresh = status == "intraday_fresh"
         return OfficialBoardAvailability(market_path_key, fresh, fresh, status, None if fresh else status, snapshot.get("observed_at") if snapshot else None)
 
+    def viewer_availability(market_path_key: str) -> OfficialBoardAvailability:
+        # The official-board lookup is database-only.  Release its connection
+        # before a proxy observation can wait on a Tencent request.
+        with sessions() as session:
+            return official_board_availability(session, market_path_key)
+
     @app.get("/api/v1/market-paths/{market_path_key}/viewer-observation")
-    def viewer_observation(market_path_key: str, current: Principal | None = Depends(optional_principal), session: Session = Depends(db_session)) -> dict:
-        return app.state.security_proxy_viewer.observe(official_board_availability(session, market_path_key), session=session)
+    def viewer_observation(market_path_key: str, current: Principal | None = Depends(optional_principal)) -> dict:
+        return app.state.security_proxy_viewer.observe(
+            viewer_availability(market_path_key), session_factory=sessions,
+        )
 
     @app.post("/api/v1/market-paths/viewer-observations/query")
-    def viewer_observations_query(payload: dict, current: Principal | None = Depends(optional_principal), session: Session = Depends(db_session)) -> dict:
+    def viewer_observations_query(payload: dict, current: Principal | None = Depends(optional_principal)) -> dict:
         keys = payload.get("market_path_keys")
         if not isinstance(keys, list) or not all(isinstance(item, str) for item in keys) or not keys or len(keys) > 20:
             raise WebDomainError("invalid_market_path_keys", "market_path_keys must contain 1..20 path keys", 422)
         ordered = list(dict.fromkeys(keys))
         results = []
         for key in ordered:
-            try: results.append(app.state.security_proxy_viewer.observe(official_board_availability(session, key), session=session))
+            try: results.append(app.state.security_proxy_viewer.observe(viewer_availability(key), session_factory=sessions))
             except WebDomainError as exc: results.append({"market_path_key": key, "viewer_source_mode": "unavailable", "fallback_reason": exc.code, "official_board": None, "security_proxy": None, "disclosure": None, "generated_at": datetime.now(timezone.utc).isoformat()})
         return {"items": results}
 

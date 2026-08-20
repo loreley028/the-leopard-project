@@ -158,10 +158,12 @@ class ProviderCircuitBreaker:
             session.commit()
         return error_class
 
-    def rows(self) -> list[dict]:
+    def rows(self, session: Session | None = None) -> list[dict]:
+        """Return health rows without opening a nested session when one is supplied."""
         now = self.now()
-        with self.sessions() as session:
-            rows = list(session.scalars(select(ProviderHealthRecord).order_by(ProviderHealthRecord.provider)))
+
+        def payload(active_session: Session) -> list[dict]:
+            rows = list(active_session.scalars(select(ProviderHealthRecord).order_by(ProviderHealthRecord.provider)))
             return [{
                 "provider": row.provider, "endpoint_family": row.endpoint_family, "state": row.state,
                 "consecutive_failures": row.consecutive_failures,
@@ -171,6 +173,11 @@ class ProviderCircuitBreaker:
                 "cooldown_remaining_seconds": max(0, int((_aware(row.next_probe_at) - now).total_seconds())) if row.next_probe_at else 0,
                 "recovery_successes": row.recovery_successes,
             } for row in rows]
+
+        if session is not None:
+            return payload(session)
+        with self.sessions() as active_session:
+            return payload(active_session)
 
 
 def _aware(value: datetime) -> datetime:
