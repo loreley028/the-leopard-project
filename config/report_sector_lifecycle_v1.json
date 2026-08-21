@@ -1,0 +1,21 @@
+{
+  "schema_version": "v1",
+  "description": "Reader lifecycle mapping for historical merged report topics. Status inheritance is a Report Fact only; no market fact may be inherited.",
+  "splits": [
+    {
+      "parent_sector_key": "battery_lithium",
+      "child_sector_keys": ["battery", "lithium_battery"],
+      "effective_report_date": "2026-07-30"
+    },
+    {
+      "parent_sector_key": "innovative_drug_medicine",
+      "child_sector_keys": ["innovative_drug", "medical_biology"],
+      "effective_report_date": "2026-08-02"
+    },
+    {
+      "parent_sector_key": "photovoltaic_energy_storage",
+      "child_sector_keys": ["photovoltaic", "energy_storage"],
+      "effective_report_date": "2026-08-02"
+    }
+  ]
+}

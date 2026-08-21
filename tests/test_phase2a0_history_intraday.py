@@ -407,7 +407,7 @@ def test_strict_and_broad_holding_end_status_contracts_use_full_path_ledger(tmp_
             result = EnhancedReportService(session).holding_intervals_for_sector("pcb")
             assert result["strict_holding_interval"] is None
             assert result["historical_strict_intervals"][0]["end_status"] == ending
-            if ending == "strong_watch":
+            if ending in {"strong_watch", "turn_weak"}:
                 assert result["broad_holding_interval"]["status"] == "active"
                 assert result["broad_holding_interval"]["calculation_status"] == "market_insufficient"
                 assert result["historical_broad_intervals"] == []
@@ -440,7 +440,8 @@ def test_low_attention_filter_search_and_admin_pin(tmp_path: Path) -> None:
         default_rows = client.get("/api/v1/sectors").json()
         all_rows = client.get("/api/v1/sectors?include_low_attention=true").json()
         search_rows = client.get("/api/v1/sectors?search=PCB").json()
-        assert len(all_rows) == 74
+        assert len(all_rows) == 71
+        assert not {"innovative_drug_medicine", "battery_lithium", "photovoltaic_energy_storage"} & {item["sector_key"] for item in all_rows}
         assert [item["group_order"] for item in all_rows] == sorted(item["group_order"] for item in all_rows)
         assert all(item["attention_level"] in {"high", "normal", "low"} for item in all_rows)
         # Ten report overlays alone no longer satisfy the M3.14 controlled

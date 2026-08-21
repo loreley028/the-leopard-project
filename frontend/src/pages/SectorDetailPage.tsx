@@ -96,5 +96,5 @@ function HoldingSummary({ label, interval }: { label: string; interval?: NonNull
 }
 
 function HoldingHistory({ label, items }: { label: string; items?: NonNullable<SectorResearch["historical_strict_intervals"]> }) {
-  return <div className="holding-history"><h3>{label}</h3>{items?.length ? items.map((item, index) => <p key={`${label}-${item.start_report_date}-${index}`}>{item.start_report_date}（行情{item.start_market_as_of_date ?? "—"}）→ {item.end_report_date}（行情{item.end_market_as_of_date ?? "—"}），{item.trading_days ?? "—"}个交易日，{formatPct(item.eod_return)}，结束状态{PATH_LABELS[item.end_status ?? "watch"]}</p>) : <p>暂无已结束区间。</p>}</div>;
+  return <div className="holding-history"><h3>{label}</h3>{items?.length ? items.map((item, index) => <p key={`${label}-${item.start_report_date}-${index}`}>{item.start_report_date} → {item.end_report_date}，{item.trading_days ?? "—"}个交易日，{formatPct(item.eod_return)}，结束状态{PATH_LABELS[item.end_status ?? "watch"]}</p>) : <p>暂无已结束区间。</p>}</div>;
 }

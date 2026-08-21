@@ -20,4 +20,4 @@
 
 Holding intervals now read the complete frozen path ledger. Formal returns use only EOD start/end closes. A cached intraday value may provide a separately labelled reference return but never replaces the formal result. Path ranges (10/20/40/60 report periods) and chart ranges (20/40/60 trading days) are different contracts.
 
-Strict holding ends on strong-watch; broad holding permits strong-watch and ends only on watch or weaker exit states. Both are computed server-side from the same frozen ledger.
+Strict holding ends on strong-watch. Broad holding permits strong-watch and turn-weak; only watch, weak-watch, exit, or avoid ends it. `turn_weak` is therefore a weakening of the holding logic, not an automatic broad-holding exit. Both are computed server-side from the same frozen ledger.

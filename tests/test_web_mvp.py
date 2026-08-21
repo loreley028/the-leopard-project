@@ -267,8 +267,9 @@ def test_sector_catalog_and_hstech_dual_status(web) -> None:
     client.post("/api/v1/auth/logout")
     login(client, "viewer")
     sectors = client.get("/api/v1/sectors").json()
-    assert len(sectors) == 74
-    assert sum(item["market_support_status"] == "supported" for item in sectors) == 73
+    assert len(sectors) == 71
+    assert sum(item["market_support_status"] == "supported" for item in sectors) == 70
+    assert not {"innovative_drug_medicine", "battery_lithium", "photovoltaic_energy_storage"} & {item["sector_key"] for item in sectors}
     assert "hotel_catering" in {item["sector_key"] for item in sectors}
     hstech = next(item for item in sectors if item["sector_key"] == "hang_seng_tech")
     assert hstech["latest_view"] is not None

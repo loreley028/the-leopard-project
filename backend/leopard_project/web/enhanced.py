@@ -6,14 +6,18 @@ import re
 from dataclasses import dataclass
 from datetime import date, datetime, timezone
 from decimal import Decimal
+from functools import lru_cache
 from pathlib import Path
 from typing import Any, Sequence
+from types import SimpleNamespace
 from zoneinfo import ZoneInfo
 
 from sqlalchemy import desc, func, select
 from sqlalchemy.orm import Session
 
 from leopard_project.config import CONFIG_DIR, load_seed_bundle, normalize_alias
+from leopard_project.report_registry import report_object_by_key
+from leopard_project.sector_lifecycle import parent_status_lineage_for_child
 
 from .models import (
     EnhancedReportRevision,
@@ -41,6 +45,7 @@ from .services import (
 PATH_STATUS_PATH = CONFIG_DIR / "sector_path_status_v1.json"
 ENHANCED_POLICY_PATH = CONFIG_DIR / "enhanced_report_policy_v1.json"
 CALENDAR_PATH = CONFIG_DIR / "enhanced_demo_calendar_v1.json"
+HOLDING_INTERVAL_POLICY_PATH = CONFIG_DIR / "holding_interval_policy_v1.json"
 
 
 def path_status_document() -> dict[str, Any]:
@@ -57,8 +62,19 @@ def validate_path_status(value: str) -> str:
     return value
 
 
-HOLDING_STATUSES = {"turn_hold", "hold"}
-HOLDING_END_STATUSES = {"strong_watch", "watch", "weak_watch", "turn_weak", "exit", "avoid"}
+@lru_cache(maxsize=1)
+def holding_interval_policy() -> dict[str, set[str]]:
+    document = json.loads(HOLDING_INTERVAL_POLICY_PATH.read_text(encoding="utf-8"))
+    return {
+        "strict_allowed": set(document["strict_allowed_statuses"]),
+        "strict_end": set(document["strict_end_statuses"]),
+        "broad_allowed": set(document["broad_allowed_statuses"]),
+        "broad_end": set(document["broad_end_statuses"]),
+    }
+
+
+HOLDING_STATUSES = holding_interval_policy()["strict_allowed"]
+HOLDING_END_STATUSES = holding_interval_policy()["strict_end"]
 
 
 def effective_statuses(reported_statuses: Sequence[str]) -> list[str | None]:
@@ -778,14 +794,51 @@ class EnhancedReportService:
             "fetched_at": fetched_at.isoformat(),
         }
 
-    def path_history(self, sector_key: str, limit: int | None = None, through: date | None = None) -> list[SectorPathHistoryEntry]:
+    def inherited_parent_status_entries(self, sector_key: str, through: date | None = None) -> list[Any]:
+        """Expose a split parent's pre-split Report Facts under an active child.
+
+        This intentionally carries only path status and report provenance.  It
+        leaves market dates, frozen returns, and detail report links empty so
+        no historical parent market fact can leak into the child's timeline.
+        """
+        lineage = parent_status_lineage_for_child(sector_key)
+        if lineage is None:
+            return []
+        query = select(SectorPathHistoryEntry).where(
+            SectorPathHistoryEntry.sector_key == lineage.parent_sector_key,
+            SectorPathHistoryEntry.path_report_date < lineage.effective_report_date,
+        )
+        if through is not None:
+            query = query.where(SectorPathHistoryEntry.path_report_date <= through)
+        parent_rows = list(self.session.scalars(query.order_by(desc(SectorPathHistoryEntry.path_report_date))))
+        child_name = report_object_by_key()[sector_key].sector_name
+        return [SimpleNamespace(
+            id=f"inherited:{sector_key}:{item.id}",
+            sector_key=sector_key,
+            sector_name=child_name,
+            path_report_date=item.path_report_date,
+            path_status=item.path_status,
+            source_report_id=item.source_report_id,
+            detail_report_id=None,
+            market_as_of_date=None,
+            frozen_daily_pct_change=None,
+            market_data_status="unavailable",
+            source_pdf_sha256=item.source_pdf_sha256,
+            template_version=item.template_version,
+            source_kind="historical_parent_status_inheritance",
+            inherited_from_sector_key=lineage.parent_sector_key,
+        ) for item in parent_rows]
+
+    def path_history(self, sector_key: str, limit: int | None = None, through: date | None = None) -> list[Any]:
         query = select(SectorPathHistoryEntry).where(SectorPathHistoryEntry.sector_key == sector_key)
         if through is not None:
             query = query.where(SectorPathHistoryEntry.path_report_date <= through)
-        query = query.order_by(desc(SectorPathHistoryEntry.path_report_date))
-        if limit is not None:
-            query = query.limit(limit)
-        return list(self.session.scalars(query))
+        direct = list(self.session.scalars(query.order_by(desc(SectorPathHistoryEntry.path_report_date))))
+        inherited = self.inherited_parent_status_entries(sector_key, through=through)
+        by_date = {item.path_report_date: item for item in direct}
+        by_date.update({item.path_report_date: item for item in inherited if item.path_report_date not in by_date})
+        merged = sorted(by_date.values(), key=lambda item: item.path_report_date, reverse=True)
+        return merged[:limit] if limit is not None else merged
 
     def holding_intervals_for_sector(self, sector_key: str, through: date | None = None) -> dict[str, Any]:
         entries = list(reversed(self.path_history(sector_key, through=through)))
@@ -857,8 +910,9 @@ class EnhancedReportService:
                         active["intraday_reference_return"] = float((Decimal(str(latest_intraday["index_value"])) / Decimal(str(start_bar.close)) - 1) * 100)
             return active, list(reversed(historical))
 
-        strict, strict_history = calculate("strict", {"turn_hold", "hold"}, {"strong_watch", "watch", "weak_watch", "turn_weak", "exit", "avoid"})
-        broad, broad_history = calculate("broad", {"turn_hold", "hold", "strong_watch"}, {"watch", "weak_watch", "turn_weak", "exit", "avoid"})
+        policy = holding_interval_policy()
+        strict, strict_history = calculate("strict", policy["strict_allowed"], policy["strict_end"])
+        broad, broad_history = calculate("broad", policy["broad_allowed"], policy["broad_end"])
         return {
             "active_holding_interval": strict,
             "historical_holding_intervals": strict_history,

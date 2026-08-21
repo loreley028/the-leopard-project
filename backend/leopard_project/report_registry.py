@@ -66,3 +66,7 @@ def report_object_by_key() -> dict[str, ReportObject]:
 def report_object_by_name() -> dict[str, ReportObject]:
     return {item.sector_name: item for item in load_report_registry()}
 
+
+def reader_report_registry() -> tuple[ReportObject, ...]:
+    """Return the active Reader universe without deleting audit-only parents."""
+    return tuple(item for item in load_report_registry() if item.lifecycle == "active")

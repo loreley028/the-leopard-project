@@ -439,7 +439,7 @@ def create_app(settings: WebSettings | None = None, session_factory: sessionmake
         current: Principal | None = Depends(optional_principal),
         session: Session = Depends(db_session),
     ) -> list[dict]:
-        rows = sector_payloads(ReportRepository(session))
+        rows = sector_payloads(ReportRepository(session), include_historical=bool(current and current.role == "admin"))
         rows = [item for item in rows if search.strip() in item["sector_name"]]
         if low_attention_only:
             rows = [item for item in rows if item["is_low_attention"]]
@@ -504,7 +504,7 @@ def create_app(settings: WebSettings | None = None, session_factory: sessionmake
     @app.get("/api/v1/sectors/{sector_key}")
     def sector_detail(sector_key: str, current: Principal | None = Depends(optional_principal), session: Session = Depends(db_session)) -> dict:
         repo = ReportRepository(session)
-        sector = next((item for item in sector_payloads(repo) if item["sector_key"] == sector_key), None)
+        sector = next((item for item in sector_payloads(repo, include_historical=bool(current and current.role == "admin")) if item["sector_key"] == sector_key), None)
         if sector is None:
             raise WebDomainError("sector_not_found", "Sector not found", 404)
         sector["timeline"] = [
