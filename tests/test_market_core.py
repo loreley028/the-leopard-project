@@ -9,7 +9,7 @@ from sqlalchemy import text
 from leopard_project.providers.tencent_standard_quote import StandardSecurityQuote, TencentQuoteBatch
 from leopard_project.live_market_anchor_daily import capture_live_market_anchor_daily
 from leopard_project.security_proxy_daily import capture_fixed_security_proxy_daily, fixed_proxy_symbols, market_core_security_symbols
-from leopard_project.security_proxy_observation import SecurityProxyObservationService
+from leopard_project.security_proxy_observation import SecurityProxyObservationService, load_security_proxy_registry
 from leopard_project.broad_market_anchors import load_broad_market_anchors
 from leopard_project.web.app import WebSettings, create_app
 from leopard_project.web.database import create_session_factory
@@ -190,6 +190,8 @@ def test_matrix_current_snapshot_uses_one_deduplicated_configured_universe_and_t
     assert second["cache_hit"] is True and second["provider_request_count"] == 0
     cpo = next(item for item in first["sectors"] if item["sector_key"] == "cpo")
     assert [item["symbol"] for item in cpo["instruments"]] == ["sh515880", "sz300308"]
+    registry_by_key = {item.market_path_key: item for item in load_security_proxy_registry()}
+    assert [item["security_code"] for item in cpo["instruments"]] == [item.reader_code for item in registry_by_key["cpo"].instruments if item.symbol in {"sh515880", "sz300308"}]
     assert max(len(item["instruments"]) for item in first["sectors"]) <= 2
     unavailable = {item["sector_key"] for item in first["sectors"] if item["market_status"] == "unavailable"}
     assert unavailable == {"glass_substrate", "hang_seng_tech"}

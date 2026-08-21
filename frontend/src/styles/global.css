@@ -244,11 +244,13 @@ button, a, input, textarea, [tabindex] { outline-offset: 4px; }
 .path-matrix thead .sticky-current { z-index: 4; text-align: center; }
 .matrix-current-heading small { display: block; margin-top: .15rem; color: var(--text-muted); font-size: .62rem; font-weight: 500; }
 .matrix-current-group { background: #e4eedc !important; }
-.matrix-current-cell { display: grid; gap: .14rem; min-height: 48px; padding: .28rem .35rem; font-size: .69rem; line-height: 1.15; }
+.matrix-current-cell { display: grid; gap: .18rem; min-height: 48px; padding: .28rem .35rem; font-size: .69rem; line-height: 1.15; }
 .matrix-current-cell > small { color: var(--text-muted); font-size: .61rem; }
-.matrix-current-cell > span { display: flex; gap: .24rem; justify-content: space-between; min-width: 0; }
-.matrix-current-cell b { overflow: hidden; color: var(--text); font-weight: 650; text-overflow: ellipsis; white-space: nowrap; }
-.matrix-current-cell em { flex: 0 0 auto; font-style: normal; font-weight: 800; }
+.matrix-current-security { display: grid; gap: .06rem; min-width: 0; }
+.matrix-current-security-top { display: flex; gap: .24rem; justify-content: space-between; min-width: 0; }
+.matrix-current-security-top b { overflow: hidden; color: var(--text); font-weight: 650; text-overflow: ellipsis; white-space: nowrap; }
+.matrix-current-security-top em { flex: 0 0 auto; font-style: normal; font-weight: 800; }
+.matrix-current-cell > .matrix-current-security > .matrix-current-security-code { color: var(--text-muted); font-size: .68rem; font-variant-numeric: tabular-nums; font-weight: 500; line-height: 1.05; }
 .matrix-current-unavailable { display: grid; min-height: 48px; place-items: center; color: var(--text-muted); }
 .matrix-group th, .matrix-group td { background: #e7efdc; }
 .matrix-group { scroll-margin-top: 9rem; }

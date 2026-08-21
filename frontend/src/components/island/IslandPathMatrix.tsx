@@ -26,7 +26,7 @@ function ExactDateMarketLayer({ cell }: { cell: Cell }) {
 const currentTone = (value: number | null) => value == null || value === 0 ? "a-share-neutral" : value > 0 ? "a-share-positive" : "a-share-negative";
 function CurrentMarketCell({ sector }: { sector: NonNullable<MarketCoreCurrentQuotes["sectors"]>[number] | undefined }) {
   if (!sector || sector.market_status === "unavailable" || sector.instruments.length === 0) return <span className="matrix-current-unavailable">—</span>;
-  return <div className="matrix-current-cell"><small>{marketSnapshotDisplayState(sector.market_session, sector.quote_time)}</small>{sector.instruments.slice(0, 2).map(item => <span key={item.symbol}><b>{item.name}</b><em className={currentTone(item.pct_change)}>{item.pct_change == null ? "—" : formatPct(item.pct_change)}</em></span>)}</div>;
+  return <div className="matrix-current-cell"><small>{marketSnapshotDisplayState(sector.market_session, sector.quote_time)}</small>{sector.instruments.slice(0, 2).map(item => <span className="matrix-current-security" key={item.symbol}><span className="matrix-current-security-top"><b>{item.name}</b><em className={currentTone(item.pct_change)}>{item.pct_change == null ? "—" : formatPct(item.pct_change)}</em></span><small className="matrix-current-security-code">{item.security_code}</small></span>)}</div>;
 }
 
 export function IslandPathMatrix({ matrix, currentMarket, period, onPeriodChange }: { matrix: PathMatrix; currentMarket: MarketCoreCurrentQuotes | null; period: string; onPeriodChange: (value: string) => void }) {
