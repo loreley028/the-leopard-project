@@ -1405,17 +1405,16 @@ def parse_v23_assessments(
     *,
     template_version: str | None = None,
 ) -> list[dict[str, Any]]:
-    # Uploaded V2.9 PDFs do not consistently print their version label in the
-    # text layer.  The positioned parser is itself the contract check: it only
-    # returns rows when it finds the native five-column geometry and an
-    # explicit sector-plus-judgement cell.  Earlier templates use different
-    # column positions and therefore safely fall through to their own parser.
-    # Versioned V2.4/V2.6 tables can look broadly similar to V2.9 at a few
-    # coordinates, but they do not share its native five-column contract.
-    # A confirmed legacy version must therefore never enter the V2.9 parser.
-    # The ``None`` path remains for old files whose decorative version label is
-    # absent: only then can native geometry provide the compatibility route.
-    if template_version in {None, "V2.9"}:
+    # The native five-column geometry is the parser contract, not the
+    # decorative version label.  A V3.0 PDF can retain the verified V2.9
+    # table layout, so it must receive the same *structural* check before the
+    # generic parser is allowed to flatten its cells.  Confirmed pre-V2.9
+    # templates are excluded because they have a different column contract.
+    # This remains fail-closed: the positioned parser returns no records
+    # unless it finds native five-column rows with explicit sector/judgement
+    # cells, after which normal validation still applies.
+    legacy_non_v29_layouts = {"V2.3", "V2.3.1", "V2.4", "V2.6"}
+    if template_version not in legacy_non_v29_layouts:
         v29_positioned_records = _parse_v29_positioned_assessments(positioned_pages or [])
         if v29_positioned_records:
             return _validate_v29_positioned_assessment_set(v29_positioned_records)

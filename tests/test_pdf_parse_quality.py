@@ -154,6 +154,23 @@ def test_v29_positioned_cells_preserve_evidence_and_condition_without_text_order
     assert selected[0]["quality_status"] == "verified_structure"
 
 
+def test_v30_label_still_uses_verified_native_five_column_geometry() -> None:
+    positioned_pages = [{
+        "page": 6,
+        "items": [
+            _item(36, 710, "半导体", 8.666), _item(160, 710, "8/19弱观→8/20弱观", 8.666),
+            _item(380, 710, "弱观", 8.666), _item(470, 710, "主力资金仍在离场。", 8.666),
+            _item(620, 710, "需明显反弹才重新评估。", 8.666),
+        ],
+    }]
+    selected = parse_v23_assessments(
+        "板块观点详细汇总 V3.0", "板块观点详细汇总", positioned_pages, template_version="V3.0",
+    )
+    assert [(item["sector_key"], item["path_status"], item["quality_status"]) for item in selected] == [
+        ("semiconductor", "weak_watch", "verified_structure"),
+    ]
+
+
 def test_v29_positioned_cells_keep_wrapped_text_with_its_own_row() -> None:
     records = _parse_v29_positioned_assessments([{
         "page": 6,

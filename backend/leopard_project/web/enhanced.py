@@ -379,13 +379,13 @@ class EnhancedReportService:
         return {"path_entries_parsed": parsed_paths, "assessments_parsed": parsed_assessments, "unknown_statuses": unknown_statuses}
 
     def reparse_missing_assessment_facts(self, report: Report, payload: bytes, actor: str) -> dict[str, int]:
-        """Fill only missing V2.9 table facts from the uploaded PDF text layer.
+        """Reconcile verified native table facts into a report-local record.
 
-        This maintenance pass never changes a report date, path status,
-        publication state, frozen history, or manually entered assessment.
-        It exists for older records where the deterministic parser did not
-        retain a table column, or retained only a demonstrably truncated tail
-        that conflicts with the native positioned PDF cell.
+        The pass is preview-safe and opt-in.  It never changes publication,
+        report dates, frozen history, or manually entered records.  A verified
+        native five-column PDF row may repair its corresponding *report-local*
+        path status and assessment facts; it never derives a value from the
+        history matrix or an effective-status fallback.
         """
         text = extract_text_layer(payload)
         layout_text = extract_layout_text(payload)
@@ -403,7 +403,9 @@ class EnhancedReportService:
             if record.get("sector_key")
         }
         assessments = {item.sector_key: item for item in self.assessments(report.id)}
+        path_entries = {item.sector_key: item for item in self.path_entries(report.id)}
         updated = 0
+        updated_paths = 0
 
         def missing(value: str) -> bool:
             return not value.strip() or value.startswith("本报告未")
@@ -430,6 +432,7 @@ class EnhancedReportService:
                 continue
             changed = False
             positioned = record.get("extraction_method") == "pdf_v29_positioned_table_cells"
+            verified_native_row = positioned and record.get("quality_status") == "verified_structure"
             native_conflict = (
                 positioned
                 and record.get("quality_status") == "verified_structure"
@@ -453,10 +456,15 @@ class EnhancedReportService:
             # made an otherwise valid native V2.9 row look ambiguous.  Refresh
             # provenance/quality only when the repaired positioned parser has
             # verified that same structured row; never overwrite reader facts.
-            provenance_improved = (
-                record.get("quality_status") == "verified_structure"
-                and assessment.quality_status != "verified_structure"
-            )
+            if verified_native_row:
+                native_status = validate_path_status(str(record.get("path_status") or ""))
+                if assessment.current_path_status != native_status:
+                    assessment.current_path_status = native_status
+                    changed = True
+                if not assessment.explicitly_mentioned:
+                    assessment.explicitly_mentioned = True
+                    changed = True
+            provenance_improved = verified_native_row and assessment.quality_status != "verified_structure"
             if not changed and not provenance_improved:
                 continue
             assessment.source_section = str(record.get("source_section") or assessment.source_section)
@@ -474,11 +482,41 @@ class EnhancedReportService:
             assessment.revision_id = f"deterministic-v29-facts-{report.enhanced_revision_number + 1}"
             assessment.updated_at = datetime.now(timezone.utc)
             updated += 1
+            entry = path_entries.get(sector_key)
+            if entry is not None and not entry.manually_modified and verified_native_row:
+                entry.path_status = validate_path_status(str(record.get("path_status") or ""))
+                entry.explicitly_mentioned = True
+                entry.judgement_summary = str(record.get("current_judgement") or "")
+                entry.source_text_reference = str(record.get("source_text_reference") or entry.source_text_reference)
+                entry.source_page = record.get("source_page")
+                entry.source_text_start = record.get("source_text_start")
+                entry.source_text_end = record.get("source_text_end")
+                entry.confidence = str(record.get("confidence") or entry.confidence)
+                entry.validation_flags_json = json.dumps(record.get("validation_flags", []), ensure_ascii=False)
+                entry.quality_status = str(record.get("quality_status") or entry.quality_status)
+                entry.review_status = "confirmed"
+                entry.revision_id = f"deterministic-native-table-{report.enhanced_revision_number + 1}"
+                entry.updated_at = datetime.now(timezone.utc)
+                updated_paths += 1
         if updated:
+            metadata = json.loads(report.interpretation_meta_json or "{}")
+            metadata["assessment_records"] = list(records.values())
+            summary = metadata.setdefault("quality_summary", {})
+            summary.update({
+                "assessment_rows": len(records),
+                "assessment_verified": sum(item.get("quality_status") == "verified_structure" for item in records.values()),
+                "assessment_needs_attention": sum(item.get("quality_status") == "needs_attention" for item in records.values()),
+                "assessment_blocking": sum(item.get("quality_status") == "blocking_parse_error" for item in records.values()),
+            })
+            metadata["attention_items"] = [
+                item for item in metadata.get("attention_items", [])
+                if not (item.get("kind") == "assessment_parse_quality" and item.get("sector_key") in records)
+            ]
+            report.interpretation_meta_json = json.dumps(metadata, ensure_ascii=False)
             report.enhanced_revision_number += 1
-            self._revision(report, actor, "deterministic_v29_assessment_fact_reparse")
+            self._revision(report, actor, "deterministic_native_assessment_fact_reparse")
             self.session.commit()
-        return {"parsed_records": len(records), "updated_assessments": updated}
+        return {"parsed_records": len(records), "updated_assessments": updated, "updated_path_entries": updated_paths}
 
     def interpretation(self, report: Report) -> dict[str, Any]:
         metadata = json.loads(report.interpretation_meta_json or "{}")

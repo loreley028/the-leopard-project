@@ -11,8 +11,9 @@ from sqlalchemy import select
 
 from leopard_project.web.app import WebSettings, create_app
 from leopard_project.web.database import create_session_factory
+from leopard_project.web import enhanced as enhanced_module
 from leopard_project.web.enhanced import EnhancedReportService, calculate_market_metrics, validate_path_status
-from leopard_project.web.models import Report, ReportFile, ReportStatus, SectorAssessment, SectorDailyBar, SecurityProxyDaily
+from leopard_project.web.models import Report, ReportFile, ReportStatus, SectorAssessment, SectorDailyBar, SectorPathEntry, SectorPathHistoryEntry, SecurityProxyDaily
 from leopard_project.web.services import WebDomainError
 
 
@@ -136,6 +137,58 @@ def test_viewer_assessment_hides_legacy_pending_review_placeholder(enhanced_web)
     assessment = next(item for item in payload["sector_assessments"] if item["sector_key"] == "chemicals")
     assert assessment["main_basis"] == "本期报告未提供可结构化展示的独立依据"
     assert assessment["observation_condition"] == ""
+
+
+def test_verified_native_reparse_repairs_report_local_status_without_touching_history(enhanced_web, monkeypatch) -> None:
+    _, sessions = enhanced_web
+    record = {
+        "sector_key": "semiconductor", "sector_name": "半导体", "path_status": "weak_watch",
+        "recent_path_summary": "8/19弱观 → 8/20弱观", "current_judgement": "弱观",
+        "main_basis": "主力资金仍在离场。", "observation_condition": "需明显反弹才重新评估。",
+        "source_section": "板块观点详细汇总", "source_text_reference": "PDF 原生五列表格行",
+        "source_text_excerpt": "PDF 原生五列表格行", "source_page": 7, "source_text_start": 100,
+        "source_text_end": 200, "extraction_method": "pdf_v29_positioned_table_cells",
+        "quality_status": "verified_structure", "confidence": "high", "validation_flags": [],
+    }
+    monkeypatch.setattr(enhanced_module, "extract_text_layer", lambda payload: "PDF text")
+    monkeypatch.setattr(enhanced_module, "extract_layout_text", lambda payload: "PDF layout")
+    monkeypatch.setattr(enhanced_module, "extract_positioned_pages", lambda payload: [])
+    monkeypatch.setattr(
+        enhanced_module, "parse_report_text",
+        lambda *args, **kwargs: ({"interpretation_meta": {"assessment_records": [record]}}, [], [], []),
+    )
+    with sessions() as session:
+        report = Report(title="published", status="published", created_by="admin", interpretation_meta_json="{}")
+        session.add(report)
+        session.flush()
+        session.add_all([
+            SectorPathEntry(
+                report_id=report.id, sector_key="semiconductor", sector_name="半导体", path_status="watch",
+                explicitly_mentioned=False, judgement_summary="", source_text_reference="fallback",
+            ),
+            SectorAssessment(
+                report_id=report.id, sector_key="semiconductor", sector_name="半导体", current_path_status="watch",
+                explicitly_mentioned=False, recent_path_summary="本期首次记录", current_judgement="",
+                main_basis="", observation_condition="", source_text_reference="fallback",
+            ),
+            SectorPathHistoryEntry(
+                sector_key="semiconductor", sector_name="半导体", path_report_date=date(2026, 8, 20),
+                path_status="hold", source_report_id=report.id, detail_report_id=report.id,
+                market_as_of_date=None, frozen_daily_pct_change=None, market_data_status="unavailable",
+                source_pdf_sha256="a" * 64,
+            ),
+        ])
+        session.commit()
+        result = EnhancedReportService(session).reparse_missing_assessment_facts(report, b"pdf", "test")
+        assessment = session.scalar(select(SectorAssessment).where(SectorAssessment.report_id == report.id))
+        entry = session.scalar(select(SectorPathEntry).where(SectorPathEntry.report_id == report.id))
+        frozen = session.scalar(select(SectorPathHistoryEntry).where(SectorPathHistoryEntry.source_report_id == report.id))
+    assert result == {"parsed_records": 1, "updated_assessments": 1, "updated_path_entries": 1}
+    assert assessment is not None and assessment.current_path_status == "weak_watch"
+    assert assessment.explicitly_mentioned is True and assessment.current_judgement == "弱观"
+    assert assessment.main_basis == "主力资金仍在离场。"
+    assert entry is not None and (entry.path_status, entry.explicitly_mentioned, entry.judgement_summary) == ("weak_watch", True, "弱观")
+    assert frozen is not None and frozen.path_status == "hold"
 
 
 def test_market_date_contract_sunday_and_fail_closed(enhanced_web) -> None:
