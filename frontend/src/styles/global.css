@@ -196,14 +196,17 @@ button, a, input, textarea, [tabindex] { outline-offset: 4px; }
 .defense-distance-trend-heading .eyebrow { margin: 0; color: var(--text-bark); }
 .defense-distance-trend-heading > span { flex: 0 0 auto; padding: .2rem .45rem; border-radius: 999px; background: rgb(255 250 240 / 80%); color: var(--text-muted); font-size: .72rem; font-weight: 800; }
 .defense-distance-chart { margin: .7rem 0 0; overflow: hidden; }
+.defense-distance-chart-canvas { position: relative; min-width: 0; }
 .defense-distance-chart svg { display: block; width: 100%; height: auto; min-height: 170px; overflow: visible; }
 .defense-distance-chart figcaption { margin-top: .25rem; color: var(--text-muted); font-size: .72rem; line-height: 1.45; }
 .defense-distance-zero { stroke: #756c5d; stroke-dasharray: 4 4; stroke-width: 1; }
-.defense-distance-positive, .defense-distance-negative { stroke-width: 2.5; stroke-linecap: round; }
-.defense-distance-positive { stroke: var(--a-share-red); }
-.defense-distance-negative { stroke: var(--a-share-green); }
-.defense-distance-point-positive { fill: var(--a-share-red); stroke: #fffaf0; stroke-width: 1.5; }
-.defense-distance-point-negative { fill: var(--a-share-green); stroke: #fffaf0; stroke-width: 1.5; }
+.defense-distance-bar { cursor: help; outline: none; }
+.defense-distance-bar:focus { stroke: var(--text-bark); stroke-width: 2; }
+.defense-distance-bar-positive { fill: var(--a-share-red); }
+.defense-distance-bar-negative { fill: var(--a-share-green); }
+.defense-distance-bar-neutral { fill: #8a8578; }
+.defense-distance-tooltip { position: absolute; z-index: 3; display: grid; gap: .18rem; width: max-content; max-width: min(260px, calc(100% - 1rem)); padding: .55rem .65rem; border: 1px solid var(--line); border-radius: 10px; background: rgb(255 250 240 / 96%); box-shadow: 0 8px 18px rgb(47 62 44 / 18%); color: var(--text); font-size: .72rem; line-height: 1.35; pointer-events: none; transform: translateY(-50%); }
+.defense-distance-tooltip strong { font-size: .78rem; }
 .defense-distance-axis-label, .defense-distance-date { fill: var(--text-muted); font-size: 10px; }
 .assessment-list { display: grid; gap: 1rem; }
 .assessment-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .7rem; }

@@ -3,6 +3,7 @@ import { Link } from "../../routes/router";
 import { api } from "../../api/client";
 import type { MarketCoreCurrentQuotes, PathMatrix, SectorResearch } from "../../types";
 import { formatPct } from "../../utils/format";
+import { marketSnapshotDisplayState } from "../../utils/marketSnapshotDisplay";
 import { IslandDialog } from "./IslandDialog";
 
 type Cell = PathMatrix["rows"][number]["cells"][number] & { sector_name: string; sector_key: string; market_available?: boolean };
@@ -18,11 +19,9 @@ const reportStatus = (cell: Cell) => cell.report_present ? cell.path_status_labe
 const cellAriaLabel = (sectorName: string, cell: Cell) => `${sectorName} 行情 ${cell.trading_date} ${cell.report_present ? `报告 ${cell.report_date} ${reportStatus(cell)}` : "该交易日无对应报告观点"} ${marketOverlayLabel(cell)}`;
 
 const currentTone = (value: number | null) => value == null || value === 0 ? "a-share-neutral" : value > 0 ? "a-share-positive" : "a-share-negative";
-const currentSessionLabel = (state: string | undefined) => state === "morning_trading" || state === "afternoon_trading" ? "盘中" : state === "lunch_break" ? "午间" : "今日收盘";
-
 function CurrentMarketCell({ sector }: { sector: NonNullable<MarketCoreCurrentQuotes["sectors"]>[number] | undefined }) {
   if (!sector || sector.market_status === "unavailable" || sector.instruments.length === 0) return <span className="matrix-current-unavailable">—</span>;
-  return <div className="matrix-current-cell"><small>{currentSessionLabel(sector.market_session)} {sector.quote_time ? sector.quote_time.slice(11, 16) : ""}</small>{sector.instruments.slice(0, 2).map(item => <span key={item.symbol}><b>{item.name}</b><em className={currentTone(item.pct_change)}>{item.pct_change == null ? "—" : formatPct(item.pct_change)}</em></span>)}</div>;
+  return <div className="matrix-current-cell"><small>{marketSnapshotDisplayState(sector.market_session, sector.quote_time)}</small>{sector.instruments.slice(0, 2).map(item => <span key={item.symbol}><b>{item.name}</b><em className={currentTone(item.pct_change)}>{item.pct_change == null ? "—" : formatPct(item.pct_change)}</em></span>)}</div>;
 }
 
 export function IslandPathMatrix({ matrix, currentMarket, period, onPeriodChange }: { matrix: PathMatrix; currentMarket: MarketCoreCurrentQuotes | null; period: string; onPeriodChange: (value: string) => void }) {

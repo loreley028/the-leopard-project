@@ -1,10 +1,11 @@
 import { SecurityProxySparkline } from "../island/SecurityProxySparkline";
 import type { MarketCoreBroadMarket, MarketCoreHistoryRow, MarketCoreIndicators, MarketCoreLiveQuote, MarketCoreProxyGroup, MarketCoreShanghai } from "../../types";
 import { formatPct, formatSecurityPrice, formatShanghaiQuoteDateTime } from "../../utils/format";
+import { marketSnapshotDisplayState } from "../../utils/marketSnapshotDisplay";
 
 const tone = (value: number | null | undefined) => value == null || value === 0 ? "a-share-neutral" : value > 0 ? "a-share-positive" : "a-share-negative";
 const liveMessage = (quote: MarketCoreLiveQuote) => quote.display_mode === "same_day_session_latest" ? "当前为非连续交易时段，已显示当日最新行情" : quote.freshness === "stale" ? "当前实时行情已结束" : "当前实时行情暂不可用";
-const liveLabel = (quote: MarketCoreLiveQuote) => quote.display_mode === "same_day_session_latest" ? "当日最新行情" : "当前行情";
+const liveLabel = (quote: MarketCoreLiveQuote) => marketSnapshotDisplayState(quote.session_state, quote.quote_datetime);
 
 export function MarketCoreIndicatorsView({ indicators }: { indicators: MarketCoreIndicators }) {
   const rows: Array<[string, number | null, number | null]> = [
@@ -57,7 +58,7 @@ function BroadAnchorCard({ instrument }: { instrument: MarketCoreBroadMarket["an
   return <article className="broad-market-card">
     <h4>{instrument.name}</h4><small className="reader-security-code">{instrument.security_code}</small>
     <strong>{formatSecurityPrice(visiblePrice)}</strong><em className={tone(visiblePct)}>{visiblePct == null ? "—" : formatPct(visiblePct)}</em>
-    <small>{instrument.live.status === "available" ? `${instrument.live.display_mode === "same_day_session_latest" ? "当日最新行情 · " : ""}行情时间：${formatShanghaiQuoteDateTime(instrument.live.quote_datetime)}` : `最近完整收盘：${instrument.latest_completed?.trading_date ?? "—"}`}</small>
+    <small>{instrument.live.status === "available" ? `${marketSnapshotDisplayState(instrument.live.session_state, instrument.live.quote_datetime)} · 行情时间：${formatShanghaiQuoteDateTime(instrument.live.quote_datetime)}` : `最近收盘：${instrument.latest_completed?.trading_date ?? "—"}`}</small>
     <div className="broad-market-ma"><span className={tone(instrument.indicators.distance_to_ma5_pct)}>MA5 {instrument.indicators.distance_to_ma5_pct == null ? "—" : formatPct(instrument.indicators.distance_to_ma5_pct)}</span><span className={tone(instrument.indicators.distance_to_ma10_pct)}>MA10 {instrument.indicators.distance_to_ma10_pct == null ? "—" : formatPct(instrument.indicators.distance_to_ma10_pct)}</span><span className={tone(instrument.indicators.distance_to_ma20_pct)}>MA20 {instrument.indicators.distance_to_ma20_pct == null ? "—" : formatPct(instrument.indicators.distance_to_ma20_pct)}</span></div>
   </article>;
 }

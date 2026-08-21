@@ -45,9 +45,9 @@ describe("Market Core reader surfaces", () => {
       anchors: proxyGroups[0].instruments.map(item => ({ ...item, live: { ...item.live, freshness: "session_latest", display_mode: "same_day_session_latest", session_state: "lunch_break" } })),
     };
     render(<><MarketCoreShanghaiReader market={lunchShanghai} /><BroadMarketOverview shanghai={lunchShanghai} broad={broad} /></>);
-    expect(screen.getByText("当日最新行情")).toBeVisible();
+    expect(screen.getByText("午间 11:30")).toBeVisible();
     expect(screen.getByText(/当前为非连续交易时段，已显示当日最新行情/)).toBeVisible();
-    expect(screen.getAllByText(/当日最新行情 · 行情时间/)).toHaveLength(4);
+    expect(screen.getAllByText(/午间 \d{2}:\d{2} · 行情时间/)).toHaveLength(4);
     expect(screen.getByText("3,926.96")).toBeVisible();
     expect(screen.queryByText("当前实时行情已结束")).not.toBeInTheDocument();
   });
