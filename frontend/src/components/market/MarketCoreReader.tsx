@@ -57,7 +57,7 @@ function BroadAnchorCard({ instrument }: { instrument: MarketCoreBroadMarket["an
   const visiblePct = instrument.live.status === "available" ? instrument.live.pct_change : instrument.latest_completed?.pct_change;
   return <article className="broad-market-card">
     <h4>{instrument.name}</h4><small className="reader-security-code">{instrument.security_code}</small>
-    <strong>{formatSecurityPrice(visiblePrice)}</strong><em className={tone(visiblePct)}>{visiblePct == null ? "—" : formatPct(visiblePct)}</em>
+    <strong className={tone(visiblePct)}>{formatSecurityPrice(visiblePrice)}</strong><em className={tone(visiblePct)}>{visiblePct == null ? "—" : formatPct(visiblePct)}</em>
     <small>{instrument.live.status === "available" ? `${marketSnapshotDisplayState(instrument.live.session_state, instrument.live.quote_datetime)} · 行情时间：${formatShanghaiQuoteDateTime(instrument.live.quote_datetime)}` : `最近收盘：${instrument.latest_completed?.trading_date ?? "—"}`}</small>
     <div className="broad-market-ma"><span className={tone(instrument.indicators.distance_to_ma5_pct)}>MA5 {instrument.indicators.distance_to_ma5_pct == null ? "—" : formatPct(instrument.indicators.distance_to_ma5_pct)}</span><span className={tone(instrument.indicators.distance_to_ma10_pct)}>MA10 {instrument.indicators.distance_to_ma10_pct == null ? "—" : formatPct(instrument.indicators.distance_to_ma10_pct)}</span><span className={tone(instrument.indicators.distance_to_ma20_pct)}>MA20 {instrument.indicators.distance_to_ma20_pct == null ? "—" : formatPct(instrument.indicators.distance_to_ma20_pct)}</span></div>
   </article>;

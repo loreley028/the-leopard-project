@@ -89,8 +89,20 @@ describe("Market Core reader surfaces", () => {
     };
     render(<><MarketCoreShanghaiReader market={current} includeHistory={false} /><BroadMarketOverview shanghai={current} broad={broad} /></>);
     expect(screen.getByText("3,926.96")).toHaveClass("a-share-positive");
+    expect(Array.from(document.querySelectorAll(".broad-market-card > strong"))).toHaveLength(4);
+    expect(Array.from(document.querySelectorAll(".broad-market-card > strong")).every(item => item.classList.contains("a-share-positive"))).toBe(true);
     const rows = Array.from(document.querySelectorAll(".aligned-broad-market-row:not(.aligned-broad-market-header)"));
     expect(rows[0]).toHaveTextContent("07-20");
     expect(rows.at(-1)).toHaveTextContent("07-11");
+  });
+
+  it("colors negative broad current prices with the A-share down tone", () => {
+    const broad: MarketCoreBroadMarket = {
+      market_core: "standalone_objective", date_axis_kind: "market_trading_day", trading_date_axis: history.slice(-10).map(item => item.trading_date),
+      universe: "broad_market_anchors", provider: "tencent_standard_security_quote", provider_role: "diagnostic_provider", cache_hit: false, provider_request_count: 1,
+      anchors: proxyGroups[0].instruments.map((item, index) => ({ ...item, live: { ...item.live, current: 10 + index, pct_change: index === 1 ? -1.25 : 1.25, freshness: "fresh", display_mode: "live", session_state: "afternoon_trading" } })),
+    };
+    render(<BroadMarketOverview shanghai={staleShanghai} broad={broad} />);
+    expect(document.querySelectorAll(".broad-market-card > strong")[1]).toHaveClass("a-share-negative");
   });
 });

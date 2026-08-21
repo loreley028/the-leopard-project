@@ -19,7 +19,7 @@ from sqlalchemy.orm import Session
 
 from .providers.tencent_standard_quote import TencentStandardSecurityQuoteProvider
 from .trading_calendar import CalendarStatus, evaluate_cn_a_day
-from .web.live_market_anchor import SHANGHAI_COMPOSITE_NAME, SHANGHAI_COMPOSITE_SYMBOL, structure_leopard_defense_line
+from .web.live_market_anchor import DefenseLine, SHANGHAI_COMPOSITE_NAME, SHANGHAI_COMPOSITE_SYMBOL, structure_leopard_defense_line
 from .web.models import LiveMarketAnchorDaily, Report, ReportStatus
 
 
@@ -164,25 +164,27 @@ def next_controlled_cn_a_trading_day(report_date: date) -> date | None:
 
 
 def _defense_line_validation_rows(session: Session) -> list[dict[str, object]]:
-    """Return every exact-date validation supported by completed market data.
+    """Build the completed-day defense verification ledger.
 
-    Multiple non-trading-day reports can target the same controlled day.  The
-    newest current published report wins for that day, so one actual close is
-    never represented as competing validation rows.
+    A report's defense line becomes eligible only on the next controlled
+    trading day.  From that day forward it remains the applicable *Report
+    Fact* until a newer verified report line becomes eligible.  Each ledger
+    row still uses the exact completed Shanghai close for its own trade day;
+    this is not a market-data fallback or a same-day report/market match.
+
+    Multiple reports can become eligible on the same controlled day (for
+    example weekend reports).  The newest current published report wins that
+    effective day, so one close never has competing defense observations.
     """
     reports = session.scalars(select(Report).where(
         Report.status == ReportStatus.PUBLISHED.value,
         Report.is_current.is_(True),
         Report.report_date.is_not(None),
     ).order_by(Report.report_date.desc(), Report.published_at.desc())).all()
-    closes = {
-        item.trading_date: item
-        for item in session.scalars(select(LiveMarketAnchorDaily).where(
-            LiveMarketAnchorDaily.symbol == SHANGHAI_COMPOSITE_SYMBOL,
-        ))
-    }
-    result: list[dict[str, object]] = []
-    seen_trade_days: set[date] = set()
+    closes = list(session.scalars(select(LiveMarketAnchorDaily).where(
+        LiveMarketAnchorDaily.symbol == SHANGHAI_COMPOSITE_SYMBOL,
+    ).order_by(LiveMarketAnchorDaily.trading_date)).all())
+    sources_by_effective_day: dict[date, tuple[Report, DefenseLine]] = {}
     for report in reports:
         assert report.report_date is not None
         metadata = json.loads(report.interpretation_meta_json or "{}")
@@ -193,17 +195,26 @@ def _defense_line_validation_rows(session: Session) -> list[dict[str, object]]:
         )
         if defense.value is None:
             continue
-        trading_date = next_controlled_cn_a_trading_day(report.report_date)
-        if trading_date is None or trading_date in seen_trade_days:
+        effective_trading_date = next_controlled_cn_a_trading_day(report.report_date)
+        if effective_trading_date is None or effective_trading_date in sources_by_effective_day:
             continue
-        close = closes.get(trading_date)
-        if close is None:
+        sources_by_effective_day[effective_trading_date] = (report, defense)
+
+    source_days = sorted(sources_by_effective_day)
+    source_index = 0
+    active_source: tuple[Report, DefenseLine] | None = None
+    result: list[dict[str, object]] = []
+    for close in closes:
+        while source_index < len(source_days) and source_days[source_index] <= close.trading_date:
+            active_source = sources_by_effective_day[source_days[source_index]]
+            source_index += 1
+        if active_source is None:
             continue
-        seen_trade_days.add(trading_date)
+        report, defense = active_source
         close_value = Decimal(str(close.close))
         distance = close_value - defense.value
         result.append({
-            "trading_date": trading_date.isoformat(),
+            "trading_date": close.trading_date.isoformat(),
             "source_report_id": report.id,
             "source_report_date": report.report_date.isoformat(),
             "defense_line_value": float(defense.value),
@@ -225,12 +236,12 @@ def recent_defense_line_validations(session: Session, *, limit: int = 10) -> lis
 
 
 def defense_line_trend(session: Session, *, limit: int = 30) -> list[dict[str, object]]:
-    """Return a 30-completed-trading-day axis with exact-date defense records.
+    """Return a completed-day axis from the same defense verification ledger.
 
-    The axis comes exclusively from completed Shanghai rows.  A date without a
-    validated report defense line stays unavailable instead of inheriting a
-    neighbouring report's line, so this read model never enables a market-data
-    fallback.
+    The axis comes exclusively from completed Shanghai rows and simply selects
+    the most recent ``limit`` records from ``_defense_line_validation_rows``.
+    Dates before any eligible Report Fact remain unavailable; no market close
+    is filled from a neighbouring date.
     """
 
     if limit < 1 or limit > 30:
