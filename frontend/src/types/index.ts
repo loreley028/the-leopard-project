@@ -527,6 +527,7 @@ export interface EnhancedReport {
   report_defense: ReportDefense;
   recent_defense_line_validations: DefenseLineValidation[];
   defense_line_trend: DefenseLineTrendPoint[];
+  intraday_defense_overlay: IntradayDefenseOverlay | null;
   comparison: { previous_report_id: string | null; previous_report_date?: string; status_changes: Array<{ sector_key: string; sector_name: string; from: PathStatus; to: PathStatus }>; counts: Record<string, number> };
   market_data_attached: boolean;
   data_notice: string;
@@ -556,6 +557,22 @@ export interface DefenseLineTrendPoint {
   distance_pct: number | null;
   close_position: DefenseLineValidation["close_position"] | null;
   data_mode: "completed_eod";
+}
+
+export interface IntradayDefenseOverlay {
+  available: true;
+  data_mode: "intraday_overlay";
+  trading_date: string;
+  quote_datetime: string;
+  session_state: "morning_trading" | "lunch_break" | "afternoon_trading";
+  source_report_id: string;
+  source_report_date: string;
+  defense_line_value: number;
+  index_name: string;
+  index_current: number;
+  distance_points: number;
+  distance_pct: number;
+  close_position: DefenseLineValidation["close_position"];
 }
 
 export interface LiveMarketAnchor {
@@ -625,20 +642,35 @@ export interface PathMatrix {
     path_status_label: string | null;
     path_status_color: string | null;
     revision_id: string | null;
-    market_overlay?: {
-      kind: "primary" | "unavailable";
-      label: string;
-      market_date: string | null;
-      pct_change: number | null;
-      primary: { name: string; security_code: string; role: "etf" | "leader"; close: number; pct_change: number | null; trading_date: string } | null;
-      instruments: Array<{ name: string; security_code: string; role: "etf" | "leader"; close: number; pct_change: number | null; trading_date: string }>;
-    };
+    market_overlay?: ExactDateMarketOverlay;
   }> }>;
   status_contract: { statuses: Array<{ code: PathStatus; label: string; color: string; order: number }> };
   period?: string;
   default_period?: string;
   available_period_count?: number;
   history_origin?: string;
+}
+
+export interface ExactDateMarketOverlay {
+  kind: "primary" | "unavailable";
+  label: string;
+  market_date: string | null;
+  pct_change: number | null;
+  primary: { name: string; security_code: string; role: "etf" | "leader"; close: number; pct_change: number | null; trading_date: string } | null;
+  instruments: Array<{ name: string; security_code: string; role: "etf" | "leader"; close: number; pct_change: number | null; trading_date: string }>;
+}
+
+export interface TimelinePathEntry {
+  id: string;
+  report_id: string;
+  detail_report_id: string | null;
+  report_date: string;
+  market_as_of_date: string | null;
+  reported_status: PathStatus;
+  effective_status: PathStatus | null;
+  has_detailed_assessment: boolean;
+  path: PathEntry;
+  market_overlay?: ExactDateMarketOverlay;
 }
 
 export interface SectorResearch {
@@ -671,10 +703,10 @@ export interface SectorResearch {
   historical_broad_intervals?: HoldingInterval[];
   is_low_attention?: boolean;
   is_pinned_for_research?: boolean;
-  recent_path_entries?: Array<{ id: string; report_id: string; detail_report_id: string | null; report_date: string; market_as_of_date: string | null; reported_status: PathStatus; effective_status: PathStatus | null; has_detailed_assessment: boolean; path: PathEntry }>;
+  recent_path_entries?: TimelinePathEntry[];
   history: Array<{ report_id: string; report_date: string; path: PathEntry; assessment: SectorAssessment; report_snapshot: MarketSnapshot | null }>;
   detailed_history?: Array<{ report_id: string; report_date: string; path: PathEntry; assessment: SectorAssessment; report_snapshot: MarketSnapshot | null }>;
-  recent_path?: Array<{ id: string; report_id: string; detail_report_id: string | null; report_date: string; market_as_of_date: string | null; reported_status: PathStatus; effective_status: PathStatus | null; has_detailed_assessment: boolean; path: PathEntry }>;
+  recent_path?: TimelinePathEntry[];
   market_history?: PrimaryMarketHistoryRow[];
   date_axis_kinds?: { sector_market_history: "market_trading_day"; board_recent10_status: "report_date"; holding_range: "report_date" };
   path_periods?: number;

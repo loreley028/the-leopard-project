@@ -44,6 +44,7 @@ function ReportOverview({ enhanced, market, broad }: { enhanced: EnhancedReport;
   const distancePct = distancePoints != null && defense.defense_line_value ? distancePoints / defense.defense_line_value * 100 : null;
   const defensePosition = distancePoints == null ? null : distancePoints > 0 ? "above_defense_line" : distancePoints < 0 ? "below_defense_line" : "at_defense_line";
   const validations = enhanced.recent_defense_line_validations;
+  const intradayOverlay = enhanced.intraday_defense_overlay;
   return <div className="report-overview-grid">
     <IslandCard title="核心观点">
       <div className="core-insight-panel">
@@ -70,6 +71,14 @@ function ReportOverview({ enhanced, market, broad }: { enhanced: EnhancedReport;
           <div className="defense-validation-heading"><div><p className="eyebrow">近10个交易日猎豹攻防点</p><p>按前一份报告提出的攻防线，对照下一受控交易日上证指数实际收盘；不构成预测评分。</p></div><span>自然积累</span></div>
           <div className="defense-validation-table" role="table" aria-label="攻防验证明细">
             <div className="defense-validation-row defense-validation-header" role="row"><span>交易日</span><span>攻防线来源</span><span>攻防线</span><span>上证收盘</span><span>距攻防线</span><span>收盘位置</span></div>
+            {intradayOverlay && <div className="defense-validation-row defense-validation-intraday" role="row">
+              <div role="cell"><small>交易日</small><strong>{intradayOverlay.trading_date.slice(5)} · {intradayOverlay.session_state === "lunch_break" ? "午间" : "盘中"}</strong></div>
+              <div role="cell"><small>攻防线来源</small><strong>来自 {intradayOverlay.source_report_date.slice(5)} 报告</strong></div>
+              <div role="cell"><small>攻防线</small><strong>{point(intradayOverlay.defense_line_value)}</strong></div>
+              <div role="cell"><small>上证当前</small><strong>{point(intradayOverlay.index_current)}</strong></div>
+              <div role="cell"><small>距攻防线</small><strong className={signedTone(intradayOverlay.distance_points)}>{signedPoint(intradayOverlay.distance_points)}</strong><em className={signedTone(intradayOverlay.distance_pct)}>{pct(intradayOverlay.distance_pct)}</em></div>
+              <div role="cell"><small>当前位置</small><strong className={positionTone(intradayOverlay.close_position)}>{validationPositionLabel[intradayOverlay.close_position]}</strong></div>
+            </div>}
             {validations.map(item => <div className="defense-validation-row" role="row" key={`${item.source_report_id}-${item.trading_date}`}>
               <div role="cell"><small>交易日</small><strong>{item.trading_date.slice(5)}</strong></div>
               <div role="cell"><small>攻防线来源</small><strong>来自 {item.source_report_date.slice(5)} 报告</strong></div>
@@ -81,7 +90,7 @@ function ReportOverview({ enhanced, market, broad }: { enhanced: EnhancedReport;
           </div>
           {validations.length === 0 && <p className="defense-validation-empty">攻防验证记录将随交易日自然积累。</p>}
           <p className="defense-validation-count">当前已积累 {validations.length} / 10 条完整验证记录。</p>
-          <DefenseDistanceTrend points={enhanced.defense_line_trend} />
+          <DefenseDistanceTrend points={enhanced.defense_line_trend} intradayOverlay={intradayOverlay} />
         </section>
         <BroadMarketOverview shanghai={market} broad={broad} />
       </div>

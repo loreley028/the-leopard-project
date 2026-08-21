@@ -13,6 +13,7 @@ from leopard_project.live_market_anchor_daily import (
     LiveMarketAnchorDailyCaptureError,
     capture_live_market_anchor_daily,
     defense_line_trend,
+    intraday_defense_overlay,
     next_controlled_cn_a_trading_day,
     recent_defense_line_validations,
 )
@@ -240,3 +241,30 @@ def test_validation_is_descriptive_only_without_prediction_or_effectiveness_scor
     with factory() as session:
         assert recent_defense_line_validations(session) == []
     assert not any("score" in name or "success" in name or "prediction" in name for name in dir(__import__("leopard_project.live_market_anchor_daily", fromlist=["*"])))
+
+
+def test_intraday_defense_overlay_uses_effective_report_fact_without_persisting(tmp_path) -> None:
+    factory = sessions(tmp_path)
+    intraday_now = datetime(2026, 8, 11, 10, 30, tzinfo=SHANGHAI)
+    with factory() as session:
+        session.add(report(date(2026, 8, 10), market_path="攻防线3844点"))
+        session.commit()
+        overlay = intraday_defense_overlay(session, quote={
+            "quote_status": "available", "quote_datetime": intraday_now.isoformat(), "current": "3851.20",
+        }, now=intraday_now)
+        assert overlay is not None
+        assert overlay["trading_date"] == "2026-08-11"
+        assert overlay["source_report_date"] == "2026-08-10"
+        assert overlay["defense_line_value"] == 3844.0
+        assert overlay["distance_points"] == pytest.approx(7.2)
+        assert session.query(LiveMarketAnchorDaily).count() == 0
+
+
+def test_intraday_defense_overlay_is_absent_after_market_close(tmp_path) -> None:
+    factory = sessions(tmp_path)
+    with factory() as session:
+        session.add(report(date(2026, 8, 10), market_path="攻防线3844点"))
+        session.commit()
+        assert intraday_defense_overlay(session, quote={
+            "quote_status": "available", "quote_datetime": NOW.isoformat(), "current": "3851.20",
+        }, now=NOW) is None

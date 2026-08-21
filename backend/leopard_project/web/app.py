@@ -433,7 +433,7 @@ def create_app(settings: WebSettings | None = None, session_factory: sessionmake
         data_status: str | None = None,
         include_low_attention: bool = False,
         low_attention_only: bool = False,
-        sort: str = Query(default="research", pattern="^(research|status|daily|five_day|view_date|group)$"),
+        sort: str = Query(default="group", pattern="^(research|status|daily|five_day|view_date|group)$"),
         page: int = Query(default=1, ge=1),
         page_size: int = Query(default=100, ge=1, le=100),
         current: Principal | None = Depends(optional_principal),

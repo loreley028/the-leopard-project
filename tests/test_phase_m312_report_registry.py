@@ -7,6 +7,8 @@ import csv
 from leopard_project.history_matrix_ordering import write_history_matrix_order_review
 from leopard_project.report_registry import load_report_registry, reader_report_registry
 from leopard_project.sector_lifecycle import parent_status_lineage_for_child
+from leopard_project.security_proxy_observation import load_security_proxy_registry
+from leopard_project.web.market_core import MarketCoreReadService
 from leopard_project.web.database import create_session_factory
 from leopard_project.web.enhanced import EnhancedReportService, effective_statuses, holding_interval_policy
 from leopard_project.web.models import SectorPathHistoryEntry
@@ -48,6 +50,14 @@ def test_reader_history_matrix_order_is_manual_static_and_places_cpo_before_mlcc
     mlcc = next(item for item in rows if item["sector_key"] == "mlcc")
     assert (cpo["manual_order"], cpo["rationale_short"]) == ("2", "主线高频")
     assert int(cpo["manual_order"]) < int(mlcc["manual_order"])
+
+
+def test_history_matrix_and_board_research_share_sector_order() -> None:
+    reader_keys = [item.sector_key for item in reader_report_registry()]
+    service = MarketCoreReadService(provider=None, live_anchor=None, registry=load_security_proxy_registry())  # type: ignore[arg-type]
+    matrix_keys = [item.market_path_key for item in service._matrix_definitions()]
+    assert matrix_keys == [item for item in reader_keys if item in set(matrix_keys)]
+    assert matrix_keys.index("cpo") < matrix_keys.index("mlcc")
 
 
 def test_split_lineage_uses_versioned_pre_split_status_only_dates() -> None:

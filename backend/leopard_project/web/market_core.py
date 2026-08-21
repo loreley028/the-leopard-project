@@ -20,7 +20,7 @@ from leopard_project.providers.tencent_standard_quote import TencentQuoteError, 
 from leopard_project.security_proxy_daily import get_security_proxy_daily_histories
 from leopard_project.security_proxy_observation import APPROVED, SecurityProxyDefinition, SecurityProxyInstrument, load_security_proxy_registry
 from leopard_project.broad_market_anchors import BroadMarketAnchor, load_broad_market_anchors
-from leopard_project.report_registry import load_report_registry
+from leopard_project.report_registry import reader_report_registry
 
 from .live_market_anchor import LiveShanghaiMarketAnchorService, SHANGHAI_COMPOSITE_NAME, SHANGHAI_COMPOSITE_SYMBOL
 from .models import LiveMarketAnchorDaily
@@ -196,7 +196,7 @@ class MarketCoreReadService:
     def _matrix_definitions(self) -> tuple[SecurityProxyDefinition, ...]:
         """Return the configured active Reader universe in report order."""
         by_key = {item.market_path_key: item for item in self.registry}
-        return tuple(by_key[item.sector_key] for item in load_report_registry() if item.lifecycle == "active" and item.sector_key in by_key)
+        return tuple(by_key[item.sector_key] for item in reader_report_registry() if item.lifecycle == "active" and item.sector_key in by_key)
 
     def current_quotes(self, *, scope: str) -> dict:
         """Serve one short-lived, single-flight quote batch for an approved scope.

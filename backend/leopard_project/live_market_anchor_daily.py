@@ -20,6 +20,7 @@ from sqlalchemy.orm import Session
 from .providers.tencent_standard_quote import TencentStandardSecurityQuoteProvider
 from .trading_calendar import CalendarStatus, evaluate_cn_a_day
 from .web.live_market_anchor import DefenseLine, SHANGHAI_COMPOSITE_NAME, SHANGHAI_COMPOSITE_SYMBOL, structure_leopard_defense_line
+from .web.market_session import cn_a_session_state, reader_quote_display
 from .web.models import LiveMarketAnchorDaily, Report, ReportStatus
 
 
@@ -163,27 +164,13 @@ def next_controlled_cn_a_trading_day(report_date: date) -> date | None:
     return None
 
 
-def _defense_line_validation_rows(session: Session) -> list[dict[str, object]]:
-    """Build the completed-day defense verification ledger.
-
-    A report's defense line becomes eligible only on the next controlled
-    trading day.  From that day forward it remains the applicable *Report
-    Fact* until a newer verified report line becomes eligible.  Each ledger
-    row still uses the exact completed Shanghai close for its own trade day;
-    this is not a market-data fallback or a same-day report/market match.
-
-    Multiple reports can become eligible on the same controlled day (for
-    example weekend reports).  The newest current published report wins that
-    effective day, so one close never has competing defense observations.
-    """
+def _defense_sources_by_effective_day(session: Session) -> dict[date, tuple[Report, DefenseLine]]:
+    """Return verified Report Facts keyed by their controlled effective day."""
     reports = session.scalars(select(Report).where(
         Report.status == ReportStatus.PUBLISHED.value,
         Report.is_current.is_(True),
         Report.report_date.is_not(None),
     ).order_by(Report.report_date.desc(), Report.published_at.desc())).all()
-    closes = list(session.scalars(select(LiveMarketAnchorDaily).where(
-        LiveMarketAnchorDaily.symbol == SHANGHAI_COMPOSITE_SYMBOL,
-    ).order_by(LiveMarketAnchorDaily.trading_date)).all())
     sources_by_effective_day: dict[date, tuple[Report, DefenseLine]] = {}
     for report in reports:
         assert report.report_date is not None
@@ -199,6 +186,26 @@ def _defense_line_validation_rows(session: Session) -> list[dict[str, object]]:
         if effective_trading_date is None or effective_trading_date in sources_by_effective_day:
             continue
         sources_by_effective_day[effective_trading_date] = (report, defense)
+    return sources_by_effective_day
+
+
+def _defense_line_validation_rows(session: Session) -> list[dict[str, object]]:
+    """Build the completed-day defense verification ledger.
+
+    A report's defense line becomes eligible only on the next controlled
+    trading day.  From that day forward it remains the applicable *Report
+    Fact* until a newer verified report line becomes eligible.  Each ledger
+    row still uses the exact completed Shanghai close for its own trade day;
+    this is not a market-data fallback or a same-day report/market match.
+
+    Multiple reports can become eligible on the same controlled day (for
+    example weekend reports).  The newest current published report wins that
+    effective day, so one close never has competing defense observations.
+    """
+    closes = list(session.scalars(select(LiveMarketAnchorDaily).where(
+        LiveMarketAnchorDaily.symbol == SHANGHAI_COMPOSITE_SYMBOL,
+    ).order_by(LiveMarketAnchorDaily.trading_date)).all())
+    sources_by_effective_day = _defense_sources_by_effective_day(session)
 
     source_days = sorted(sources_by_effective_day)
     source_index = 0
@@ -225,6 +232,68 @@ def _defense_line_validation_rows(session: Session) -> list[dict[str, object]]:
             "close_position": "close_above_defense_line" if distance > 0 else "close_below_defense_line" if distance < 0 else "close_at_defense_line",
         })
     return sorted(result, key=lambda item: str(item["trading_date"]), reverse=True)
+
+
+def intraday_defense_overlay(
+    session: Session,
+    *,
+    quote: dict[str, object],
+    now: datetime,
+) -> dict[str, object] | None:
+    """Return a view-only current-day defense comparison when it is honest.
+
+    The overlay intentionally never creates a ``LiveMarketAnchorDaily`` row.
+    It exists only during a controlled trading or lunch session, requires a
+    same-day usable quote, and uses the same effective Report Fact chain as
+    the immutable completed verification ledger.
+    """
+    session_state = cn_a_session_state(now)
+    if session_state not in {"morning_trading", "lunch_break", "afternoon_trading"}:
+        return None
+    raw_datetime = quote.get("quote_datetime")
+    try:
+        quote_datetime = datetime.fromisoformat(str(raw_datetime)) if raw_datetime else None
+    except ValueError:
+        return None
+    current = _decimal(quote.get("current"), positive=True)
+    decision = reader_quote_display(
+        quote_available=quote.get("quote_status") == "available",
+        quote_datetime=quote_datetime,
+        current=current,
+        now=now,
+    )
+    if decision.status != "available" or quote_datetime is None or current is None:
+        return None
+    local_quote = _shanghai(quote_datetime)
+    local_now = _shanghai(now)
+    if local_quote is None or local_now is None or local_quote.date() != local_now.date():
+        return None
+    sources_by_effective_day = _defense_sources_by_effective_day(session)
+    active: tuple[Report, DefenseLine] | None = None
+    for effective_day in sorted(sources_by_effective_day):
+        if effective_day > local_now.date():
+            break
+        active = sources_by_effective_day[effective_day]
+    if active is None:
+        return None
+    report, defense = active
+    assert defense.value is not None
+    distance = current - defense.value
+    return {
+        "available": True,
+        "data_mode": "intraday_overlay",
+        "trading_date": local_now.date().isoformat(),
+        "quote_datetime": local_quote.isoformat(),
+        "session_state": session_state,
+        "source_report_id": report.id,
+        "source_report_date": report.report_date.isoformat() if report.report_date else None,
+        "defense_line_value": float(defense.value),
+        "index_name": SHANGHAI_COMPOSITE_NAME,
+        "index_current": float(current),
+        "distance_points": float(distance),
+        "distance_pct": float((current / defense.value - Decimal("1")) * Decimal("100")),
+        "close_position": "close_above_defense_line" if distance > 0 else "close_below_defense_line" if distance < 0 else "close_at_defense_line",
+    }
 
 
 def recent_defense_line_validations(session: Session, *, limit: int = 10) -> list[dict[str, object]]:

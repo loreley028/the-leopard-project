@@ -58,7 +58,7 @@ from .market_ingestion import import_real_market, refresh_real_market
 from .intraday import IntradayRefreshCoordinator, intraday_policy, resolve_intraday_data_status
 from .market_automation import EodBackfillCoordinator
 from .live_market_anchor import LiveShanghaiMarketAnchorService
-from leopard_project.live_market_anchor_daily import defense_line_trend, recent_defense_line_validations
+from leopard_project.live_market_anchor_daily import defense_line_trend, intraday_defense_overlay, recent_defense_line_validations
 from .path_history import matrix_dates
 from .primary_market_observation import primary_history
 from .market_date_axis import market_core_completed_dates
@@ -227,6 +227,14 @@ def register_enhanced_routes(
             assessments.append(payload)
         paths = [path_entry_payload(item) for item in service.path_entries(report.id) if include_historical or item.sector_key in reader_keys]
         report_defense = report_defense_payload(report)
+        # This is deliberately a view-only companion to the immutable EOD
+        # ledger.  The live anchor has its own short cache, so the existing
+        # report-defense read and this overlay share one quote when possible.
+        intraday_overlay = intraday_defense_overlay(
+            session,
+            quote=live_market_anchor.observe_objective(),
+            now=datetime.now(timezone.utc),
+        )
         groups: dict[str, list[dict]] = {}
         for item in assessments:
             groups.setdefault(item["current_path_status"], []).append(item)
@@ -239,6 +247,7 @@ def register_enhanced_routes(
             "report_defense": report_defense,
             "recent_defense_line_validations": recent_defense_line_validations(session),
             "defense_line_trend": defense_line_trend(session),
+            "intraday_defense_overlay": intraday_overlay,
             "comparison": service.comparison(report),
             # Compatibility only.  The Viewer must never treat this legacy
             # report-snapshot count as a market-data quality gate.
@@ -647,6 +656,54 @@ def register_enhanced_routes(
         if capability and not capability.selectable_candidates:
             resolved_intraday_status = "provider_failed"
         primary_definition = next((item for item in load_security_proxy_registry() if item.market_path_key == report_key and item.status == APPROVED), None)
+        # Reader timeline tiles deliberately use the same fixed, exact-date
+        # primary observation contract as History Matrix.  Their companion
+        # securities remain separate facts for the selected-day detail; no
+        # sector return is calculated here.
+        timeline_overlay_by_report_date: dict[str, dict] = {}
+        if primary_definition is not None and recent_path_entries:
+            symbols = tuple(item.symbol for item in primary_definition.instruments if item.enabled)
+            mapped_dates = {
+                report_market_date(date.fromisoformat(str(item["report_date"])))
+                for item in recent_path_entries
+            }
+            latest_mapped_date = max((item for item in mapped_dates if item is not None), default=None)
+            proxy_rows = list(session.scalars(select(SecurityProxyDaily).where(
+                SecurityProxyDaily.symbol.in_(symbols),
+                SecurityProxyDaily.trading_date <= latest_mapped_date,
+            ).order_by(SecurityProxyDaily.symbol, SecurityProxyDaily.trading_date))) if symbols and latest_mapped_date else []
+            rows_by_symbol_date = {(item.symbol, item.trading_date): item for item in proxy_rows}
+            previous_close: dict[tuple[str, date], float | None] = {}
+            prior_by_symbol: dict[str, float] = {}
+            for item in proxy_rows:
+                previous_close[(item.symbol, item.trading_date)] = prior_by_symbol.get(item.symbol)
+                prior_by_symbol[item.symbol] = float(item.close)
+
+            def timeline_overlay(report_date: str) -> dict:
+                market_date = report_market_date(date.fromisoformat(report_date))
+                primary = primary_definition.primary_observation
+                primary_row = rows_by_symbol_date.get((primary.symbol, market_date)) if primary and market_date else None
+                if primary is None or primary_row is None or market_date is None:
+                    return {"kind": "unavailable", "label": "—", "market_date": market_date.isoformat() if market_date else None, "pct_change": None, "primary": None, "instruments": []}
+                def instrument_payload(instrument, row) -> dict:
+                    previous = previous_close.get((instrument.symbol, market_date))
+                    close = float(row.close)
+                    pct_change = (close / previous - 1) * 100 if previous and previous > 0 else None
+                    return {"name": instrument.security_name, "role": instrument.proxy_role, "security_code": instrument.reader_code, "close": close, "pct_change": pct_change, "trading_date": market_date.isoformat()}
+                primary_payload = instrument_payload(primary, primary_row)
+                related = [
+                    instrument_payload(instrument, row)
+                    for instrument in primary_definition.instruments
+                    if instrument.enabled and instrument.symbol != primary.symbol
+                    for row in [rows_by_symbol_date.get((instrument.symbol, market_date))]
+                    if row is not None
+                ]
+                pct_change = primary_payload["pct_change"]
+                return {"kind": "primary", "label": f"{primary.security_name} {pct_change:+.2f}%" if pct_change is not None else f"{primary.security_name} —", "market_date": market_date.isoformat(), "pct_change": pct_change, "primary": primary_payload, "instruments": related}
+
+            timeline_overlay_by_report_date = {str(item["report_date"]): timeline_overlay(str(item["report_date"])) for item in recent_path_entries}
+            for item in recent_path_entries:
+                item["market_overlay"] = timeline_overlay_by_report_date[str(item["report_date"])]
         primary_market = primary_history(session, primary_definition) if primary_definition is not None else None
         primary_chart = primary_history(session, primary_definition, limit=market_days) if primary_definition is not None else None
         recent_days = primary_market["history"] if primary_market is not None else []
