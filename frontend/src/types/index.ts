@@ -685,6 +685,7 @@ export interface SectorResearch {
   latest_report_explicitly_mentioned?: boolean | null;
   current_latest_market: MarketSnapshot | null;
   primary_market?: PrimaryMarketObservation | null;
+  timeline_market_basis?: { name: string; security_code: string } | null;
   latest_complete_market?: MarketSnapshot | null;
   recent_10_trading_days?: PrimaryMarketHistoryRow[];
   intraday_snapshot?: IntradaySnapshot | null;

@@ -656,6 +656,13 @@ def register_enhanced_routes(
         if capability and not capability.selectable_candidates:
             resolved_intraday_status = "provider_failed"
         primary_definition = next((item for item in load_security_proxy_registry() if item.market_path_key == report_key and item.status == APPROVED), None)
+        timeline_market_basis = None
+        if primary_definition is not None and primary_definition.primary_observation is not None:
+            primary_basis = primary_definition.primary_observation
+            timeline_market_basis = {
+                "name": primary_basis.security_name,
+                "security_code": primary_basis.reader_code,
+            }
         # Reader timeline tiles deliberately use the same fixed, exact-date
         # primary observation contract as History Matrix.  Their companion
         # securities remain separate facts for the selected-day detail; no
@@ -730,6 +737,7 @@ def register_enhanced_routes(
             "current_latest_market": None,
             "latest_complete_market": None,
             "primary_market": primary_market,
+            "timeline_market_basis": timeline_market_basis,
             "recent_10_trading_days": recent_days,
             "date_axis_kinds": {
                 "sector_market_history": "market_trading_day",

@@ -263,9 +263,9 @@ button, a, input, textarea, [tabindex] { outline-offset: 4px; }
 .path-cell { display: grid; grid-template-rows: minmax(2.1rem, 2fr) minmax(1.35rem, 1fr); width: 100%; min-height: 3.45rem; padding: 0; overflow: hidden; border: 0; border-radius: 2px; background: transparent; font-size: .72rem; font-weight: 900; cursor: pointer; }
 .matrix-report-layer { display: grid; min-width: 0; place-items: center; padding: .2rem; line-height: 1.05rem; }
 .matrix-report-layer.path-no-report { background: rgb(255 250 240 / 76%); color: var(--text-muted); }
-.matrix-market-layer { display: flex; min-width: 0; align-items: center; justify-content: space-between; gap: .22rem; padding: .17rem .28rem; background: #f8f5ed; color: var(--text-muted); font-size: .75rem; font-weight: 600; line-height: 1.1; }
-.matrix-market-name { min-width: 0; overflow: hidden; font-size: inherit; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
-.matrix-market-pct { flex: 0 0 auto; font-size: .84rem; font-style: normal; font-variant-numeric: tabular-nums; font-weight: 700; white-space: nowrap; }
+.matrix-market-layer { display: grid; min-width: 0; grid-template-rows: auto auto; justify-items: center; gap: .08rem; padding: .16rem .28rem; background: #f8f5ed; color: var(--text-muted); font-size: .75rem; font-weight: 600; line-height: 1.1; }
+.matrix-market-name { display: block; max-width: 100%; overflow: hidden; font-size: inherit; font-weight: 600; text-align: center; text-overflow: ellipsis; white-space: nowrap; }
+.matrix-market-pct { font-size: .84rem; font-style: normal; font-variant-numeric: tabular-nums; font-weight: 700; line-height: 1; white-space: nowrap; }
 .matrix-market-unavailable { display: grid; place-items: center; }
 .matrix-mobile-path-tile { display: grid; grid-template-rows: minmax(2rem, 2fr) minmax(1.25rem, 1fr); width: 100%; padding: 0; overflow: hidden; border: 0; border-radius: 8px; background: transparent; font: inherit; cursor: pointer; }
 .path-chip { padding: .3rem .45rem; border: 0; border-radius: 6px; font-weight: 900; }
@@ -315,10 +315,13 @@ button, a, input, textarea, [tabindex] { outline-offset: 4px; }
 .recent-path-banner { display: flex; flex-wrap: wrap; gap: .3rem; margin-top: .8rem; }
 .recent-path-banner > span { display: grid; min-width: 4.2rem; padding: .45rem; border-radius: 8px; font-weight: 900; text-align: center; }
 .recent-path-banner small { font-weight: 600; }
+.sector-timeline-market-basis { margin: .55rem 0 0; color: var(--text-muted); font-size: .82rem; line-height: 1.45; }
+.sector-timeline-market-basis strong { color: var(--text); font-weight: 650; }
 .sector-timeline-tile { display: grid; grid-template-rows: minmax(2.8rem, 2fr) minmax(1.35rem, 1fr); min-width: 4.6rem; padding: 0; overflow: hidden; border: 0; border-radius: 8px; background: transparent; color: var(--text); font: inherit; cursor: pointer; }
 .sector-timeline-report { display: grid; place-items: center; gap: .1rem; padding: .28rem; }
 .sector-timeline-report small { line-height: 1; }
-.sector-timeline-market { display: flex; min-width: 0; align-items: center; justify-content: space-between; gap: .15rem; padding: .16rem .26rem; background: #f8f5ed; color: var(--text-muted); font-size: .62rem; font-weight: 700; line-height: 1; }
+.sector-timeline-market { display: grid; min-width: 0; place-items: center; gap: .08rem; padding: .16rem .26rem; background: #f8f5ed; color: var(--text-muted); font-size: .72rem; font-weight: 700; line-height: 1; }
+.sector-timeline-market small { font-size: .6rem; font-weight: 600; }
 .sector-timeline-market em { flex: 0 0 auto; font-style: normal; font-variant-numeric: tabular-nums; font-weight: 900; }
 .sector-timeline-detail { display: grid; gap: .45rem; margin: .75rem 0 0; padding: .7rem; border: 1px solid var(--border-soft); border-radius: 10px; background: rgb(255 250 240 / 72%); }
 .sector-timeline-detail p { margin: 0; }

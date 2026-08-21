@@ -201,6 +201,38 @@ def test_matrix_uses_controlled_trading_days_and_maps_weekend_report_overlay(tmp
     assert weekend_overlay["market_overlay"]["market_date"] == mapped_day.isoformat()
 
 
+def test_sector_timeline_and_matrix_share_primary_observation_source(tmp_path) -> None:
+    settings = _settings(tmp_path)
+    sessions = create_session_factory(settings.database_url)
+    report_day, prior_day = date(2026, 8, 11), date(2026, 8, 10)
+    cpo = next(item for item in load_security_proxy_registry() if item.market_path_key == "cpo")
+    primary = cpo.primary_observation
+    assert primary is not None
+    with sessions() as session:
+        report = Report(
+            id="shared-primary", title="published", report_date=report_day, report_date_confirmed=True,
+            status="published", is_current=True, created_by="admin", data_origin="real_upload",
+        )
+        session.add(report)
+        session.add(SectorPathHistoryEntry(
+            sector_key="cpo", sector_name="CPO", path_report_date=report_day, path_status="hold",
+            source_report_id=report.id, detail_report_id=report.id, market_as_of_date=None,
+            frozen_daily_pct_change=None, market_data_status="unavailable", source_pdf_sha256="c" * 64,
+        ))
+        session.add_all([
+            SecurityProxyDaily(symbol=primary.symbol, trading_date=prior_day, close=Decimal("10"), open=None, high=None, low=None, amount_yuan=None, quote_datetime=None, fetched_at=datetime.now(timezone.utc), source="test"),
+            SecurityProxyDaily(symbol=primary.symbol, trading_date=report_day, close=Decimal("11"), open=None, high=None, low=None, amount_yuan=None, quote_datetime=None, fetched_at=datetime.now(timezone.utc), source="test"),
+        ])
+        session.commit()
+    with TestClient(create_app(settings, sessions)) as client:
+        timeline = client.get("/api/v1/sectors/cpo/research").json()
+        matrix = client.get("/api/v1/reports/shared-primary/path-matrix?periods=10").json()
+    assert timeline["timeline_market_basis"] == {"name": primary.security_name, "security_code": primary.reader_code}
+    cpo_cell = next(cell for cell in next(row for row in matrix["rows"] if row["sector_key"] == "cpo")["cells"] if cell["trading_date"] == report_day.isoformat())
+    assert cpo_cell["market_overlay"]["primary"]["name"] == timeline["timeline_market_basis"]["name"]
+    assert cpo_cell["market_overlay"]["primary"]["security_code"] == timeline["timeline_market_basis"]["security_code"]
+
+
 def test_matrix_market_axis_extends_beyond_latest_report_and_keeps_empty_report_overlay(tmp_path) -> None:
     settings = _settings(tmp_path)
     sessions = create_session_factory(settings.database_url)
