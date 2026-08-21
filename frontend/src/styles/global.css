@@ -264,7 +264,7 @@ button, a, input, textarea, [tabindex] { outline-offset: 4px; }
 .matrix-report-layer { display: grid; min-width: 0; place-items: center; padding: .2rem; line-height: 1.05rem; }
 .matrix-report-layer.path-no-report { background: rgb(255 250 240 / 76%); color: var(--text-muted); }
 .matrix-market-layer { display: flex; min-width: 0; align-items: center; justify-content: space-between; gap: .22rem; padding: .17rem .28rem; background: #f8f5ed; color: var(--text-muted); font-size: .75rem; font-weight: 600; line-height: 1.1; }
-.matrix-market-name { overflow: hidden; min-width: 0; text-overflow: ellipsis; white-space: nowrap; }
+.matrix-market-name { min-width: 0; overflow: hidden; font-size: inherit; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
 .matrix-market-pct { flex: 0 0 auto; font-size: .84rem; font-style: normal; font-variant-numeric: tabular-nums; font-weight: 700; white-space: nowrap; }
 .matrix-market-unavailable { display: grid; place-items: center; }
 .matrix-mobile-path-tile { display: grid; grid-template-rows: minmax(2rem, 2fr) minmax(1.25rem, 1fr); width: 100%; padding: 0; overflow: hidden; border: 0; border-radius: 8px; background: transparent; font: inherit; cursor: pointer; }
