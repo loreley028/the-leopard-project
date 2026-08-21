@@ -2,7 +2,9 @@ from __future__ import annotations
 
 from datetime import date
 from pathlib import Path
+import csv
 
+from leopard_project.history_matrix_ordering import write_history_matrix_order_review
 from leopard_project.report_registry import load_report_registry, reader_report_registry
 from leopard_project.sector_lifecycle import parent_status_lineage_for_child
 from leopard_project.web.database import create_session_factory
@@ -31,6 +33,21 @@ def test_reader_registry_hides_historical_parents_but_keeps_active_children() ->
     assert len(keys) == 71
     assert not {"innovative_drug_medicine", "battery_lithium", "photovoltaic_energy_storage"} & keys
     assert {"innovative_drug", "medical_biology", "battery", "lithium_battery", "photovoltaic", "energy_storage"} <= keys
+
+
+def test_reader_history_matrix_order_is_manual_static_and_places_cpo_before_mlcc(tmp_path: Path) -> None:
+    reader = reader_report_registry()
+    hardware = [item.sector_key for item in reader if item.group_order == 1]
+    assert hardware.index("cpo") < hardware.index("mlcc")
+    assert [item.within_group_order for item in (item for item in reader if item.group_order == 1)] == list(range(1, len(hardware) + 1))
+    output = write_history_matrix_order_review(tmp_path / "history_matrix_order_review.csv", load_report_registry())
+    with output.open(encoding="utf-8-sig", newline="") as handle:
+        rows = list(csv.DictReader(handle))
+    assert len(rows) == 71
+    cpo = next(item for item in rows if item["sector_key"] == "cpo")
+    mlcc = next(item for item in rows if item["sector_key"] == "mlcc")
+    assert (cpo["manual_order"], cpo["rationale_short"]) == ("2", "主线高频")
+    assert int(cpo["manual_order"]) < int(mlcc["manual_order"])
 
 
 def test_split_lineage_uses_versioned_pre_split_status_only_dates() -> None:

@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from functools import lru_cache
 
 from leopard_project.config import CONFIG_DIR, load_seed_bundle
+from leopard_project.history_matrix_ordering import apply_history_matrix_order
 
 
 @dataclass(frozen=True)
@@ -68,5 +69,5 @@ def report_object_by_name() -> dict[str, ReportObject]:
 
 
 def reader_report_registry() -> tuple[ReportObject, ...]:
-    """Return the active Reader universe without deleting audit-only parents."""
-    return tuple(item for item in load_report_registry() if item.lifecycle == "active")
+    """Return the active Reader universe in its versioned manual order."""
+    return tuple(apply_history_matrix_order(load_report_registry()))  # type: ignore[return-value]

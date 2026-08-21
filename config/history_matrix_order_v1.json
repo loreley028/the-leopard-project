@@ -1,0 +1,126 @@
+{
+  "schema_version": "v1",
+  "ordering_mode": "manual_static",
+  "description": "Reader-only, manually maintained order for active Report Objects. It is not a market signal, ranking model, or PDF parsing input.",
+  "groups": [
+    {
+      "group_order": 1,
+      "group_name": "科技硬件与通信",
+      "sectors": [
+        {"sector_key": "semiconductor", "rationale_short": "主线中枢"},
+        {"sector_key": "cpo", "rationale_short": "主线高频"},
+        {"sector_key": "pcb", "rationale_short": "高频细分"},
+        {"sector_key": "electronic_components", "rationale_short": "高频细分"},
+        {"sector_key": "consumer_electronics", "rationale_short": "主线扩散"},
+        {"sector_key": "communication_equipment", "rationale_short": "通信主线"},
+        {"sector_key": "computing_power_rental", "rationale_short": "算力主线"},
+        {"sector_key": "liquid_cooling", "rationale_short": "算力细分"},
+        {"sector_key": "advanced_packaging", "rationale_short": "芯片细分"},
+        {"sector_key": "optical_fiber_theme", "rationale_short": "通信细分"},
+        {"sector_key": "telecom_services", "rationale_short": "通信补充"},
+        {"sector_key": "mlcc", "rationale_short": "规模较小"},
+        {"sector_key": "glass_substrate", "rationale_short": "市场待覆盖"}
+      ]
+    },
+    {
+      "group_order": 2,
+      "group_name": "科技软件、传媒与互联网",
+      "sectors": [
+        {"sector_key": "ai_applications", "rationale_short": "主线高频"},
+        {"sector_key": "software_development", "rationale_short": "主线中枢"},
+        {"sector_key": "computer_sector", "rationale_short": "市场规模"},
+        {"sector_key": "computer_equipment", "rationale_short": "硬件补充"},
+        {"sector_key": "it_services", "rationale_short": "软件细分"},
+        {"sector_key": "gaming", "rationale_short": "传媒高频"},
+        {"sector_key": "media", "rationale_short": "传媒主线"},
+        {"sector_key": "cinema", "rationale_short": "消费传媒"},
+        {"sector_key": "advertising", "rationale_short": "低频补充"},
+        {"sector_key": "hang_seng_tech", "rationale_short": "跨市场观察"}
+      ]
+    },
+    {
+      "group_order": 3,
+      "group_name": "医药、消费与服务",
+      "sectors": [
+        {"sector_key": "innovative_drug", "rationale_short": "医药主线"},
+        {"sector_key": "medical_biology", "rationale_short": "医药中枢"},
+        {"sector_key": "medical_services", "rationale_short": "医药服务"},
+        {"sector_key": "medical_devices", "rationale_short": "医药器械"},
+        {"sector_key": "traditional_chinese_medicine", "rationale_short": "医药补充"},
+        {"sector_key": "baijiu", "rationale_short": "消费核心"},
+        {"sector_key": "food_beverage", "rationale_short": "消费主线"},
+        {"sector_key": "retail", "rationale_short": "消费高频"},
+        {"sector_key": "hotel_catering", "rationale_short": "服务消费"},
+        {"sector_key": "tourism", "rationale_short": "服务消费"},
+        {"sector_key": "agriculture_breeding", "rationale_short": "防御补充"},
+        {"sector_key": "white_goods", "rationale_short": "家电消费"},
+        {"sector_key": "small_appliances", "rationale_short": "家电细分"},
+        {"sector_key": "internet_ecommerce", "rationale_short": "新消费补充"},
+        {"sector_key": "beer", "rationale_short": "细分消费"},
+        {"sector_key": "education", "rationale_short": "低频补充"}
+      ]
+    },
+    {
+      "group_order": 4,
+      "group_name": "大金融",
+      "sectors": [
+        {"sector_key": "securities", "rationale_short": "高频中枢"},
+        {"sector_key": "bank", "rationale_short": "权重核心"},
+        {"sector_key": "insurance", "rationale_short": "权重金融"},
+        {"sector_key": "internet_finance", "rationale_short": "金融科技"},
+        {"sector_key": "diversified_finance", "rationale_short": "低频补充"}
+      ]
+    },
+    {
+      "group_order": 5,
+      "group_name": "新能源、汽车与高端制造",
+      "sectors": [
+        {"sector_key": "robotics", "rationale_short": "高端制造主线"},
+        {"sector_key": "automobiles", "rationale_short": "整车主线"},
+        {"sector_key": "auto_parts", "rationale_short": "汽车高频"},
+        {"sector_key": "power_grid_equipment", "rationale_short": "电力设备主线"},
+        {"sector_key": "photovoltaic", "rationale_short": "新能源主线"},
+        {"sector_key": "energy_storage", "rationale_short": "新能源细分"},
+        {"sector_key": "battery", "rationale_short": "电池主线"},
+        {"sector_key": "lithium_battery", "rationale_short": "电池细分"},
+        {"sector_key": "nuclear_power", "rationale_short": "能源制造"},
+        {"sector_key": "general_equipment", "rationale_short": "制造补充"}
+      ]
+    },
+    {
+      "group_order": 6,
+      "group_name": "资源、能源与周期",
+      "sectors": [
+        {"sector_key": "nonferrous_metals", "rationale_short": "周期主线"},
+        {"sector_key": "coal", "rationale_short": "能源高频"},
+        {"sector_key": "electricity", "rationale_short": "公用事业"},
+        {"sector_key": "rare_earth", "rationale_short": "资源主线"},
+        {"sector_key": "precious_metals", "rationale_short": "贵金属观察"},
+        {"sector_key": "gold_concept", "rationale_short": "黄金细分"},
+        {"sector_key": "oil_petrochemical", "rationale_short": "能源主线"},
+        {"sector_key": "chemicals", "rationale_short": "周期中枢"},
+        {"sector_key": "lithium_mining", "rationale_short": "资源细分"},
+        {"sector_key": "minor_metals", "rationale_short": "资源补充"},
+        {"sector_key": "glass_fiber", "rationale_short": "材料细分"},
+        {"sector_key": "steel", "rationale_short": "低频周期"}
+      ]
+    },
+    {
+      "group_order": 7,
+      "group_name": "军工、航天与运输",
+      "sectors": [
+        {"sector_key": "commercial_space", "rationale_short": "航天主线"},
+        {"sector_key": "defense_military", "rationale_short": "军工中枢"},
+        {"sector_key": "aerospace_equipment", "rationale_short": "军工细分"},
+        {"sector_key": "port_shipping", "rationale_short": "运输补充"}
+      ]
+    },
+    {
+      "group_order": 8,
+      "group_name": "地产",
+      "sectors": [
+        {"sector_key": "real_estate", "rationale_short": "独立板块"}
+      ]
+    }
+  ]
+}
