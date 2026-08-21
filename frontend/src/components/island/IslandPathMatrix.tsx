@@ -20,7 +20,7 @@ const cellAriaLabel = (sectorName: string, cell: Cell) => `${sectorName} 行情 
 function ExactDateMarketLayer({ cell }: { cell: Cell }) {
   const overlay = cell.market_overlay;
   if (!overlay || overlay.kind === "unavailable" || !overlay.primary) return <span className="matrix-market-layer matrix-market-unavailable">—</span>;
-  return <span className="matrix-market-layer"><small>{overlay.primary.name}</small><em className={currentTone(overlay.pct_change)}>{overlay.pct_change == null ? "—" : formatPct(overlay.pct_change)}</em></span>;
+  return <span className="matrix-market-layer"><small className="matrix-market-name">{overlay.primary.name}</small><em className={`matrix-market-pct ${currentTone(overlay.pct_change)}`}>{overlay.pct_change == null ? "—" : formatPct(overlay.pct_change)}</em></span>;
 }
 
 const currentTone = (value: number | null) => value == null || value === 0 ? "a-share-neutral" : value > 0 ? "a-share-positive" : "a-share-negative";
