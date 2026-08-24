@@ -13,7 +13,6 @@ import argparse
 import hashlib
 import json
 import os
-import shutil
 import sqlite3
 import tempfile
 from datetime import date
@@ -116,12 +115,6 @@ def _backup(source: Path, destination: Path) -> None:
         reader.backup(writer)
 
 
-def _checkpoint(database: Path) -> None:
-    """Fold SQLite WAL contents into the staged file before an atomic swap."""
-    with sqlite3.connect(database) as connection:
-        connection.execute("PRAGMA wal_checkpoint(TRUNCATE)")
-
-
 def _reconcile(database: Path, upload_dir: Path, report_dates: list[date], actor: str) -> tuple[dict[str, dict[str, Any]], dict[str, Any]]:
     factory = create_session_factory(f"sqlite:///{database}")
     before: dict[str, dict[str, Any]] = {}
@@ -167,7 +160,6 @@ def main() -> int:
         with create_session_factory(f"sqlite:///{database}")() as session:
             target_before = {value.isoformat(): _facts(session, value) for value in args.report_date}
         _, staged_result = _reconcile(staged, args.upload_dir.resolve(), args.report_date, args.actor)
-        _checkpoint(staged)
         records: list[dict[str, Any]] = []
         changed = False
         for report_date in args.report_date:
@@ -185,7 +177,17 @@ def main() -> int:
             })
         if args.apply and changed:
             replacement = database.with_name(f".{database.name}.reconciled")
-            shutil.copy2(staged, replacement)
+            # Copy through SQLite's online-backup API, rather than copying the
+            # main file alone: the staged parser uses WAL mode and its newest
+            # committed pages may still be in the WAL sidecar.
+            _backup(staged, replacement)
+            # The target is explicitly an offline, isolated database.  Its
+            # old WAL/SHM pair belongs to the pre-reconciliation main file;
+            # retaining it across ``os.replace`` would make SQLite combine
+            # incompatible page histories.  The authoritative backup above
+            # already captured every target page before this cleanup.
+            for suffix in ("-wal", "-shm"):
+                Path(f"{database}{suffix}").unlink(missing_ok=True)
             os.replace(replacement, database)
         output = {
             "mode": "apply" if args.apply else "dry_run",

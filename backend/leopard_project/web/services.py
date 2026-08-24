@@ -2067,9 +2067,23 @@ class ReportService:
 
         reparsed = self.parse(report, actor)
         from .enhanced import EnhancedReportService
+        from .models import ReportReviewIssue, SectorAssessment, SectorPathEntry
         from .path_history import sync_path_history
         from .review_workflow import ReviewWorkflowService
+        from sqlalchemy import delete
 
+        # ``parse`` replaces its own sections, mentions and unmapped terms.
+        # These two enhanced ledgers are likewise entirely PDF-derived, so an
+        # existing legacy persistence must not shadow a freshly parsed row.
+        # Resolved human review decisions are intentionally retained; only
+        # unresolved parser diagnostics are rebuilt from the source PDF.
+        self.repo.session.execute(delete(SectorAssessment).where(SectorAssessment.report_id == reparsed.id))
+        self.repo.session.execute(delete(SectorPathEntry).where(SectorPathEntry.report_id == reparsed.id))
+        self.repo.session.execute(delete(ReportReviewIssue).where(
+            ReportReviewIssue.report_id == reparsed.id,
+            ReportReviewIssue.resolved_at.is_(None),
+        ))
+        self.repo.session.commit()
         enhanced = EnhancedReportService(self.repo.session)
         enhanced.parse_structured_text(reparsed, actor)
         reparsed = self.repo.by_id(report.id) or reparsed
