@@ -16,6 +16,7 @@ from leopard_project.web.services import (
     extract_positioned_pages,
     extract_text_layer,
     parse_report_text,
+    parse_pdf_history_matrix,
 )
 
 
@@ -76,6 +77,24 @@ def test_legacy_62_topic_matrix_is_accepted_only_with_its_exact_catalogue() -> N
         "gold_concept", "internet_ecommerce", "internet_finance", "port_shipping",
     ]
     assert not any(item["severity"] == "blocking" for item in metadata["attention_items"])
+
+
+def test_legacy_wrapped_matrix_row_requires_exact_own_date_axis() -> None:
+    layout = "\n".join([
+        "[[LEOPARD_PAGE:3]]", "A. 板块历史路径图（更新至 7 月 13 日）",
+        "板块 6/09 6/10 6/11", "半导  转持", "体 观察 持有",
+    ])
+    matrix = parse_pdf_history_matrix(layout)
+    assert matrix["quality_status"] == "verified_structure"
+    assert matrix["rows"][0]["sector_key"] == "semiconductor"
+    assert matrix["rows"][0]["statuses"] == ["turn_hold", "watch", "hold"]
+
+
+def test_legacy_prose_assessment_requires_explicit_current_conclusion() -> None:
+    text = """板块观点详细汇总\n半导体\n当前结论：继续持有。\n资金仍有承接。\n\nCPO\n直播仅讨论技术细节。"""
+    records = parse_v23_assessments(text)
+    assert [(item["sector_key"], item["path_status"]) for item in records] == [("semiconductor", "hold")]
+    assert records[0]["extraction_method"] == "pdf_text_bounded_legacy_prose"
 
 
 def test_missing_source_evidence_cannot_be_marked_verified() -> None:

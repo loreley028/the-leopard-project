@@ -1291,10 +1291,275 @@ def _parse_positioned_history_matrix(positioned_pages: list[dict[str, Any]]) -> 
     }
 
 
+def _parse_legacy_layout_history_matrix(layout_text: str) -> dict[str, Any]:
+    """Recover pre-V2.9 matrices whose labels or final cells wrap across lines.
+
+    Older authoritative PDFs retain a real table, but their exported text can
+    split a display label (for example ``有色金`` / ``属``) or its final status
+    onto adjacent physical lines.  This parser treats such a table as valid
+    only when every recovered row has exactly the table's own date cardinality
+    and every physical status row maps to one configured display object.  It
+    is intentionally evidence-led rather than report-date-led: an unknown or
+    partially recovered row remains a validation failure.
+    """
+    bundle = load_seed_bundle()
+    canonical_by_name = {
+        _normalized_sector_token(item.sector_name): item
+        for item in bundle.sectors
+    }
+    report_objects = report_object_by_name()
+    known_names = {
+        **{token: item.sector_name for token, item in canonical_by_name.items()},
+        **{_normalized_sector_token(item.sector_name): item.sector_name for item in report_objects.values()},
+    }
+    status_pattern = re.compile("|".join(STATUS_LABELS))
+    raw_lines = layout_text.splitlines()
+    active = False
+    current_page: int | None = None
+    page_has_date_header = False
+    dates: list[str] = []
+    recovered: dict[str, dict[str, Any]] = {}
+    unresolved_rows: list[dict[str, Any]] = []
+    unmapped_display_rows: list[dict[str, Any]] = []
+    consumed_status_lines: set[int] = set()
+
+    def _label_for(index: int) -> str | None:
+        line = raw_lines[index]
+        first_status = status_pattern.search(line)
+        if first_status is None:
+            return None
+        fragments = [line[:first_status.start()]]
+        initial_token = _normalized_sector_token("".join(fragments))
+        if initial_token in known_names:
+            next_line = raw_lines[index + 1].strip() if index + 1 < len(raw_lines) else ""
+            if next_line and not status_pattern.search(next_line) and len(_compact(next_line)) <= 12:
+                compound = _normalized_sector_token("".join([*fragments, next_line]))
+                if compound in known_names:
+                    return known_names[compound]
+            return known_names[initial_token]
+        # A wrapped label can have a short fragment immediately above or
+        # below its status cells.  Stop at another status row: it belongs to a
+        # neighbouring table row, not this label.
+        for offset in (1,):
+            candidate_index = index - offset
+            if candidate_index < 0:
+                break
+            candidate = raw_lines[candidate_index].strip()
+            if not candidate or status_pattern.search(candidate):
+                break
+            if len(_compact(candidate)) <= 12:
+                fragments.insert(0, candidate)
+        for offset in (1,):
+            candidate_index = index + offset
+            if candidate_index >= len(raw_lines):
+                break
+            candidate = raw_lines[candidate_index].strip()
+            if not candidate:
+                break
+            candidate_status = status_pattern.search(candidate)
+            if candidate_status:
+                # A final wrapped cell can share its continuation glyph with
+                # the last status.  Preserve only that glyph, never the
+                # neighbouring row's status values.
+                prefix = candidate[:candidate_status.start()].strip()
+                if prefix and len(_compact(prefix)) <= 12:
+                    fragments.append(prefix)
+                break
+            if len(_compact(candidate)) <= 12:
+                fragments.append(candidate)
+        token = _normalized_sector_token("".join(fragments))
+        if token in known_names:
+            return known_names[token]
+        # Some exports lose only the final glyph of a wrapped label.  A unique
+        # configured prefix is deterministic evidence; an ambiguous prefix is
+        # deliberately not promoted into a row.
+        candidates = [name for known, name in known_names.items() if known.startswith(token)] if token else []
+        return candidates[0] if len(set(candidates)) == 1 else None
+
+    for index, line in enumerate(raw_lines):
+        if index in consumed_status_lines:
+            continue
+        marker = re.match(r"\[\[LEOPARD_PAGE:(\d+)\]\]", line)
+        if marker:
+            current_page = int(marker.group(1))
+            # Early PDFs often continue the exact same matrix onto the next
+            # page without repeating its date header.  The inherited axis is
+            # valid only because every recovered row still has to match it
+            # exactly.
+            page_has_date_header = bool(dates)
+            continue
+        compact_line = _normalized_sector_token(line)
+        if "板块历史路径图" in compact_line and (
+            "更新至" in compact_line or re.match(r"^(?:[A-Z]|[一二三四五六七八九十])(?:[.、])?板块历史路径图", compact_line)
+        ):
+            active = True
+            continue
+        if active and "板块观点详细汇总" in compact_line:
+            break
+        if not active:
+            continue
+        candidate_dates = re.findall(r"\d{1,2}\s*/\s*\d{2}", line)
+        if len(candidate_dates) >= 3 and len(candidate_dates) >= len(dates):
+            dates = [re.sub(r"\s+", "", value) for value in candidate_dates]
+            page_has_date_header = True
+        if not dates or not page_has_date_header:
+            continue
+        statuses = status_pattern.findall(line)
+        if not statuses:
+            continue
+        display_name = _label_for(index)
+        if display_name is None:
+            label_fragment = _compact(line[:status_pattern.search(line).start()])
+            if len(label_fragment) >= 2 and len(statuses) == len(dates):
+                # Retain a real legacy display row as evidence without
+                # silently promoting it into today's report/market registry.
+                unmapped_display_rows.append({
+                    "source_page": current_page,
+                    "source_line": index + 1,
+                    "display_name": label_fragment,
+                    "status_count": len(statuses),
+                    "status_values": [STATUS_TO_CODE[value] for value in statuses],
+                    "lifecycle": "legacy_candidate_only",
+                })
+                continue
+            if (
+                len(statuses) >= max(1, len(dates) - 1)
+                and label_fragment
+                and len(label_fragment) <= 16
+            ):
+                first_status = status_pattern.search(line)
+                unresolved_rows.append({
+                    "source_page": current_page,
+                    "source_line": index + 1,
+                    "label_fragment": label_fragment if first_status else "",
+                    "status_count": len(statuses),
+                })
+            continue
+        report_object = report_objects.get(display_name)
+        canonical = canonical_by_name.get(_normalized_sector_token(display_name))
+        sector_key = report_object.sector_key if report_object else (canonical.sector_key if canonical else None)
+        if sector_key is None:
+            unresolved_rows.append({
+                "source_page": current_page,
+                "source_line": index + 1,
+                "label_fragment": display_name,
+                "status_count": len(statuses),
+                "reason": "configured_display_object_missing",
+            })
+            continue
+        # A legacy line may wrap exactly its final status to the next physical
+        # line.  Never scan further than that immediate continuation: doing so
+        # would silently consume the following sector row.
+        if 0 < len(statuses) <= 3 and index + 1 < len(raw_lines):
+            following_statuses = status_pattern.findall(raw_lines[index + 1])
+            if len(statuses) + len(following_statuses) == len(dates):
+                statuses.extend(following_statuses)
+                consumed_status_lines.add(index + 1)
+        if len(statuses) == len(dates) - 1 and index + 1 < len(raw_lines):
+            following = raw_lines[index + 1]
+            following_statuses = status_pattern.findall(following)
+            if len(following_statuses) == 1:
+                statuses.extend(following_statuses)
+                consumed_status_lines.add(index + 1)
+        if len(statuses) < len(dates) - 1 and canonical is not None and report_object.lifecycle != "historical_carry":
+            # This is normally the isolated last cell of the preceding
+            # wrapped row.  It is not an independent canonical row, and its
+            # predecessor has already been checked for exact cardinality.
+            previous = raw_lines[index - 1] if index else ""
+            if len(status_pattern.findall(previous)) >= len(dates) - 1:
+                continue
+        if len(statuses) > len(dates):
+            unresolved_rows.append({
+                "source_page": current_page,
+                "source_line": index + 1,
+                "label_fragment": display_name,
+                "status_count": len(statuses),
+                "expected_status_count": len(dates),
+            })
+            continue
+        if len(statuses) < len(dates):
+            # Lifecycle carry rows contain the earlier, left-aligned history
+            # and then become structural blanks.  A newly split active row is
+            # the inverse: only its later dates are present.  Both cases are
+            # visible in the PDF itself and are represented without filling a
+            # status across an absent date.
+            if canonical is not None and report_object.lifecycle != "historical_carry":
+                # Canonical active rows must be complete; partial output is a
+                # parser failure, not an invitation to infer a lifecycle.
+                unresolved_rows.append({
+                    "source_page": current_page,
+                    "source_line": index + 1,
+                    "label_fragment": display_name,
+                    "status_count": len(statuses),
+                    "expected_status_count": len(dates),
+                })
+                continue
+            blanks = ["blank"] * (len(dates) - len(statuses))
+            statuses = statuses + blanks if report_object.lifecycle == "historical_carry" else blanks + statuses
+        if len(statuses) != len(dates):
+            unresolved_rows.append({
+                "source_page": current_page,
+                "source_line": index + 1,
+                "label_fragment": display_name,
+                "status_count": len(statuses),
+                "expected_status_count": len(dates),
+            })
+            continue
+        record = {
+            "sector_key": sector_key,
+            "sector_name": display_name,
+            "group_name": (report_object.group_name if report_object else canonical.category_level_1),
+            "source_page": current_page,
+            "statuses": ["blank" if value == "blank" else STATUS_TO_CODE[value] for value in statuses],
+            "source_display_rows": [display_name],
+        }
+        previous = recovered.get(sector_key)
+        if previous is not None and previous["statuses"] != record["statuses"]:
+            unresolved_rows.append({
+                "source_page": current_page,
+                "source_line": index + 1,
+                "label_fragment": display_name,
+                "reason": "duplicate_display_row_conflict",
+            })
+            continue
+        recovered[sector_key] = record
+
+    canonical_rows = [
+        recovered[item.sector_key]
+        for item in sorted(bundle.sectors, key=lambda item: item.overall_order)
+        if item.sector_key in recovered
+    ]
+    if not dates or not recovered:
+        return {"dates": [], "rows": [], "quality_status": "needs_attention"}
+    # A legacy table is structurally acceptable when every actual row is
+    # complete and mapped.  Its catalogue deliberately evolves over time; the
+    # positive evidence is the table itself, never a nearest-date fallback.
+    structural_ok = not unresolved_rows and all(len(item["statuses"]) == len(dates) for item in recovered.values())
+    return {
+        "dates": dates,
+        "rows": canonical_rows,
+        "display_rows": [recovered[key] for key in sorted(recovered)],
+        "display_row_count": len(recovered),
+        "active_object_count": len(recovered),
+        "canonical_row_count": len(canonical_rows),
+        "row_count": len(canonical_rows),
+        "accepted_structure": {
+            "profile": "legacy_source_complete_matrix",
+            "display_row_count": len(recovered),
+            "date_column_count": len(dates),
+            "rationale": "历史PDF以自身完整的显示行和日期列为准；每个状态行必须精确匹配日期列。",
+        } if structural_ok else None,
+        "unresolved_display_rows": unresolved_rows,
+        "unmapped_display_rows": unmapped_display_rows,
+        "quality_status": "verified_structure" if structural_ok else "needs_attention",
+    }
+
+
 def parse_pdf_history_matrix(layout_text: str, positioned_pages: list[dict[str, Any]] | None = None) -> dict[str, Any]:
     positioned: dict[str, Any] = {"rows": []}
     if positioned_pages:
         positioned = _parse_positioned_history_matrix(positioned_pages)
+    legacy_layout = _parse_legacy_layout_history_matrix(layout_text)
     if "板块历史路径图" not in _normalized_sector_token(layout_text):
         return positioned if positioned.get("rows") else {"dates": [], "rows": [], "quality_status": "needs_attention"}
     active = False
@@ -1310,7 +1575,9 @@ def parse_pdf_history_matrix(layout_text: str, positioned_pages: list[dict[str, 
             current_page = int(marker.group(1))
             continue
         compact_line = _normalized_sector_token(line)
-        if "板块历史路径图" in compact_line:
+        if "板块历史路径图" in compact_line and (
+            "更新至" in compact_line or re.match(r"^(?:[A-Z]|[一二三四五六七八九十])(?:[.、])?板块历史路径图", compact_line)
+        ):
             active = True
             continue
         if active and "板块观点详细汇总" in compact_line:
@@ -1372,7 +1639,24 @@ def parse_pdf_history_matrix(layout_text: str, positioned_pages: list[dict[str, 
     # A partial coordinate extraction must not shadow a complete layout-table
     # extraction. This occurs when matrix labels share nearly identical
     # baselines or a sector name is split into glyph fragments.
-    return layout if len(layout["rows"]) >= len(positioned.get("rows", [])) else positioned
+    candidates = (layout, legacy_layout, positioned)
+    exact_legacy_catalog = next(
+        (item for item in candidates if (item.get("accepted_structure") or {}).get("profile") == "legacy_62_canonical_catalog"),
+        None,
+    )
+    if exact_legacy_catalog is not None:
+        return exact_legacy_catalog
+    # Prefer the most complete source-faithful recovery.  A larger row set is
+    # not sufficient by itself: when tied, retain the structurally verified
+    # candidate so a partial coordinate pass cannot shadow an exact layout
+    # table.
+    return max(
+        candidates,
+        key=lambda item: (
+            len(item.get("rows") or []),
+            item.get("quality_status") == "verified_structure",
+        ),
+    )
 
 
 def compare_frozen_history(
@@ -1524,7 +1808,64 @@ def parse_v23_assessments(
         record["confidence"] = confidence
         record["validation_flags"] = sorted(set(flags))
         output.append(record)
-    return _validate_assessment_set(output)
+    return _validate_assessment_set(output) or _parse_legacy_prose_assessments(text)
+
+
+def _parse_legacy_prose_assessments(text: str) -> list[dict[str, Any]]:
+    """Read bounded pre-table sector paragraphs without inventing statuses.
+
+    The earliest authoritative documents precede the five-column table.  They
+    still state an explicit sector heading followed by ``当前结论``.  Preserve
+    only conclusions with an unambiguous status phrase; narrative-only rows
+    remain absent rather than being guessed.
+    """
+    heading = re.search(r"板块观点详细汇总", text)
+    if not heading:
+        return []
+    bundle = load_seed_bundle()
+    by_name = {item.sector_name: item for item in bundle.sectors}
+    raw_lines = text[heading.end():].splitlines(keepends=True)
+    compact_lines = [_compact(line) for line in raw_lines]
+    records: list[dict[str, Any]] = []
+    status_phrases = (
+        ("继续持有", "持有"), ("可以持有", "转持"), ("转为持有", "转持"),
+        ("明确持有", "持有"), ("不碰", "不碰"), ("回避", "不碰"),
+        ("离场", "离场"), ("观察", "观察"),
+    )
+    for index, sector_name in enumerate(compact_lines):
+        sector = by_name.get(sector_name)
+        if sector is None:
+            continue
+        end = min(len(compact_lines), index + 8)
+        segment = [line for line in compact_lines[index + 1:end] if line]
+        conclusion = next((line for line in segment if "当前结论" in line), "")
+        matched = next(((phrase, status) for phrase, status in status_phrases if phrase in conclusion), None)
+        if matched is None:
+            continue
+        phrase, status_label = matched
+        evidence = _compact(" ".join([sector_name, conclusion, *segment]))[:900]
+        records.append({
+            "sector_key": sector.sector_key,
+            "sector_name": sector.sector_name,
+            "path_status": STATUS_TO_CODE[status_label],
+            "recent_path_summary": "本报告以段落式明确结论记录。",
+            "current_judgement": conclusion,
+            "main_basis": evidence,
+            "observation_condition": "本报告未使用五列表格单列观察条件。",
+            "source_text_reference": evidence,
+            "source_section": "板块观点详细汇总",
+            "source_page": _source_page(text, heading.end()),
+            "source_text_start": heading.end(),
+            "source_text_end": heading.end() + len("".join(raw_lines[:end])),
+            "source_text_excerpt": evidence,
+            "source_reference": f"第{_source_page(text, heading.end())}页·板块观点详细汇总·{sector.sector_name}段落",
+            "extraction_method": "pdf_text_bounded_legacy_prose",
+            "manually_modified": False,
+            "quality_status": "needs_attention",
+            "confidence": "medium",
+            "validation_flags": ["legacy_prose_assessment"],
+        })
+    return _validate_assessment_set(records)
 
 
 def _report_template_version(text: str, history_matrix: dict[str, Any]) -> str:
