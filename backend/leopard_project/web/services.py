@@ -260,7 +260,7 @@ def _main_fields(text: str) -> tuple[dict[str, str], dict[str, dict[str, Any]]]:
             max_chars=1000,
         )
     market_match = re.search(
-        r"(?ms)^\s*(?:行情结论|大盘结论|大盘路径|指数路径|执行结论)\s*[：:]\s*(.+?)(?=^\s*(?:数据与历史说明|一[、.．]|二[、.．]|风险提示))",
+        r"(?ms)^\s*(?:行情结论|大盘结论|大盘路径|指数路径|执行结论)\s*[：:]\s*(.+?)(?=^\s*(?:数据与历史说明|历史核对|风险提示|(?:第\s*\d+\s*页\s*)?[一二三四五六七八九十]+[、.．]))",
         text,
     )
     market = _compact(market_match.group(1)) if market_match else ""

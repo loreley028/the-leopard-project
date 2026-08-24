@@ -7,11 +7,12 @@ from datetime import date
 from pathlib import Path
 
 import pytest
+from sqlalchemy import select
 from starlette.testclient import TestClient
 
 from leopard_project.web.app import WebSettings, create_app
 from leopard_project.web.database import create_session_factory
-from leopard_project.web.models import SectorPathHistoryEntry
+from leopard_project.web.models import Report, SectorAssessment, SectorPathEntry, SectorPathHistoryEntry
 from leopard_project.security_proxy_daily import market_core_security_symbols
 from leopard_project.web.services import _history_shape_matches_report_date, extract_layout_text, extract_positioned_pages, extract_text_layer, parse_report_text
 
@@ -241,6 +242,30 @@ def test_real_v29_uploads_gap_import_then_appends_without_review(automatic_web) 
     assert second["interpretation"]["ingestion_summary"]["history_matrix"]["conflicts"] == 0
     with create_session_factory(settings.database_url)() as session:
         assert session.query(SectorPathHistoryEntry).count() >= 46 * 66
+        for report_date, expected in {
+            "2026-08-10": {
+                "semiconductor": "hold", "cpo": "hold", "pcb": "hold",
+                "electronic_components": "hold", "consumer_electronics": "hold",
+                "communication_equipment": "hold",
+            },
+            "2026-08-11": {
+                "semiconductor": "hold", "cpo": "hold", "electronic_components": "hold",
+                "consumer_electronics": "hold", "computing_power_rental": "hold",
+            },
+        }.items():
+            report = session.scalar(select(Report).where(Report.report_date == date.fromisoformat(report_date)))
+            assert report is not None
+            assert "历史核对" not in report.market_path
+            for sector_key, expected_status in expected.items():
+                assessment = session.scalar(select(SectorAssessment).where(
+                    SectorAssessment.report_id == report.id, SectorAssessment.sector_key == sector_key,
+                ))
+                entry = session.scalar(select(SectorPathEntry).where(
+                    SectorPathEntry.report_id == report.id, SectorPathEntry.sector_key == sector_key,
+                ))
+                assert assessment is not None and entry is not None
+                assert assessment.current_path_status == entry.path_status == expected_status
+                assert assessment.explicitly_mentioned is entry.explicitly_mentioned is True
 
 
 def test_v29_fidelity_validator_uses_the_authoritative_history_matrix() -> None:

@@ -53,6 +53,28 @@ def test_core_characterization_stops_before_execution_conclusion() -> None:
     assert provenance["core_view"]["source_page"] == 1
 
 
+def test_execution_conclusion_stops_before_history_check() -> None:
+    fields, _ = _main_fields(
+        "核心定性：趋势仍在，但加仓需要等待承接。\n"
+        "执行结论：收盘守住核心线继续进攻，跌破则减速。\n"
+        "历史核对：此前交易日矩阵已冻结，仅新增本报告日期。\n"
+        "一、当日行情复盘\n"
+    )
+    assert fields["core_view"] == "趋势仍在，但加仓需要等待承接。"
+    assert fields["market_path"] == "收盘守住核心线继续进攻，跌破则减速。"
+    assert "历史核对" not in fields["market_path"]
+
+
+def test_execution_conclusion_stops_before_later_numbered_section() -> None:
+    fields, _ = _main_fields(
+        "核心定性：防守仍是主框架。\n"
+        "执行结论：收盘站上核心线才恢复进攻，盘中突破不算。\n"
+        "第 1 页\n三、科技相对弱势\n"
+        "该段落属于后续正文，不能并入执行结论。\n"
+    )
+    assert fields["market_path"] == "收盘站上核心线才恢复进攻，盘中突破不算。"
+
+
 @pytest.fixture()
 def interpretation_web(tmp_path: Path):
     database_url = f"sqlite:///{tmp_path / 'interpretation.sqlite3'}"
