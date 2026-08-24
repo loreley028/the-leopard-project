@@ -1575,9 +1575,7 @@ def parse_pdf_history_matrix(layout_text: str, positioned_pages: list[dict[str, 
             current_page = int(marker.group(1))
             continue
         compact_line = _normalized_sector_token(line)
-        if "板块历史路径图" in compact_line and (
-            "更新至" in compact_line or re.match(r"^(?:[A-Z]|[一二三四五六七八九十])(?:[.、])?板块历史路径图", compact_line)
-        ):
+        if "板块历史路径图" in compact_line:
             active = True
             continue
         if active and "板块观点详细汇总" in compact_line:
@@ -1639,7 +1637,10 @@ def parse_pdf_history_matrix(layout_text: str, positioned_pages: list[dict[str, 
     # A partial coordinate extraction must not shadow a complete layout-table
     # extraction. This occurs when matrix labels share nearly identical
     # baselines or a sector name is split into glyph fragments.
-    candidates = (layout, legacy_layout, positioned)
+    # The coordinate-derived parser is the established contract for current
+    # V2.4+ layouts.  Keep it ahead of the legacy recovery on a tie; legacy
+    # recovery is selected only when it provides strictly more source rows.
+    candidates = (layout, positioned, legacy_layout)
     exact_legacy_catalog = next(
         (item for item in candidates if (item.get("accepted_structure") or {}).get("profile") == "legacy_62_canonical_catalog"),
         None,
