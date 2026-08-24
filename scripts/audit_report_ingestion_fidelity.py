@@ -16,6 +16,7 @@ import csv
 import json
 import sqlite3
 import tempfile
+from collections import Counter
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -26,7 +27,7 @@ from sqlalchemy import select
 from leopard_project.web.app import WebSettings, create_app
 from leopard_project.config import load_seed_bundle
 from leopard_project.web.database import create_session_factory
-from leopard_project.web.models import Report, SectorAssessment, SectorPathEntry
+from leopard_project.web.models import Report, ReportReviewIssue, SectorAssessment, SectorPathEntry
 from leopard_project.web.services import extract_layout_text, extract_positioned_pages, extract_text_layer, parse_report_text
 
 
@@ -150,7 +151,14 @@ def _persisted_snapshot(session: Any, report_date: str) -> dict[str, Any]:
         "review_status": report.interpretation_status,
         "review_issues": metadata.get("attention_items", []),
         "sectors": sectors,
+        # This is the final persisted publication state, deliberately kept
+        # separate from the API response's immediate publication label.
         "publication": report.status,
+        "final_publication_state": report.status,
+        "blocking_issue_count": sum(
+            item.severity == "required" and item.resolved_at is None
+            for item in session.scalars(select(ReportReviewIssue).where(ReportReviewIssue.report_id == report.id))
+        ),
         "sha256": report.file.sha256 if report.file else None,
     }
 
@@ -278,6 +286,7 @@ def audit(documents: list[SourceDocument], *, reference_database: Path | None) -
                 )
                 if response.status_code != 201:
                     raise RuntimeError(f"admin_ingestion_failed:{document.path.name}:{response.status_code}:{response.text[:300]}")
+                api_response = response.json()
                 with factory() as session:
                     ingested = _persisted_snapshot(session, document.report_date)
                 preview = _reference_snapshot(reference_database, document.report_date) if reference_database else None
@@ -332,6 +341,12 @@ def audit(documents: list[SourceDocument], *, reference_database: Path | None) -
                 reports.append({
                     "report_date": document.report_date,
                     "filename": document.path.name,
+                    "admin_upload": {
+                        "http_status": response.status_code,
+                        "duplicate": bool(api_response.get("duplicate")),
+                        "api_publication": api_response.get("publication"),
+                        "interpretation_error": api_response.get("interpretation_error"),
+                    },
                     "pdf_derived": document.snapshot,
                     "admin_ingested": ingested,
                     "approved_preview": preview,
@@ -340,6 +355,9 @@ def audit(documents: list[SourceDocument], *, reference_database: Path | None) -
                 })
     all_differences = [item for report in reports for item in report["differences"]]
     all_reference_differences = [item for report in reports for item in report["reference_differences"]]
+    final_publications = Counter(str(item["admin_ingested"]["final_publication_state"]) for item in reports)
+    review_statuses = Counter(str(item["admin_ingested"]["review_status"]) for item in reports)
+    api_publications = Counter(str(item["admin_upload"]["api_publication"]) for item in reports)
     return {
         "authority": "original_pdf",
         "reference_database_is_comparison_only": reference_database is not None,
@@ -353,6 +371,10 @@ def audit(documents: list[SourceDocument], *, reference_database: Path | None) -
             "approved_preview_substantive_reference_differences": sum(
                 item["classification"] == "REFERENCE_SUBSTANTIVE" for item in all_reference_differences
             ),
+            "api_publication_counts": dict(sorted(api_publications.items())),
+            "final_publication_counts": dict(sorted(final_publications.items())),
+            "review_status_counts": dict(sorted(review_statuses.items())),
+            "blocking_issue_count": sum(int(item["admin_ingested"]["blocking_issue_count"]) for item in reports),
         },
     }
 

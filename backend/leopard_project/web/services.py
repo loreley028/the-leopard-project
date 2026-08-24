@@ -468,11 +468,16 @@ def _assessment_quality(record: dict[str, Any]) -> tuple[str, str, list[str]]:
         and len(_normalized_sector_token(item.sector_name)) >= 3
         and _normalized_sector_token(item.sector_name) in normalized_combined
     }
-    contextual_technology_cross_reference = (
-        record.get("sector_key") == "electronic_components"
-        and other_names <= {"CPO", "PCB"}
-    )
-    if len(other_names) >= 2 and not contextual_technology_cross_reference:
+    # A bounded row can legitimately compare a sector with two peers.  The
+    # explicit grouping language below is evidence of a cross-reference, not
+    # a substitute for a physical row boundary.  Keep the former exception
+    # generic and narrow: a list of neighbouring status clauses is still a
+    # blocking row-bleed signal.
+    contextual_cross_reference = bool(re.search(
+        r"(?:与|和)[^。；，]{0,24}(?:一并(?:归入|处理)|同进同退|同步(?:处理|观察))",
+        combined,
+    ))
+    if len(other_names) >= 2 and not contextual_cross_reference:
         flags.append("multiple_other_sector_names")
     blocking_flags = {"abnormal_status_sequence", "field_length_outlier", "multiple_other_sector_names", "crossed_sector_boundary", "conflicting_status"}
     if blocking_flags.intersection(flags):
@@ -1333,11 +1338,36 @@ def parse_pdf_history_matrix(layout_text: str, positioned_pages: list[dict[str, 
             "statuses": [STATUS_TO_CODE[value] for value in selected],
         }
     ordered = [rows[item.sector_key] for item in sorted(bundle.sectors, key=lambda item: item.overall_order) if item.sector_key in rows]
+    missing_canonical_keys = {
+        item.sector_key for item in bundle.sectors
+        if item.sector_key not in rows
+    }
+    # The pre-V2.3 matrix used a verified 62-topic catalogue.  It is accepted
+    # only when all of its positive structure is present and its four absent
+    # topics match the documented historical catalogue exactly.  This is not
+    # a nearest-row recovery: a 61-row matrix, a different missing set, or a
+    # short date axis remains fail-closed.
+    legacy_62_missing_keys = {
+        "gold_concept", "internet_ecommerce", "internet_finance", "port_shipping",
+    }
+    legacy_62_shape = (
+        len(ordered) == 62
+        and len(dates) >= 20
+        and missing_canonical_keys == legacy_62_missing_keys
+        and all(len(item.get("statuses") or []) == len(dates) for item in ordered)
+    )
     layout = {
         "dates": dates,
         "rows": ordered,
         "row_count": len(ordered),
-        "quality_status": "verified_structure" if len(ordered) == 66 and len(dates) >= 20 else "needs_attention",
+        "canonical_row_count": len(ordered),
+        "accepted_structure": {
+            "profile": "legacy_62_canonical_catalog",
+            "canonical_row_count": 62,
+            "missing_canonical_keys": sorted(legacy_62_missing_keys),
+            "rationale": "早期PDF使用62项正式目录；仅在固定缺项与完整交易日列同时成立时接受。",
+        } if legacy_62_shape else None,
+        "quality_status": "verified_structure" if (len(ordered) == 66 and len(dates) >= 20) or legacy_62_shape else "needs_attention",
     }
     # A partial coordinate extraction must not shadow a complete layout-table
     # extraction. This occurs when matrix labels share nearly identical
@@ -1974,6 +2004,123 @@ class ReportService:
             if isinstance(exc, WebDomainError):
                 raise
             raise WebDomainError("pdf_parse_failed", "The PDF could not be parsed locally", 422) from exc
+
+    def reconcile_existing_report_facts(self, report: Report, actor: str) -> dict[str, Any]:
+        """Rebuild only PDF-derived facts for an already-published report.
+
+        This is deliberately an operator action, not a GET-side effect and not
+        a duplicate upload shortcut.  It validates the authoritative file's
+        detected report date before reusing the ordinary deterministic parser,
+        preserves report identity and publication provenance, and records an
+        explicit audit event.  Callers that require an all-or-nothing SQLite
+        replacement run it against an isolated database copy first.
+        """
+        if report.status != ReportStatus.PUBLISHED.value or not report.file:
+            raise WebDomainError(
+                "reconciliation_requires_published_report",
+                "仅允许校准已发布且具有原始PDF的报告",
+                409,
+            )
+        source = self.upload_dir / report.file.storage_filename
+        if not source.exists():
+            raise WebDomainError("source_pdf_unavailable", "原始PDF不可访问", 409)
+        payload = source.read_bytes()
+        text = extract_text_layer(payload)
+        if not text:
+            raise WebDomainError("pdf_text_unavailable", "No reliable PDF text layer was extracted", 422)
+        fields, _, _, _ = parse_report_text(
+            text,
+            report.id,
+            report.file.original_filename,
+            layout_text=extract_layout_text(payload),
+            positioned_pages=extract_positioned_pages(payload),
+        )
+        detected_date = fields.get("candidate_report_date")
+        if detected_date != report.report_date:
+            raise WebDomainError(
+                "reconciliation_report_date_conflict",
+                "当前权威PDF识别日期与既有报告身份不一致，已拒绝校准",
+                409,
+            )
+
+        identity = {
+            "report_date": report.report_date,
+            "revision_number": report.revision_number,
+            "replaces_report_id": report.replaces_report_id,
+            "is_current": report.is_current,
+            "published_at": report.published_at,
+            "published_by": report.published_by,
+            "created_at": report.created_at,
+            "created_by": report.created_by,
+            "file_sha256": report.file.sha256,
+            "storage_filename": report.file.storage_filename,
+        }
+        # Published -> parsing is intentionally not an ordinary lifecycle
+        # transition.  This opt-in reconciliation moves only an isolated copy
+        # through the standard parser, then restores the published identity.
+        report.status = ReportStatus.NEEDS_REVIEW.value
+        self.repo.audit(actor, "report_facts_reconciliation_started", "report", report.id, {
+            "source_pdf_sha256": identity["file_sha256"],
+            "report_date": report.report_date.isoformat() if report.report_date else None,
+        })
+        self.repo.commit()
+
+        reparsed = self.parse(report, actor)
+        from .enhanced import EnhancedReportService
+        from .path_history import sync_path_history
+        from .review_workflow import ReviewWorkflowService
+
+        enhanced = EnhancedReportService(self.repo.session)
+        enhanced.parse_structured_text(reparsed, actor)
+        reparsed = self.repo.by_id(report.id) or reparsed
+        issues = ReviewWorkflowService(self.repo.session).sync(reparsed)
+        warnings = self._validate_publishable(reparsed)
+
+        # The prior report was already published.  Warnings remain visible in
+        # its review workflow, but a fresh non-blocking warning must not turn a
+        # historical Reader record into a silently disappeared report.  This
+        # is an explicit, audited legacy reconciliation confirmation, never a
+        # blanket auto-publish relaxation for new daily uploads.
+        reparsed.status = ReportStatus.PUBLISHED.value
+        reparsed.report_date = identity["report_date"]
+        reparsed.revision_number = identity["revision_number"]
+        reparsed.replaces_report_id = identity["replaces_report_id"]
+        reparsed.is_current = identity["is_current"]
+        reparsed.published_at = identity["published_at"]
+        reparsed.published_by = identity["published_by"]
+        reparsed.created_at = identity["created_at"]
+        if not reparsed.file or reparsed.file.sha256 != identity["file_sha256"] or reparsed.file.storage_filename != identity["storage_filename"]:
+            raise WebDomainError("reconciliation_identity_changed", "PDF身份发生变化，已拒绝校准", 409)
+        path_result = sync_path_history(
+            self.repo.session,
+            reparsed,
+            commit=False,
+            allow_same_source_reconciliation=True,
+        )
+        if path_result.difference_count:
+            raise WebDomainError(
+                "reconciliation_path_history_conflict",
+                "重建后的PDF路径事实与同源冻结记录冲突，已拒绝校准",
+                409,
+            )
+        self.repo.audit(actor, "report_facts_reconciled", "report", reparsed.id, {
+            "source_pdf_sha256": identity["file_sha256"],
+            "report_date": reparsed.report_date.isoformat() if reparsed.report_date else None,
+            "warning_count": len(warnings),
+            "review_issue_count": len(issues),
+            "path_history_status": path_result.status,
+            "path_history_changed_cells": len(path_result.differences),
+        })
+        self.repo.commit()
+        return {
+            "report_id": reparsed.id,
+            "report_date": reparsed.report_date.isoformat() if reparsed.report_date else None,
+            "publication": reparsed.status,
+            "review_status": reparsed.interpretation_status,
+            "warning_count": len(warnings),
+            "review_issue_count": len(issues),
+            "path_history_status": path_result.status,
+        }
 
     def patch(self, report: Report, changes: dict, actor: str) -> Report:
         if report.status == ReportStatus.PUBLISHED.value:

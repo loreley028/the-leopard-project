@@ -108,7 +108,13 @@ class PathHistorySyncResult:
     differences: list[dict[str, Any]]
 
 
-def sync_path_history(session: Session, report: Report, *, commit: bool = True) -> PathHistorySyncResult:
+def sync_path_history(
+    session: Session,
+    report: Report,
+    *,
+    commit: bool = True,
+    allow_same_source_reconciliation: bool = False,
+) -> PathHistorySyncResult:
     """Reconcile the derived canonical ledger from formal PDF matrices.
 
     A matrix stored on a report is an immutable report-local snapshot.  A
@@ -274,16 +280,30 @@ def sync_path_history(session: Session, report: Report, *, commit: bool = True) 
         if current is not None:
             if current.path_status != status:
                 if current.source_report_id == source.id:
-                    differences.append({
+                    if not allow_same_source_reconciliation:
+                        differences.append({
+                            "sector_key": sector_key,
+                            "sector_name": sector.sector_name,
+                            "report_date": path_date.isoformat(),
+                            "reason": "same_source_snapshot_changed",
+                            "old_status": current.path_status,
+                            "new_status": status,
+                            "source_report_id": source.id,
+                        })
+                        continue
+                    superseded.append({
+                        "report_date": path_date.isoformat(),
                         "sector_key": sector_key,
                         "sector_name": sector.sector_name,
-                        "report_date": path_date.isoformat(),
-                        "reason": "same_source_snapshot_changed",
-                        "old_status": current.path_status,
-                        "new_status": status,
-                        "source_report_id": source.id,
+                        "old_value": current.path_status,
+                        "old_source_report_id": current.source_report_id,
+                        "old_source_pdf_sha256": current.source_pdf_sha256,
+                        "new_value": status,
+                        "canonical_source_report_id": source.id,
+                        "canonical_source_pdf_sha256": source.file.sha256 if source.file else "",
+                        "resolution_reason": "same_source_authoritative_pdf_reparse",
                     })
-                    continue
+                    current.path_status = status
                 superseded.append({
                     "report_date": path_date.isoformat(),
                     "sector_key": sector_key,

@@ -1,5 +1,9 @@
 from __future__ import annotations
 
+from pathlib import Path
+
+import pytest
+
 from leopard_project.web.services import (
     _assessment_quality,
     _parse_positioned_assessments,
@@ -8,6 +12,10 @@ from leopard_project.web.services import (
     _validate_v29_positioned_assessment_set,
     _validate_assessment_set,
     parse_v23_assessments,
+    extract_layout_text,
+    extract_positioned_pages,
+    extract_text_layer,
+    parse_report_text,
 )
 
 
@@ -39,6 +47,35 @@ def test_multiple_neighbor_sector_names_are_blocking_row_bleed() -> None:
     assert quality == "blocking_parse_error"
     assert confidence == "low"
     assert "multiple_other_sector_names" in flags
+
+
+def test_explicit_cross_reference_is_not_row_bleed() -> None:
+    quality, confidence, flags = _assessment_quality(assessment(
+        sector_key="pcb",
+        sector_name="PCB",
+        main_basis="被直播者与元器件、CPO一并归入当前科技观望线，原有出清波段尚未改变。",
+    ))
+    assert (quality, confidence) == ("verified_structure", "high")
+    assert "multiple_other_sector_names" not in flags
+
+
+def test_legacy_62_topic_matrix_is_accepted_only_with_its_exact_catalogue() -> None:
+    source = Path("/Users/cailei/Downloads/大盘猎豹7月23日直播总结-大类排序版.pdf")
+    if not source.exists():
+        pytest.skip("user-provided legacy acceptance PDF is not present")
+    payload = source.read_bytes()
+    fields, *_ = parse_report_text(
+        extract_text_layer(payload), "legacy-62", source.name,
+        extract_layout_text(payload), extract_positioned_pages(payload),
+    )
+    metadata = fields["interpretation_meta"]
+    matrix = metadata["pdf_history_matrix"]
+    assert matrix["quality_status"] == "verified_structure"
+    assert matrix["accepted_structure"]["profile"] == "legacy_62_canonical_catalog"
+    assert matrix["accepted_structure"]["missing_canonical_keys"] == [
+        "gold_concept", "internet_ecommerce", "internet_finance", "port_shipping",
+    ]
+    assert not any(item["severity"] == "blocking" for item in metadata["attention_items"])
 
 
 def test_missing_source_evidence_cannot_be_marked_verified() -> None:

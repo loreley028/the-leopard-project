@@ -13,8 +13,9 @@ from starlette.testclient import TestClient
 from leopard_project.web.app import WebSettings, create_app
 from leopard_project.web.database import create_session_factory
 from leopard_project.web.models import Report, SectorAssessment, SectorPathEntry, SectorPathHistoryEntry
+from leopard_project.web.repository import ReportRepository
 from leopard_project.security_proxy_daily import market_core_security_symbols
-from leopard_project.web.services import _history_shape_matches_report_date, extract_layout_text, extract_positioned_pages, extract_text_layer, parse_report_text
+from leopard_project.web.services import ReportService, _history_shape_matches_report_date, extract_layout_text, extract_positioned_pages, extract_text_layer, parse_report_text
 
 
 def pseudo_pdf(text: str) -> bytes:
@@ -53,6 +54,30 @@ def automatic_web(tmp_path: Path):
 
 def upload(client: TestClient, filename: str, text: str):
     return client.post("/api/v1/admin/reports/interpret", files={"file": (filename, pseudo_pdf(text), "application/pdf")})
+
+
+def test_existing_published_report_reconciliation_preserves_identity(automatic_web) -> None:
+    client, settings = automatic_web
+    response = upload(client, "authoritative.pdf", report_text("2026-08-10", "V2.9", "2026-08-09", "3864.27", "3847.09"))
+    assert response.status_code == 201
+    report_id = response.json()["report"]["id"]
+    factory = create_session_factory(settings.database_url)
+    with factory() as session:
+        report = session.scalar(select(Report).where(Report.id == report_id))
+        assert report is not None and report.status == "published" and report.file is not None
+        identity = (report.id, report.report_date, report.file.sha256, report.published_at, report.published_by)
+        report.core_view = "旧解析错误"
+        session.commit()
+    with factory() as session:
+        report = session.scalar(select(Report).where(Report.id == report_id))
+        assert report is not None
+        result = ReportService(ReportRepository(session), settings.upload_dir).reconcile_existing_report_facts(report, "reconciliation-test")
+        assert result["publication"] == "published"
+    with factory() as session:
+        report = session.scalar(select(Report).where(Report.id == report_id))
+        assert report is not None and report.file is not None
+        assert (report.id, report.report_date, report.file.sha256, report.published_at, report.published_by) == identity
+        assert report.core_view != "旧解析错误"
 
 
 def test_v29_0810_contract_is_metadata_not_date_specific() -> None:
