@@ -171,6 +171,16 @@ describe("Admin workflow and permissions", () => {
 
 describe("Accessibility foundations", () => {
   beforeEach(() => mockApi());
+  it("shows the single shared ICP registration link in the public shell", async () => {
+    renderAt("/");
+    const registration = await screen.findByRole("link", { name: "沪ICP备2026042082号-1" });
+    expect(screen.getAllByRole("link", { name: "沪ICP备2026042082号-1" })).toHaveLength(1);
+    expect(registration).toHaveAttribute("href", "https://beian.miit.gov.cn/");
+    expect(registration).toHaveAttribute("target", "_blank");
+    expect(registration).toHaveAttribute("rel", "noopener noreferrer");
+    expect(document.body).not.toHaveTextContent(["苏", "ICP备2026042082号-1"].join(""));
+    expect(screen.getByText("研究型 Web MVP · PDF 是主线，行情仅作辅助")).toBeVisible();
+  });
   it("supports keyboard focus on the low-priority Admin entry and primary navigation", async () => { const user = userEvent.setup(); renderAt("/"); await user.tab(); expect(document.activeElement).toHaveAttribute("href", "/admin/login"); await user.tab(); expect(document.activeElement).toHaveAttribute("href", "/"); });
   it("uses text and symbols for status, not color alone", async () => { renderAt("/sectors"); expect(await screen.findByText("不支持1项")).toHaveTextContent("不支持1项"); });
   it("declares reduced-motion behavior", () => { const css = readFileSync(resolve(process.cwd(), "src/styles/global.css"), "utf8"); expect(css).toContain("prefers-reduced-motion"); });
