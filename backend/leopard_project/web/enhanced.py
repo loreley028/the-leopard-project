@@ -16,7 +16,7 @@ from sqlalchemy import desc, func, select
 from sqlalchemy.orm import Session
 
 from leopard_project.config import CONFIG_DIR, load_seed_bundle, normalize_alias
-from leopard_project.report_registry import report_object_by_key
+from leopard_project.report_registry import load_report_registry, report_object_by_key
 from leopard_project.sector_lifecycle import parent_status_lineage_for_child
 
 from .models import (
@@ -242,6 +242,55 @@ def intraday_matches_complete_eod_scale(intraday: dict[str, Any] | None, latest_
 class EnhancedReportService:
     session: Session
 
+    def latest_explicit_sector_facts(
+        self,
+        reports: Sequence[Report] | None = None,
+    ) -> dict[str, tuple[Report, SectorPathEntry | None, SectorAssessment]]:
+        """Return the newest explicit persisted report fact for each sector.
+
+        Report-local observations are provenance-bearing facts. A later
+        explicit row replaces the source report even when its status is the
+        same as the preceding explicit row; only ``not_mentioned`` may carry
+        an older fact forward.
+        """
+        ordered_reports = list(reports) if reports is not None else list(self.session.scalars(
+            select(Report).where(
+                Report.status == "published",
+                Report.is_current.is_(True),
+            ).order_by(desc(Report.report_date), desc(Report.published_at), desc(Report.created_at))
+        ))
+        report_ids = [report.id for report in ordered_reports]
+        if not report_ids:
+            return {}
+        entries = {
+            (item.report_id, item.sector_key): item
+            for item in self.session.scalars(
+                select(SectorPathEntry).where(SectorPathEntry.report_id.in_(report_ids))
+            )
+        }
+        assessments = {
+            (item.report_id, item.sector_key): item
+            for item in self.session.scalars(
+                select(SectorAssessment).where(SectorAssessment.report_id.in_(report_ids))
+            )
+        }
+        output: dict[str, tuple[Report, SectorPathEntry | None, SectorAssessment]] = {}
+        for report in ordered_reports:
+            for (report_id, sector_key), assessment in assessments.items():
+                if report_id != report.id or sector_key in output:
+                    continue
+                entry = entries.get((report_id, sector_key))
+                if (
+                    not assessment.explicitly_mentioned
+                    or assessment.current_path_status == "not_mentioned"
+                    or entry is not None and (
+                        not entry.explicitly_mentioned or entry.path_status == "not_mentioned"
+                    )
+                ):
+                    continue
+                output[sector_key] = (report, entry, assessment)
+        return output
+
     def ensure_structure(self, report: Report, actor: str = "system") -> None:
         bundle = load_seed_bundle()
         mention_map = {item.sector_key: item for item in report.mentions}
@@ -286,6 +335,33 @@ class EnhancedReportService:
                 quality_status="needs_attention" if mention else "not_applicable",
                 review_status="needs_review" if mention else "not_applicable",
             ))
+        existing_assessments = {
+            item.sector_key
+            for item in self.session.scalars(select(SectorAssessment).where(SectorAssessment.report_id == report.id))
+        }
+        for report_object in load_report_registry():
+            if report_object.sector_key in existing_assessments:
+                continue
+            mention = mention_map.get(report_object.sector_key)
+            status = "watch" if mention else "not_mentioned"
+            summary = mention.summary if mention else ""
+            self.session.add(SectorAssessment(
+                report_id=report.id,
+                sector_key=report_object.sector_key,
+                sector_name=report_object.sector_name,
+                current_path_status=status,
+                explicitly_mentioned=mention is not None,
+                recent_path_summary="本期首次记录" if mention else "本期未明确提及",
+                current_judgement=summary,
+                main_basis="",
+                observation_condition="",
+                source_text_reference=mention.source_text if mention else "",
+                extraction_method="mention_fallback" if mention else "unavailable",
+                confidence="medium" if mention else "low",
+                validation_flags_json=json.dumps(["structured_row_not_parsed"] if mention else []),
+                quality_status="needs_attention" if mention else "not_applicable",
+                review_status="needs_review" if mention else "not_applicable",
+            ))
         report.enhanced_status = "needs_review"
         self.session.commit()
 
@@ -301,20 +377,21 @@ class EnhancedReportService:
         for record in interpretation_meta.get("assessment_records", []):
             sector_key = record.get("sector_key")
             status = record.get("path_status")
-            if sector_key not in entries or sector_key not in assessments or status not in path_statuses():
+            if sector_key not in assessments or status not in path_statuses():
                 continue
-            entry = entries[sector_key]
-            entry.path_status = status
-            entry.explicitly_mentioned = True
-            entry.judgement_summary = record.get("current_judgement", "")
-            entry.source_text_reference = record.get("source_text_reference", "")
-            entry.source_page = record.get("source_page")
-            entry.source_text_start = record.get("source_text_start")
-            entry.source_text_end = record.get("source_text_end")
-            entry.confidence = record.get("confidence", "low")
-            entry.validation_flags_json = json.dumps(record.get("validation_flags", []), ensure_ascii=False)
-            entry.quality_status = record.get("quality_status", "needs_attention")
-            entry.review_status = "confirmed" if entry.quality_status == "verified_structure" else "needs_review"
+            entry = entries.get(sector_key)
+            if entry is not None:
+                entry.path_status = status
+                entry.explicitly_mentioned = True
+                entry.judgement_summary = record.get("current_judgement", "")
+                entry.source_text_reference = record.get("source_text_reference", "")
+                entry.source_page = record.get("source_page")
+                entry.source_text_start = record.get("source_text_start")
+                entry.source_text_end = record.get("source_text_end")
+                entry.confidence = record.get("confidence", "low")
+                entry.validation_flags_json = json.dumps(record.get("validation_flags", []), ensure_ascii=False)
+                entry.quality_status = record.get("quality_status", "needs_attention")
+                entry.review_status = "confirmed" if entry.quality_status == "verified_structure" else "needs_review"
             assessment = assessments[sector_key]
             assessment.current_path_status = status
             assessment.explicitly_mentioned = True
@@ -332,7 +409,7 @@ class EnhancedReportService:
             assessment.validation_flags_json = json.dumps(record.get("validation_flags", []), ensure_ascii=False)
             assessment.quality_status = record.get("quality_status", "needs_attention")
             assessment.review_status = "confirmed" if assessment.quality_status == "verified_structure" else "needs_review"
-            parsed_paths += 1
+            parsed_paths += int(entry is not None)
             parsed_assessments += 1
         for match in re.finditer(r"^路径状态[：:]\s*([^|｜]+)[|｜]\s*([^|｜\s]+)(?:[|｜]\s*(.*))?$", report.raw_text, re.M):
             sector_key = normalize_alias(match.group(1).strip(), bundle)
@@ -527,6 +604,7 @@ class EnhancedReportService:
             item.sector_key for item in paths
             if item.explicitly_mentioned or item.path_status != "not_mentioned" or item.review_status not in {"confirmed", "not_applicable"}
         }
+        relevant_keys.update(item.sector_key for item in assessments if item.explicitly_mentioned)
         relevant_assessments = [
             assessment_payload(item)
             for item in assessments
@@ -1007,6 +1085,36 @@ def path_entry_payload(item: SectorPathEntry) -> dict[str, Any]:
         "path_status_color": status["color"],
         "explicitly_mentioned": item.explicitly_mentioned,
         "judgement_summary": item.judgement_summary,
+        "source_text_reference": item.source_text_reference,
+        "source_page": item.source_page,
+        "source_text_start": item.source_text_start,
+        "source_text_end": item.source_text_end,
+        "confidence": item.confidence,
+        "validation_flags": json.loads(item.validation_flags_json or "[]"),
+        "quality_status": item.quality_status,
+        "review_status": item.review_status,
+        "manually_modified": item.manually_modified,
+        "revision_id": item.revision_id,
+    }
+
+
+def assessment_path_payload(item: SectorAssessment) -> dict[str, Any]:
+    """Expose a report-local path marker for a split Reader-only object.
+
+    These objects deliberately have no canonical market-topic path row. Their
+    assessment status is still an explicit Report Fact and carries its own PDF
+    provenance; no market value or parent status is synthesized here.
+    """
+    status = path_statuses()[item.current_path_status]
+    return {
+        "id": f"assessment-path:{item.id}",
+        "sector_key": item.sector_key,
+        "sector_name": item.sector_name,
+        "path_status": item.current_path_status,
+        "path_status_label": status["label"],
+        "path_status_color": status["color"],
+        "explicitly_mentioned": item.explicitly_mentioned,
+        "judgement_summary": item.current_judgement,
         "source_text_reference": item.source_text_reference,
         "source_page": item.source_page,
         "source_text_start": item.source_text_start,

@@ -12,7 +12,7 @@ from leopard_project.report_registry import load_report_registry, reader_report_
 from leopard_project.security_proxy_observation import APPROVED, load_security_proxy_registry
 from sqlalchemy import desc, select
 
-from .models import MarketRefreshItem, MarketRefreshRun, Report, SectorDailyBar, SectorMention, SectorResearchPreference
+from .models import MarketRefreshItem, MarketRefreshRun, Report, SectorDailyBar, SectorResearchPreference
 from .repository import ReportRepository
 from .primary_market_observation import primary_history
 from .market_date_axis import market_core_completed_dates
@@ -118,7 +118,7 @@ def objective_change_summary(current: Report, previous: Report | None) -> dict:
 
 
 def sector_payloads(repo: ReportRepository, *, include_historical: bool = False) -> list[dict]:
-    from .enhanced import EnhancedReportService, effective_statuses, path_statuses
+    from .enhanced import EnhancedReportService, assessment_path_payload, assessment_payload, effective_statuses, path_entry_payload, path_statuses
 
     bundle = load_seed_bundle()
     registry = load_market_path_registry(bundle)
@@ -134,14 +134,20 @@ def sector_payloads(repo: ReportRepository, *, include_historical: bool = False)
     pinned = {item.sector_key for item in repo.session.scalars(select(SectorResearchPreference).where(SectorResearchPreference.is_pinned_for_research.is_(True)))}
     now = datetime.now(timezone.utc)
     phase = market_phase(now)
-    latest: dict[str, SectorMention] = {}
-    latest_dates: dict[str, str] = {}
-    for report in published:
-        for mention in report.mentions:
-            if mention.sector_key not in latest:
-                latest[mention.sector_key] = mention
-                latest_dates[mention.sector_key] = report.report_date.isoformat()
-    latest_report_keys = {item.sector_key for item in published[0].mentions} if published else set()
+    latest_explicit = enhanced.latest_explicit_sector_facts(published)
+    latest_report_assessments = {
+        item.sector_key: item
+        for item in enhanced.assessments(published[0].id)
+    } if published else {}
+    latest_report_path_keys = {
+        item.sector_key
+        for item in enhanced.path_entries(published[0].id)
+    } if published else set()
+    latest_report_keys = {
+        sector_key
+        for sector_key, (report, _, _) in latest_explicit.items()
+        if published and report.id == published[0].id
+    }
     market_paths_by_parent: dict[str, list] = {}
     for market_path in registry.market_paths:
         market_paths_by_parent.setdefault(market_path.parent_report_topic, []).append(market_path)
@@ -155,7 +161,15 @@ def sector_payloads(repo: ReportRepository, *, include_historical: bool = False)
         # always the explicitly configured report-topic primary.
         market_path = next((item for item in candidates if item.market_path_key == report_key), candidates[0] if candidates else None)
         market_key = market_path.market_path_key if market_path is not None else report_key
-        mention = latest.get(report_key)
+        explicit_fact = latest_explicit.get(report_key)
+        explicit_report, explicit_entry, explicit_assessment = explicit_fact if explicit_fact else (None, None, None)
+        latest_report_assessment = latest_report_assessments.get(report_key)
+        explicit_assessment_data = assessment_payload(explicit_assessment) if explicit_assessment else None
+        latest_view = " · ".join(filter(None, (
+            explicit_assessment_data["current_judgement"] if explicit_assessment_data else "",
+            explicit_assessment_data["main_basis"] if explicit_assessment_data else "",
+            explicit_assessment_data["observation_condition"] if explicit_assessment_data else "",
+        ))) or None
         path_history = enhanced.path_history(report_key, through=published[0].report_date if published else None)
         path = path_history[0] if path_history else None
         legacy_market = None if market_path is None or market_key == "hang_seng_tech" else enhanced.latest_market(market_key)
@@ -179,8 +193,32 @@ def sector_payloads(repo: ReportRepository, *, include_historical: bool = False)
             "path_status_color": path_statuses()[item.path_status]["color"],
             "explicitly_mentioned": bool(item.detail_report_id and item.path_status != "not_mentioned"),
         } for item in reversed(path_history[:10])]
+        latest_report_date = published[0].report_date if published else None
+        if (
+            latest_report_assessment is not None
+            and report_key not in latest_report_path_keys
+            and latest_report_date is not None
+            and not any(item["report_date"] == latest_report_date.isoformat() for item in recent_path)
+        ):
+            recent_path.append({
+                "id": f"assessment-path:{latest_report_assessment.id}",
+                "report_id": published[0].id,
+                "detail_report_id": published[0].id,
+                "has_detailed_report": True,
+                "report_date": latest_report_date.isoformat(),
+                "market_as_of_date": None,
+                "path_status": latest_report_assessment.current_path_status,
+                "path_status_label": path_statuses()[latest_report_assessment.current_path_status]["label"],
+                "path_status_color": path_statuses()[latest_report_assessment.current_path_status]["color"],
+                "explicitly_mentioned": latest_report_assessment.explicitly_mentioned,
+            })
+            recent_path = recent_path[-10:]
         recent_mention_count = sum(item["explicitly_mentioned"] for item in recent_path)
         statuses = [item.path_status for item in reversed(path_history)]
+        if latest_report_assessment is not None and report_key not in latest_report_path_keys and latest_report_date is not None and (
+            not path_history or path_history[0].path_report_date < latest_report_date
+        ):
+            statuses.append(latest_report_assessment.current_path_status)
         effective = effective_statuses(statuses)
         current_effective = effective[-1] if effective else None
         explicit_statuses = [status for status in statuses if status != "not_mentioned"]
@@ -195,7 +233,7 @@ def sector_payloads(repo: ReportRepository, *, include_historical: bool = False)
             intraday_status = "provider_failed"
         dormant = classify_dormant_sector(path_history, controlled_dates)
         is_pinned = report_key in pinned
-        is_low_attention = report_object.lifecycle == "active" and dormant.is_dormant
+        is_low_attention = report_object.lifecycle == "active" and dormant.is_dormant and report_key not in latest_report_keys
         attention_level = (
             "high" if is_pinned or report_key in latest_report_keys or holding
             or current_effective in {"turn_hold", "hold", "strong_watch"}
@@ -212,15 +250,22 @@ def sector_payloads(repo: ReportRepository, *, include_historical: bool = False)
             "group_name": report_object.group_name,
             "group_order": report_object.group_order,
             "overall_order": report_object.display_order,
-            "latest_view": mention.summary if mention else None,
-            "latest_view_date": latest_dates.get(report_key),
+            "latest_view": latest_view,
+            "latest_view_date": explicit_report.report_date.isoformat() if explicit_report and explicit_report.report_date else None,
+            "latest_view_report_id": explicit_report.id if explicit_report else None,
+            "latest_explicit_view": {
+                "report_id": explicit_report.id,
+                "report_date": explicit_report.report_date.isoformat(),
+                "path": path_entry_payload(explicit_entry) if explicit_entry else assessment_path_payload(explicit_assessment),
+                "assessment": explicit_assessment_data,
+            } if explicit_report and explicit_report.report_date and explicit_assessment and explicit_assessment_data else None,
             "mentioned_in_latest_published": report_key in latest_report_keys,
             "market_support_status": "unsupported" if unsupported else "supported",
             "data_status": data_status,
             "market_status_detail": "港股跨市场行情暂未接入" if unsupported else "当前无可靠固定主观察标的" if report_key == "glass_substrate" else "研究辅助数据，非生产级行情服务。",
-            "current_path_status": path.path_status if path else "not_mentioned",
-            "current_path_status_label": path_statuses()[path.path_status]["label"] if path else "未提",
-            "reported_status": path.path_status if path else "not_mentioned",
+            "current_path_status": statuses[-1] if statuses else "not_mentioned",
+            "current_path_status_label": path_statuses()[statuses[-1]]["label"] if statuses else "未提",
+            "reported_status": statuses[-1] if statuses else "not_mentioned",
             "effective_status": current_effective,
             "effective_status_label": path_statuses()[current_effective]["label"] if current_effective else "暂无",
             "latest_market": None,

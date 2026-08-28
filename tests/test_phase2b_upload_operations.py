@@ -4,8 +4,9 @@ import hashlib
 import json
 import subprocess
 import sys
-from datetime import date
+from datetime import date, datetime
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 import pytest
 from sqlalchemy import select
@@ -16,6 +17,7 @@ from leopard_project.web.database import create_session_factory
 from leopard_project.web.models import Report, SectorAssessment, SectorPathEntry, SectorPathHistoryEntry
 from leopard_project.web.repository import ReportRepository
 from leopard_project.security_proxy_daily import market_core_security_symbols
+from leopard_project.live_market_anchor_daily import intraday_defense_overlay
 from leopard_project.web.live_market_anchor import structure_leopard_defense_line
 from leopard_project.web.services import ReportService, _history_shape_matches_report_date, _main_fields, extract_layout_text, extract_positioned_pages, extract_text_layer, parse_report_text
 
@@ -291,10 +293,18 @@ def test_authoritative_v30_0827_defense_line_and_conditions_regression() -> None
     assert "收盘站在3930.1点之上" in (structured.stand_above_condition or "")
     assert "收盘跌回3930.1点下方" in (structured.break_below_condition or "")
     assert "放量验证" in (structured.validation_conditions or "").replace(" ", "")
+    records = {item["sector_key"]: item for item in fields["interpretation_meta"]["assessment_records"]}
+    assert len(records) == 19
+    assert records["medical_biology"]["current_judgement"] == "持有"
+    assert records["battery"]["current_judgement"] == "观察"
+    assert records["medical_biology"]["main_basis"].startswith("主播明确当前医药波段")
+    assert records["agriculture_breeding"]["main_basis"].startswith("主播再次确认种植业/农业/猪肉")
+    assert records["securities"]["main_basis"].endswith("只有非常离谱的暴跌才否定。")
+    assert all(item["quality_status"] == "verified_structure" for item in records.values())
 
 
 def test_authoritative_v30_0827_reader_uses_parsed_defense_line(automatic_web) -> None:
-    client, _ = automatic_web
+    client, settings = automatic_web
     source = Path(__file__).parent / "fixtures" / "authoritative" / "大盘猎豹8月27日直播总结-V3.0版.pdf"
     response = client.post(
         "/api/v1/admin/reports/interpret",
@@ -311,6 +321,70 @@ def test_authoritative_v30_0827_reader_uses_parsed_defense_line(automatic_web) -
     assert "收盘站在3930.1点之上" in defense["stand_above_condition"]
     assert "收盘跌回3930.1点下方" in defense["break_below_condition"]
     assert "放量验证" in defense["validation_conditions"].replace(" ", "")
+    with create_session_factory(settings.database_url)() as session:
+        intraday_now = datetime(2026, 8, 28, 10, 30, tzinfo=ZoneInfo("Asia/Shanghai"))
+        overlay = intraday_defense_overlay(session, quote={
+            "quote_status": "available",
+            "quote_datetime": intraday_now.isoformat(),
+            "current": "3935.20",
+        }, now=intraday_now)
+    assert overlay is not None
+    assert overlay["trading_date"] == "2026-08-28"
+    assert overlay["defense_line_value"] == 3930.1
+    assert overlay["source_report_id"] == response.json()["report"]["id"]
+    assert overlay["source_report_date"] == "2026-08-27"
+
+
+def test_authoritative_v30_0827_latest_board_and_sector_detail_have_substantive_parity(automatic_web) -> None:
+    client, _ = automatic_web
+    source = Path(__file__).parent / "fixtures" / "authoritative" / "大盘猎豹8月27日直播总结-V3.0版.pdf"
+    response = client.post(
+        "/api/v1/admin/reports/interpret",
+        files={"file": (source.name, source.read_bytes(), "application/pdf")},
+    )
+    assert response.status_code == 201
+    report_id = response.json()["report"]["id"]
+    assert response.json()["publication"] == "published"
+
+    latest = client.get(f"/api/v1/reports/{report_id}/enhanced").json()
+    latest_facts = {
+        item["sector_key"]: item
+        for item in latest["sector_assessments"]
+        if item["explicitly_mentioned"]
+    }
+    assert len(latest_facts) == 19
+    assert {"medical_biology", "battery"} <= set(latest_facts)
+    assert not {"innovative_drug_medicine", "battery_lithium"} & set(latest_facts)
+    assert "医药" not in latest_facts["agriculture_breeding"]["main_basis"]
+    assert "医药" not in latest_facts["securities"]["main_basis"]
+    board_facts = {
+        item["sector_key"]: item
+        for item in client.get("/api/v1/sectors").json()
+        if item["latest_view_report_id"] == report_id
+    }
+    assert set(board_facts) == set(latest_facts)
+
+    substantive_fields = (
+        "current_path_status", "current_judgement", "main_basis",
+        "observation_condition", "source_text_reference", "source_page",
+    )
+    for sector_key, latest_fact in latest_facts.items():
+        board = board_facts[sector_key]
+        board_fact = board["latest_explicit_view"]
+        assert board["latest_view_date"] == board_fact["report_date"] == "2026-08-27"
+        assert board_fact["report_id"] == report_id
+        assert board_fact["path"]["path_status"] == latest_fact["current_path_status"]
+        assert {key: board_fact["assessment"][key] for key in substantive_fields} == {
+            key: latest_fact[key] for key in substantive_fields
+        }
+
+        detail_fact = client.get(f"/api/v1/sectors/{sector_key}/research").json()["latest_explicit_view"]
+        assert detail_fact["report_id"] == report_id
+        assert detail_fact["report_date"] == "2026-08-27"
+        assert detail_fact["path"]["path_status"] == latest_fact["current_path_status"]
+        assert {key: detail_fact["assessment"][key] for key in substantive_fields} == {
+            key: latest_fact[key] for key in substantive_fields
+        }
 
 
 def test_real_v29_uploads_gap_import_then_appends_without_review(automatic_web) -> None:

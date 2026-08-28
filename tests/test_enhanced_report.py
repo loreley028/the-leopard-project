@@ -278,6 +278,56 @@ def test_not_mentioned_keeps_latest_explicit_view(enhanced_web) -> None:
     assert sum(item["has_detailed_assessment"] for item in research["recent_path_entries"]) == 2
 
 
+def test_same_status_restatement_refreshes_latest_board_and_detail_provenance(enhanced_web) -> None:
+    client, sessions = enhanced_web
+    login(client)
+
+    def persist_semiconductor_fact(report_id: str, marker: str) -> None:
+        with sessions() as session:
+            entry = session.scalar(select(SectorPathEntry).where(
+                SectorPathEntry.report_id == report_id,
+                SectorPathEntry.sector_key == "semiconductor",
+            ))
+            assessment = session.scalar(select(SectorAssessment).where(
+                SectorAssessment.report_id == report_id,
+                SectorAssessment.sector_key == "semiconductor",
+            ))
+            assert entry is not None and assessment is not None
+            entry.path_status = assessment.current_path_status = "strong_watch"
+            entry.explicitly_mentioned = assessment.explicitly_mentioned = True
+            entry.judgement_summary = assessment.current_judgement = "强观察"
+            entry.source_text_reference = assessment.source_text_reference = f"{marker} explicit source"
+            assessment.main_basis = f"{marker} main basis"
+            assessment.observation_condition = f"{marker} observation condition"
+            session.commit()
+
+    first = create_report(client, "2026-08-25")
+    client.post(f"/api/v1/admin/reports/{first}/enhance/parse")
+    persist_semiconductor_fact(first, "D1")
+    client.post(f"/api/v1/admin/reports/{first}/ready")
+    client.post(f"/api/v1/admin/reports/{first}/publish")
+
+    second = create_report(client, "2026-08-26")
+    client.post(f"/api/v1/admin/reports/{second}/enhance/parse")
+    persist_semiconductor_fact(second, "D2")
+    client.post(f"/api/v1/admin/reports/{second}/ready")
+    client.post(f"/api/v1/admin/reports/{second}/publish")
+
+    latest = client.get(f"/api/v1/reports/{second}/enhanced").json()
+    latest_fact = next(item for item in latest["sector_assessments"] if item["sector_key"] == "semiconductor")
+    board = next(item for item in client.get("/api/v1/sectors").json() if item["sector_key"] == "semiconductor")
+    detail = client.get("/api/v1/sectors/semiconductor/research").json()
+
+    assert latest_fact["current_path_status"] == "strong_watch"
+    assert board["latest_view_report_id"] == second
+    assert board["latest_view_date"] == "2026-08-26"
+    assert board["latest_explicit_view"]["report_id"] == second
+    assert board["latest_explicit_view"]["assessment"]["main_basis"] == "D2 main basis"
+    assert detail["latest_explicit_view"]["report_id"] == second
+    assert detail["latest_explicit_view"]["assessment"]["main_basis"] == "D2 main basis"
+    assert board["latest_explicit_view"]["assessment"] == detail["latest_explicit_view"]["assessment"]
+
+
 def test_manual_refresh_requires_confirmation_and_excludes_hstech(enhanced_web) -> None:
     client, _ = enhanced_web
     login(client)

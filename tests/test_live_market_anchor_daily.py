@@ -167,6 +167,35 @@ def test_validation_uses_parser_verified_primary_line_when_narrative_has_two_lev
     assert rows[0]["defense_line_value"] == 3864.27
 
 
+@pytest.mark.parametrize(("second_path", "expected_value", "expected_source"), [
+    ("核心攻防线仍为3930.1点", 3930.1, "2026-08-26"),
+    ("本期没有明确攻防点位", 3930.1, "2026-08-25"),
+    ("核心攻防线调整为3950点", 3950.0, "2026-08-26"),
+])
+def test_defense_provenance_refreshes_only_for_explicit_report_facts(
+    tmp_path, second_path: str, expected_value: float, expected_source: str,
+) -> None:
+    factory = sessions(tmp_path)
+    with factory() as session:
+        first = report(date(2026, 8, 25), market_path="核心攻防线为3930.1点")
+        second = report(date(2026, 8, 26), market_path=second_path)
+        session.add_all([
+            first,
+            second,
+            daily(date(2026, 8, 26), "3931"),
+            daily(date(2026, 8, 27), "3951"),
+        ])
+        session.commit()
+        rows = recent_defense_line_validations(session)
+        latest = next(item for item in rows if item["trading_date"] == "2026-08-27")
+    assert latest["defense_line_value"] == expected_value
+    assert latest["source_report_date"] == expected_source
+    if expected_source == "2026-08-26":
+        assert latest["source_report_id"] == second.id
+    else:
+        assert latest["source_report_id"] == first.id
+
+
 def test_validation_skips_missing_defense_missing_close_and_uses_newest_report_for_one_trade_day(tmp_path) -> None:
     factory = sessions(tmp_path)
     with factory() as session:

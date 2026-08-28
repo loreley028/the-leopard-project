@@ -259,6 +259,13 @@ export interface Sector {
   overall_order: number;
   latest_view: string | null;
   latest_view_date?: string | null;
+  latest_view_report_id?: string | null;
+  latest_explicit_view?: {
+    report_id: string;
+    report_date: string;
+    path: PathEntry;
+    assessment: SectorAssessment;
+  } | null;
   mentioned_in_latest_published: boolean;
   market_support_status: "supported" | "unsupported";
   market_path_key?: string;

@@ -22,6 +22,7 @@ from .catalog import configured_groups
 from .enhanced import (
     EnhancedReportService,
     active_holding_interval,
+    assessment_path_payload,
     assessment_payload,
     effective_statuses,
     market_payload,
@@ -270,6 +271,7 @@ def register_enhanced_routes(
         ).distinct().order_by(SectorPathHistoryEntry.path_report_date)))
         published_reports = list(session.scalars(select(Report).where(
             Report.status == ReportStatus.PUBLISHED.value,
+            Report.is_current.is_(True),
             Report.report_date <= report.report_date,
         ).order_by(Report.report_date, Report.published_at)))
         calendar = load_calendar()
@@ -287,21 +289,26 @@ def register_enhanced_routes(
         # A detailed published report remains a valid report-fact overlay even
         # when its date is absent from the frozen full-PDF ledger.  It does not
         # create a report-date column: it only overlays its mapped trade day.
-        # The frozen path ledger is the authoritative Report-fact record when
-        # it owns the same sector and report date.  Legacy detail entries are
-        # still useful for reports whose matrix could not be recovered, but
-        # must never overwrite a verified report-local matrix cell.
+        # The frozen full-PDF ledger remains authoritative for path history.
+        # The matrix cell's *report overlay*, however, uses an explicit native
+        # five-column assessment from that date when one exists.  This keeps
+        # the immutable history lane intact while honoring the authoritative
+        # report-local judgement cells, including same-status restatements and
+        # a current-date judgement that differs from the historical matrix.
         frozen_report_cells = {
-            (entry.sector_key, entry.path_report_date)
+            (entry.sector_key, entry.path_report_date): entry
             for entry in entries
         }
         fallback_entries = []
         service = EnhancedReportService(session)
         for published_report in published_reports:
-            for path in service.path_entries(published_report.id):
+            report_paths = service.path_entries(published_report.id)
+            path_keys = {path.sector_key for path in report_paths}
+            for path in report_paths:
                 if path.sector_key not in reader_keys:
                     continue
-                if (path.sector_key, published_report.report_date) in frozen_report_cells:
+                frozen = frozen_report_cells.get((path.sector_key, published_report.report_date))
+                if frozen is not None and not path.explicitly_mentioned:
                     continue
                 fallback_entries.append(SimpleNamespace(
                     id=path.id,
@@ -309,6 +316,21 @@ def register_enhanced_routes(
                     sector_name=path.sector_name,
                     path_report_date=published_report.report_date,
                     path_status=path.path_status,
+                    source_report_id=published_report.id,
+                    detail_report_id=published_report.id,
+                    frozen_daily_pct_change=None,
+                    market_data_status="unavailable",
+                    is_detailed_report_overlay=True,
+                ))
+            for assessment in service.assessments(published_report.id):
+                if assessment.sector_key not in reader_keys or assessment.sector_key in path_keys:
+                    continue
+                fallback_entries.append(SimpleNamespace(
+                    id=f"assessment-path:{assessment.id}",
+                    sector_key=assessment.sector_key,
+                    sector_name=assessment.sector_name,
+                    path_report_date=published_report.report_date,
+                    path_status=assessment.current_path_status,
                     source_report_id=published_report.id,
                     detail_report_id=published_report.id,
                     frozen_daily_pct_change=None,
@@ -548,7 +570,10 @@ def register_enhanced_routes(
         report_key = sector_key
         sector = report_object
         service = EnhancedReportService(session)
-        reports = list(session.scalars(select(Report).where(Report.status == "published").order_by(desc(Report.report_date))))
+        reports = list(session.scalars(select(Report).where(
+            Report.status == "published",
+            Report.is_current.is_(True),
+        ).order_by(desc(Report.report_date), desc(Report.published_at), desc(Report.created_at))))
         selected_path_period = path_period if path_period is not None else path_periods
         if selected_path_period not in {10, 20, 40, 60}:
             raise WebDomainError("invalid_path_period", "路径期数仅支持10、20、40或60期", 422)
@@ -567,22 +592,33 @@ def register_enhanced_routes(
             item.id: next((assessment for assessment in service.assessments(item.id) if assessment.sector_key == report_key), None)
             for item in reports
         }
+        latest_report_assessment = assessment_by_report.get(reports[0].id) if reports else None
+        latest_report_explicitly_mentioned = bool(
+            latest_report_entry.explicitly_mentioned
+            and latest_report_entry.path_status != "not_mentioned"
+        ) if latest_report_entry is not None else bool(
+            latest_report_assessment
+            and latest_report_assessment.explicitly_mentioned
+            and latest_report_assessment.current_path_status != "not_mentioned"
+        )
         detailed_history = []
-        latest_explicit = None
+        canonical_latest = service.latest_explicit_sector_facts(reports).get(report_key)
         for report in reports:
             entry = session.scalar(select(SectorPathEntry).where(SectorPathEntry.report_id == report.id, SectorPathEntry.sector_key == report_key))
             assessment = assessment_by_report[report.id]
-            if entry:
+            if entry or assessment:
                 item = {
                     "report_id": report.id,
                     "report_date": report.report_date.isoformat(),
-                    "path": path_entry_payload(entry),
+                    "path": path_entry_payload(entry) if entry else assessment_path_payload(assessment),
                     "assessment": assessment_payload(assessment) if assessment else None,
                     "report_snapshot": None if report_key == "hotel_catering" else next((row for row in service.report_snapshots(report.id) if row["sector_key"] == market_key), None),
                 }
                 detailed_history.append(item)
-                if latest_explicit is None and entry.explicitly_mentioned and entry.path_status != "not_mentioned":
-                    latest_explicit = item
+        latest_explicit = next((
+            item for item in detailed_history
+            if canonical_latest is not None and item["report_id"] == canonical_latest[0].id
+        ), None)
         chronological = list(reversed(path_rows))
         effective = effective_statuses([item.path_status for item in chronological])
         effective_by_date = {item.path_report_date: value for item, value in zip(chronological, effective)}
@@ -638,6 +674,38 @@ def register_enhanced_routes(
                         "manually_modified": False, "revision_id": reports[0].id,
                     },
                 } for (path_date, status), effective_value in zip(selected, selected_effective)]))
+        if reports and (latest_report_entry is not None or latest_report_assessment is not None) and not any(
+            item["report_date"] == reports[0].report_date.isoformat()
+            for item in recent_path_entries
+        ):
+            prior_effective = recent_path_entries[0]["effective_status"] if recent_path_entries else None
+            latest_local_status = (
+                latest_report_entry.path_status
+                if latest_report_entry is not None
+                else latest_report_assessment.current_path_status
+            )
+            latest_local_explicit = (
+                latest_report_entry.explicitly_mentioned
+                if latest_report_entry is not None
+                else latest_report_assessment.explicitly_mentioned
+            )
+            latest_effective = (
+                latest_local_status
+                if latest_local_explicit and latest_local_status != "not_mentioned"
+                else prior_effective
+            )
+            recent_path_entries.insert(0, {
+                "id": latest_report_entry.id if latest_report_entry is not None else f"assessment-path:{latest_report_assessment.id}",
+                "report_id": reports[0].id,
+                "detail_report_id": reports[0].id,
+                "has_detailed_assessment": latest_report_assessment is not None,
+                "report_date": reports[0].report_date.isoformat(),
+                "market_as_of_date": None,
+                "reported_status": latest_local_status,
+                "effective_status": latest_effective,
+                "path": path_entry_payload(latest_report_entry) if latest_report_entry is not None else assessment_path_payload(latest_report_assessment),
+            })
+            recent_path_entries = recent_path_entries[:selected_path_period]
         unsupported = report_key == "hang_seng_tech" or bool(market_path and market_path.support_status.value == "unsupported")
         intervals = service.holding_intervals_for_sector(report_key, reports[0].report_date if reports else None)
         # Keep the old board table available only as a compatibility/audit
@@ -729,11 +797,7 @@ def register_enhanced_routes(
             "group_name": sector.group_name,
             "latest_explicit_view": latest_explicit,
             "latest_report_date": reports[0].report_date.isoformat() if reports and reports[0].report_date else None,
-            "latest_report_explicitly_mentioned": bool(
-                latest_report_entry
-                and latest_report_entry.explicitly_mentioned
-                and latest_report_entry.path_status != "not_mentioned"
-            ) if reports else None,
+            "latest_report_explicitly_mentioned": latest_report_explicitly_mentioned if reports else None,
             "current_latest_market": None,
             "latest_complete_market": None,
             "primary_market": primary_market,
@@ -755,8 +819,8 @@ def register_enhanced_routes(
             "recent_path_entries": recent_path_entries,
             "path_periods": selected_path_period,
             "available_path_periods": len(all_path_rows) or len(recent_path_entries),
-            "reported_status": path_rows[0].path_status if path_rows else recent_path_entries[0]["reported_status"] if recent_path_entries else "not_mentioned",
-            "effective_status": effective_statuses([item.path_status for item in reversed(all_path_rows)])[-1] if all_path_rows else recent_path_entries[0]["effective_status"] if recent_path_entries else None,
+            "reported_status": recent_path_entries[0]["reported_status"] if recent_path_entries else "not_mentioned",
+            "effective_status": recent_path_entries[0]["effective_status"] if recent_path_entries else None,
             "active_holding_interval": None if report_key == "hotel_catering" else intervals["active_holding_interval"],
             "historical_holding_intervals": [] if report_key == "hotel_catering" else intervals["historical_holding_intervals"],
             "strict_holding_interval": None if report_key == "hotel_catering" else intervals["strict_holding_interval"],

@@ -14,7 +14,7 @@ from uuid import uuid4
 from pypdf import PdfReader
 
 from leopard_project.config import CONFIG_DIR, load_seed_bundle, normalize_alias
-from leopard_project.report_registry import load_report_registry, report_object_by_name
+from leopard_project.report_registry import load_report_registry, report_object_by_key, report_object_by_name
 
 from .models import ALLOWED_TRANSITIONS, Report, ReportFile, ReportSection, ReportStatus, SectorMention, UnmappedTerm
 from .repository import ReportRepository
@@ -444,10 +444,20 @@ def _normalized_sector_token(value: str) -> str:
     return re.sub(r"[\s/／、·]+", "", value).lower()
 
 
-def _sector_from_fragment(fragment: str) -> Any | None:
+def _sector_from_fragment(fragment: str, *, include_report_objects: bool = True) -> Any | None:
     token = _normalized_sector_token(fragment)
     if len(token) < 2 or token in {"板块", "历史路径", "主要依据", "观察条件"}:
         return None
+    # Reader report objects are the authority for post-split detailed rows.
+    # Prefer their exact names before allowing a short token such as `电池`
+    # to prefix-match the historical combined market topic `电池/锂电池`.
+    if include_report_objects:
+        report_exact = [
+            item for item in load_report_registry()
+            if _normalized_sector_token(item.sector_name) == token
+        ]
+        if len(report_exact) == 1:
+            return report_exact[0]
     sectors = load_seed_bundle().sectors
     exact = [item for item in sectors if _normalized_sector_token(item.sector_name) == token]
     if len(exact) == 1:
@@ -749,7 +759,8 @@ def _parse_positioned_assessments(positioned_pages: list[dict[str, Any]]) -> lis
             record["validation_flags"] = sorted(set(flags))
             records.append(record)
     unique = {record["sector_key"]: record for record in records}
-    return sorted(unique.values(), key=lambda record: next(item.overall_order for item in load_seed_bundle().sectors if item.sector_key == record["sector_key"]))
+    report_order = {item.sector_key: item.display_order for item in load_report_registry()}
+    return sorted(unique.values(), key=lambda record: report_order[record["sector_key"]])
 
 
 def _layout_chunks(line: str) -> list[tuple[int, str]]:
@@ -935,7 +946,8 @@ def _parse_v29_layout_assessments(layout_text: str) -> list[dict[str, Any]]:
         previous = unique.get(record["sector_key"])
         if previous is None or len(record["source_text_reference"]) > len(previous["source_text_reference"]):
             unique[record["sector_key"]] = record
-    return sorted(unique.values(), key=lambda item: next(sector.overall_order for sector in load_seed_bundle().sectors if sector.sector_key == item["sector_key"]))
+    report_order = {item.sector_key: item.display_order for item in load_report_registry()}
+    return sorted(unique.values(), key=lambda item: report_order[item["sector_key"]])
 
 
 def _parse_v29_positioned_assessments(positioned_pages: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -1046,7 +1058,8 @@ def _parse_v29_positioned_assessments(positioned_pages: list[dict[str, Any]]) ->
             record["validation_flags"] = sorted(set(flags))
             records.append(record)
     unique = {record["sector_key"]: record for record in records}
-    return sorted(unique.values(), key=lambda item: next(sector.overall_order for sector in load_seed_bundle().sectors if sector.sector_key == item["sector_key"]))
+    report_order = {item.sector_key: item.display_order for item in load_report_registry()}
+    return sorted(unique.values(), key=lambda item: report_order[item["sector_key"]])
 
 
 def _parse_layout_assessments(layout_text: str) -> list[dict[str, Any]]:
@@ -1135,7 +1148,8 @@ def _parse_layout_assessments(layout_text: str) -> list[dict[str, Any]]:
             previous["confidence"] = "low"
             continue
         unique[record["sector_key"]] = record
-    ordered = sorted(unique.values(), key=lambda item: next(s.overall_order for s in load_seed_bundle().sectors if s.sector_key == item["sector_key"]))
+    report_order = {item.sector_key: item.display_order for item in load_report_registry()}
+    ordered = sorted(unique.values(), key=lambda item: report_order[item["sector_key"]])
     for left, right in zip(ordered, ordered[1:]):
         for field in ("main_basis", "observation_condition"):
             a, b = left[field], right[field]
@@ -1616,7 +1630,7 @@ def parse_pdf_history_matrix(layout_text: str, positioned_pages: list[dict[str, 
         first_status = status_pattern.search(line)
         if first_status is None:
             continue
-        sector = _sector_from_fragment(line[:first_status.start()].strip())
+        sector = _sector_from_fragment(line[:first_status.start()].strip(), include_report_objects=False)
         if sector is None:
             continue
         selected = statuses[-len(dates):]
@@ -2031,13 +2045,13 @@ def parse_report_text(
             assessment["quality_status"] = "needs_attention"
             assessment["confidence"] = "medium"
     bundle = load_seed_bundle()
-    sector_by_key = {item.sector_key: item for item in bundle.sectors}
+    sector_by_key = report_object_by_key()
     assessment_by_key = {item["sector_key"]: item for item in assessments}
     focus_region_match = re.search(r"(?ms)^\s*板块主线\s*(.+?)(?=^\s*核心定性[：:]|\Z)", text)
     explicit_focus, _ = _explicit_field(text, ("重点板块",))
     focus_region = focus_region_match.group(1) if focus_region_match else explicit_focus
     focus_keys = {
-        sector.sector_key for sector in bundle.sectors
+        sector.sector_key for sector in load_report_registry()
         if sector.sector_name in focus_region
     }
     for alias in bundle.aliases:
@@ -2045,7 +2059,7 @@ def parse_report_text(
             focus_keys.add(alias.sector_key)
     mention_keys = set(assessment_by_key) | focus_keys
     mentions: list[SectorMention] = []
-    for sector_key in sorted(mention_keys, key=lambda key: sector_by_key[key].overall_order):
+    for sector_key in sorted(mention_keys, key=lambda key: sector_by_key[key].display_order):
         sector = sector_by_key[sector_key]
         assessment = assessment_by_key.get(sector_key)
         simple_summary, _ = _explicit_field(text, (sector.sector_name,))
@@ -2191,7 +2205,7 @@ def parse_report_text(
         "report_date_source": date_result["source"],
         "report_date_confidence": date_result["confidence"],
         **main_fields,
-        "focus_sectors": [sector_by_key[key].sector_name for key in sorted(focus_keys, key=lambda key: sector_by_key[key].overall_order)],
+        "focus_sectors": [sector_by_key[key].sector_name for key in sorted(focus_keys, key=lambda key: sector_by_key[key].display_order)],
         "interpretation_meta": {
             "template_version": template_version,
             "history_freeze": {

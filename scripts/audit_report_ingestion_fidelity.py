@@ -26,6 +26,7 @@ from sqlalchemy import select
 
 from leopard_project.web.app import WebSettings, create_app
 from leopard_project.config import load_seed_bundle
+from leopard_project.report_registry import load_report_registry
 from leopard_project.web.database import create_session_factory
 from leopard_project.web.models import Report, ReportReviewIssue, SectorAssessment, SectorPathEntry
 from leopard_project.web.services import extract_layout_text, extract_positioned_pages, extract_text_layer, parse_report_text
@@ -89,6 +90,7 @@ def pdf_snapshot(path: Path) -> SourceDocument:
     # ledger.  A sector that has no native detailed-table row is therefore an
     # explicit *not mentioned* local fact, not a missing comparison row and
     # not an effective-status carry-forward.
+    canonical_path_keys = {sector.sector_key for sector in load_seed_bundle().sectors}
     records = {
         sector.sector_key: parsed_records.get(sector.sector_key, {
             "daily_path_marker": "",
@@ -99,8 +101,11 @@ def pdf_snapshot(path: Path) -> SourceDocument:
             "path_source": "",
             "report_local_path_entry": "not_mentioned",
         })
-        for sector in load_seed_bundle().sectors
+        for sector in load_report_registry()
     }
+    for sector_key, record in records.items():
+        if sector_key not in canonical_path_keys:
+            record["report_local_path_entry"] = "not_mentioned"
     snapshot = {
         "report_date": report_date.isoformat(),
         "report_version": metadata.get("template_version", "unknown"),
@@ -140,7 +145,7 @@ def _persisted_snapshot(session: Any, report_date: str) -> dict[str, Any]:
             "explicitly_mentioned": bool(entry.explicitly_mentioned if entry else assessment and assessment.explicitly_mentioned),
             "primary_evidence": assessment.main_basis if assessment else "",
             "observation_condition": assessment.observation_condition if assessment else "",
-            "path_source": entry.source_text_reference if entry else "",
+            "path_source": entry.source_text_reference if entry else (assessment.source_text_reference if assessment else ""),
             "report_local_path_entry": entry.path_status if entry else "not_mentioned",
         }
     return {
@@ -199,7 +204,7 @@ def _reference_snapshot(database: Path, report_date: str) -> dict[str, Any] | No
                 "explicitly_mentioned": bool(entry["explicitly_mentioned"] if entry else assessment and assessment["explicitly_mentioned"]),
                 "primary_evidence": assessment["main_basis"] if assessment else "",
                 "observation_condition": assessment["observation_condition"] if assessment else "",
-                "path_source": entry["source_text_reference"] if entry else "",
+                "path_source": entry["source_text_reference"] if entry else (assessment["source_text_reference"] if assessment else ""),
                 "report_local_path_entry": entry["path_status"] if entry else "not_mentioned",
             }
         return {

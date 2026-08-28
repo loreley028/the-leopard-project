@@ -10,7 +10,15 @@ from sqlalchemy import func, select
 from leopard_project.web.app import WebSettings, create_app
 from leopard_project.web.database import create_session_factory
 from leopard_project.web.enhanced import EnhancedReportService
-from leopard_project.web.models import LiveMarketAnchorDaily, Report, SectorDailyBar, SectorPathHistoryEntry, SecurityProxyDaily
+from leopard_project.web.models import (
+    LiveMarketAnchorDaily,
+    Report,
+    SectorAssessment,
+    SectorDailyBar,
+    SectorPathEntry,
+    SectorPathHistoryEntry,
+    SecurityProxyDaily,
+)
 from leopard_project.web.path_history import _exact_market_payload
 from leopard_project.config import load_seed_bundle
 from leopard_project.security_proxy_observation import load_security_proxy_registry
@@ -160,6 +168,82 @@ def test_matrix_keeps_verified_report_local_ledger_over_stale_detail_overlay(tmp
     cell = next(item for item in next(row for row in matrix["rows"] if row["sector_key"] == "semiconductor")["cells"] if item["trading_date"] == day.isoformat())
     assert cell["path_status"] == "hold"
     assert cell["revision_id"] == report.id
+
+
+@pytest.mark.parametrize(("frozen_status", "current_status"), [
+    ("hold", "hold"),
+    ("weak_watch", "avoid"),
+])
+def test_matrix_explicit_report_fact_refreshes_report_overlay(
+    tmp_path, frozen_status: str, current_status: str,
+) -> None:
+    settings = _settings(tmp_path)
+    sessions = create_session_factory(settings.database_url)
+    prior_day, day = date(2026, 8, 25), date(2026, 8, 26)
+    primary = next(
+        item for item in load_security_proxy_registry()
+        if item.market_path_key == "semiconductor"
+    ).primary_observation
+    assert primary is not None
+    with sessions() as session:
+        prior_report = Report(
+            id="prior-source", title="prior", report_date=prior_day,
+            report_date_confirmed=True, status="published", is_current=True,
+            created_by="admin", data_origin="real_upload",
+        )
+        current_report = Report(
+            id="current-detail", title="current", report_date=day,
+            report_date_confirmed=True, status="published", is_current=True,
+            created_by="admin", data_origin="real_upload",
+        )
+        session.add_all([prior_report, current_report])
+        EnhancedReportService(session).ensure_structure(current_report)
+        entry = session.scalar(select(SectorPathEntry).where(
+            SectorPathEntry.report_id == current_report.id,
+            SectorPathEntry.sector_key == "semiconductor",
+        ))
+        assessment = session.scalar(select(SectorAssessment).where(
+            SectorAssessment.report_id == current_report.id,
+            SectorAssessment.sector_key == "semiconductor",
+        ))
+        assert entry is not None and assessment is not None
+        entry.path_status = assessment.current_path_status = current_status
+        entry.explicitly_mentioned = assessment.explicitly_mentioned = True
+        session.add(SectorPathHistoryEntry(
+            sector_key="semiconductor", sector_name="半导体", path_report_date=day,
+            path_status=frozen_status, source_report_id=prior_report.id,
+            detail_report_id=prior_report.id, market_as_of_date=None,
+            frozen_daily_pct_change=None, market_data_status="unavailable",
+            source_pdf_sha256="d" * 64, source_kind="full_pdf_matrix",
+        ))
+        session.add_all([
+            SecurityProxyDaily(
+                symbol=primary.symbol, trading_date=prior_day, close=Decimal("10"),
+                open=None, high=None, low=None, amount_yuan=None, quote_datetime=None,
+                fetched_at=datetime.now(timezone.utc), source="test",
+            ),
+            SecurityProxyDaily(
+                symbol=primary.symbol, trading_date=day, close=Decimal("11"),
+                open=None, high=None, low=None, amount_yuan=None, quote_datetime=None,
+                fetched_at=datetime.now(timezone.utc), source="test",
+            ),
+        ])
+        session.commit()
+    with TestClient(create_app(settings, sessions)) as client:
+        matrix = client.get(
+            f"/api/v1/reports/{current_report.id}/path-matrix?periods=10"
+        ).json()
+    cell = next(
+        item
+        for item in next(
+            row for row in matrix["rows"] if row["sector_key"] == "semiconductor"
+        )["cells"]
+        if item["trading_date"] == day.isoformat()
+    )
+    assert cell["path_status"] == current_status
+    assert cell["report_id"] == current_report.id
+    assert cell["detail_report_id"] == current_report.id
+    assert cell["revision_id"] == current_report.id
 
 
 def test_matrix_uses_controlled_trading_days_and_maps_weekend_report_overlay(tmp_path) -> None:

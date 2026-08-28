@@ -512,6 +512,8 @@ button, a, input, textarea, [tabindex] { outline-offset: 4px; }
 .two-line-cell, .realtime-cell { display: grid; min-height: 2.6rem; align-content: center; gap: .12rem; white-space: nowrap; }
 .two-line-cell b, .realtime-cell b { font-size: 14px; font-weight: 600; font-variant-numeric: tabular-nums; }
 .two-line-cell small, .realtime-cell small { margin: 0 !important; font-size: 11px; font-weight: 400; line-height: 1.2; }
+.board-latest-view { min-width: 12rem; max-width: 22rem; white-space: normal; }
+.board-latest-view small { display: -webkit-box !important; overflow: hidden; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
 .realtime-cell .up, .two-line-cell .up, .ma-cell .up { color: #b91c1c; }
 .realtime-cell .down, .two-line-cell .down, .ma-cell .down { color: #166534; }
 .realtime-cell .flat, .two-line-cell .flat, .ma-cell .flat { color: #64748b; }
