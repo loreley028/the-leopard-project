@@ -243,6 +243,29 @@ def _report_title(text: str) -> tuple[str, tuple[int, int] | None]:
     return (lines[0][:300], (0, len(lines[0]))) if lines else ("待复核报告", None)
 
 
+def _v30_execution_field(text: str) -> tuple[str, tuple[int, int] | None]:
+    """Recover V3.0 execution prose only after the established routes fail.
+
+    V3.0 may express the executable market rule as a named discipline rather
+    than an ``执行结论`` field.  Prefer the next-session rule because it is the
+    final, most specific instruction; the summary-table trend discipline is a
+    safe fallback when the detailed section is absent.
+    """
+    next_session = re.search(
+        r"(?ms)^\s*下一交易日新纪律\s*[：:]\s*(.+?)"
+        r"(?=^\s*(?:第\s*\d+\s*页\s*)?[一二三四五六七八九十]+[、.．]\s*|\Z)",
+        text,
+    )
+    if next_session:
+        return _compact(next_session.group(1))[:1400], next_session.span(1)
+    trend = re.search(
+        r"(?ms)^\s*趋势纪律\s*(?:[：:]|\n)\s*(.+?)"
+        r"(?=^\s*(?:量能结构|板块结构|执行重点|核心定性)\s*(?:[：:]|\n)|\Z)",
+        text,
+    )
+    return (_compact(trend.group(1))[:1400], trend.span(1)) if trend else ("", None)
+
+
 def _main_fields(text: str) -> tuple[dict[str, str], dict[str, dict[str, Any]]]:
     core_match = re.search(
         r"(?ms)^\s*(?:核心定性|核心观点|核心结论)\s*[：:]\s*(.+?)(?=^\s*(?:行情结论|大盘结论|执行结论|数据与历史说明|一[、.．]))",
@@ -274,6 +297,8 @@ def _main_fields(text: str) -> tuple[dict[str, str], dict[str, dict[str, Any]]]:
             ("仓位纪律", "板块主线", "核心定性", "风险提示"),
             max_chars=700,
         )
+    if not market:
+        market, market_span = _v30_execution_field(text)
     risk, risk_span = _explicit_field(text, ("风险提示", "风险点"))
     if not risk:
         risk_match = re.search(
@@ -360,7 +385,7 @@ def _extract_defense_line_candidates(text: str, layout_text: str = "") -> list[d
         add(match, 1, "secondary", "high", "second_layer")
     # Explicit labels are useful corroboration, but a movement statement above
     # remains the authority when it exists.
-    for match in re.finditer(rf"(?:核心|主)(?:攻防线|成本线|线)\s*(?:为|是|提高到|上移至|：)?\s*{number}\s*点?", text):
+    for match in re.finditer(rf"(?:核心|主)(?:攻防线|成本线|线)\s*(?:为|是|提高到|仍为|上移至|：)?\s*{number}\s*点?", text):
         add(match, 1, "primary", "medium", "explicit_core_label")
     for match in re.finditer(rf"核心攻防线\s*提高到\s*{number}\s*点?", text):
         add(match, 1, "primary", "high", "explicit_core_label")

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import subprocess
 import sys
@@ -15,7 +16,8 @@ from leopard_project.web.database import create_session_factory
 from leopard_project.web.models import Report, SectorAssessment, SectorPathEntry, SectorPathHistoryEntry
 from leopard_project.web.repository import ReportRepository
 from leopard_project.security_proxy_daily import market_core_security_symbols
-from leopard_project.web.services import ReportService, _history_shape_matches_report_date, extract_layout_text, extract_positioned_pages, extract_text_layer, parse_report_text
+from leopard_project.web.live_market_anchor import structure_leopard_defense_line
+from leopard_project.web.services import ReportService, _history_shape_matches_report_date, _main_fields, extract_layout_text, extract_positioned_pages, extract_text_layer, parse_report_text
 
 
 def pseudo_pdf(text: str) -> bytes:
@@ -245,6 +247,70 @@ def test_v29_downward_defense_line_move_keeps_new_line_as_primary() -> None:
     defense = fields["interpretation_meta"]["defense_lines"]
     assert defense["primary_defense_line"] == 3896.49
     assert defense["secondary_defense_line"] == 3900.0
+
+
+@pytest.mark.parametrize("wording", ("为", "是", "提高到", "仍为"))
+def test_explicit_core_defense_line_continuity_wording_is_supported(wording: str) -> None:
+    fields, *_ = parse_report_text(
+        f"大盘猎豹 2026年8月27日直播总结 V3.0\n核心攻防线{wording} 3930.1 点。",
+        f"defense-line-{wording}",
+    )
+    assert fields["interpretation_meta"]["defense_lines"]["primary_defense_line"] == 3930.1
+
+
+def test_v30_discipline_routing_is_fallback_only() -> None:
+    fields, _ = _main_fields(
+        "趋势纪律\n核心攻防线仍为3930.1点，站稳转进攻。\n量能结构\n已放量。\n"
+        "下一交易日新纪律：收盘站在3930.1点之上转进攻；收盘跌回3930.1点下方继续防守。\n"
+        "三、后续正文\n不得进入执行结论。"
+    )
+    assert fields["market_path"] == "收盘站在3930.1点之上转进攻；收盘跌回3930.1点下方继续防守。"
+
+    explicit, _ = _main_fields(
+        "执行结论：旧路由保持权威。\n数据与历史说明\n下一交易日新纪律：不得抢占。\n三、后续正文"
+    )
+    assert explicit["market_path"] == "旧路由保持权威。"
+
+
+def test_authoritative_v30_0827_defense_line_and_conditions_regression() -> None:
+    source = Path(__file__).parent / "fixtures" / "authoritative" / "大盘猎豹8月27日直播总结-V3.0版.pdf"
+    payload = source.read_bytes()
+    assert hashlib.sha256(payload).hexdigest() == "d26d403d180f95abf0ac17c171b53536fefbb4304462ab8e579bda321c937742"
+    fields, *_ = parse_report_text(
+        extract_text_layer(payload), "v30-0827-regression", source.name,
+        extract_layout_text(payload), extract_positioned_pages(payload),
+    )
+    defense = fields["interpretation_meta"]["defense_lines"]
+    structured = structure_leopard_defense_line(
+        fields["market_path"], fields["core_view"], defense["primary_defense_line"],
+    )
+
+    assert fields["candidate_report_date"].isoformat() == "2026-08-27"
+    assert fields["interpretation_meta"]["template_version"] == "V3.0"
+    assert defense["primary_defense_line"] == 3930.1
+    assert "收盘站在3930.1点之上" in (structured.stand_above_condition or "")
+    assert "收盘跌回3930.1点下方" in (structured.break_below_condition or "")
+    assert "放量验证" in (structured.validation_conditions or "").replace(" ", "")
+
+
+def test_authoritative_v30_0827_reader_uses_parsed_defense_line(automatic_web) -> None:
+    client, _ = automatic_web
+    source = Path(__file__).parent / "fixtures" / "authoritative" / "大盘猎豹8月27日直播总结-V3.0版.pdf"
+    response = client.post(
+        "/api/v1/admin/reports/interpret",
+        files={"file": (source.name, source.read_bytes(), "application/pdf")},
+    )
+    assert response.status_code == 201
+    assert response.json()["publication"] == "published"
+
+    enhanced = client.get(f"/api/v1/reports/{response.json()['report']['id']}/enhanced")
+    assert enhanced.status_code == 200
+    defense = enhanced.json()["report_defense"]
+    assert defense["defense_line_value"] == 3930.1
+    assert defense["defense_line_source"] == "parsed_defense_line"
+    assert "收盘站在3930.1点之上" in defense["stand_above_condition"]
+    assert "收盘跌回3930.1点下方" in defense["break_below_condition"]
+    assert "放量验证" in defense["validation_conditions"].replace(" ", "")
 
 
 def test_real_v29_uploads_gap_import_then_appends_without_review(automatic_web) -> None:
