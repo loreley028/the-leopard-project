@@ -17,7 +17,8 @@ from typing import Any
 
 from fastapi.testclient import TestClient
 
-from leopard_project.report_registry import reader_report_registry
+from leopard_project.report_registry import load_report_registry, reader_report_registry
+from leopard_project.sector_lifecycle import load_sector_lifecycle_splits
 from leopard_project.trading_calendar import report_market_date
 from leopard_project.web.app import WebSettings, create_app
 from leopard_project.web.database import create_session_factory
@@ -44,6 +45,15 @@ def validate(paths: list[Path]) -> dict[str, Any]:
     if len({item.report_date for item in documents}) != len(documents):
         raise ValueError("report_dates_must_be_unique")
     active_keys = {item.sector_key for item in reader_report_registry()}
+    historical_only_keys = {
+        item.sector_key for item in load_report_registry()
+        if item.lifecycle == "historical_only"
+    }
+    split_child_keys = {
+        child_key
+        for split in load_sector_lifecycle_splits()
+        for child_key in split.child_sector_keys
+    }
     mismatches: list[dict[str, Any]] = []
     checked_facts = checked_matrix_overlays = reviewed_publications = additional_mention_fallback_facts = 0
 
@@ -164,6 +174,52 @@ def validate(paths: list[Path]) -> dict[str, Any]:
                             "actual_review_status": cell.get("review_status") if cell else None,
                         })
 
+            latest_report_id = payload["report"]["id"]
+            final_latest = client.get(f"/api/v1/reports/{latest_report_id}/enhanced").json()
+            final_latest_keys = {item["sector_key"] for item in final_latest["sector_assessments"]}
+            final_board = client.get(
+                "/api/v1/sectors",
+                params={"include_low_attention": "true", "page_size": 100},
+            ).json()
+            final_board_keys = {item["sector_key"] for item in final_board}
+            final_matrix = client.get(
+                f"/api/v1/reports/{latest_report_id}/path-matrix",
+                params={"periods": "all"},
+            ).json()
+            final_matrix_keys = {item["sector_key"] for item in final_matrix["rows"]}
+            for surface, keys in (
+                ("LATEST_REPORT_CURRENT_CATALOG", final_latest_keys),
+                ("BOARD_RESEARCH_CURRENT_CATALOG", final_board_keys),
+                ("HISTORY_MATRIX_CURRENT_CATALOG", final_matrix_keys),
+            ):
+                leaked = sorted(keys & historical_only_keys)
+                if leaked:
+                    mismatches.append({"surface": surface, "historical_only_leaks": leaked})
+            if final_board_keys != active_keys:
+                mismatches.append({
+                    "surface": "BOARD_RESEARCH_CURRENT_CATALOG",
+                    "missing_active": sorted(active_keys - final_board_keys),
+                    "unexpected": sorted(final_board_keys - active_keys),
+                })
+            if final_matrix_keys != active_keys:
+                mismatches.append({
+                    "surface": "HISTORY_MATRIX_CURRENT_CATALOG",
+                    "missing_active": sorted(active_keys - final_matrix_keys),
+                    "unexpected": sorted(final_matrix_keys - active_keys),
+                })
+            if not split_child_keys <= final_board_keys or not split_child_keys <= final_matrix_keys:
+                mismatches.append({
+                    "surface": "SPLIT_CHILD_CURRENT_CATALOG",
+                    "board_missing": sorted(split_child_keys - final_board_keys),
+                    "matrix_missing": sorted(split_child_keys - final_matrix_keys),
+                })
+            for sector_key in sorted(historical_only_keys):
+                if client.get(f"/api/v1/sectors/{sector_key}/research").status_code != 404:
+                    mismatches.append({
+                        "surface": "SECTOR_DETAIL_CURRENT_CATALOG",
+                        "historical_only_leak": sector_key,
+                    })
+
     return {
         "report_count": len(documents),
         "first_report_date": documents[0].report_date if documents else None,
@@ -172,6 +228,9 @@ def validate(paths: list[Path]) -> dict[str, Any]:
         "additional_mention_fallback_facts": additional_mention_fallback_facts,
         "checked_reader_facts": checked_facts,
         "checked_matrix_overlays": checked_matrix_overlays,
+        "current_active_object_count": len(active_keys),
+        "historical_only_object_count": len(historical_only_keys),
+        "split_child_object_count": len(split_child_keys),
         "unexpected_substantive_diff": len(mismatches),
         "mismatches": mismatches,
     }

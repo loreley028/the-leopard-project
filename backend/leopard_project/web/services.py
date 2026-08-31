@@ -15,6 +15,7 @@ from pypdf import PdfReader
 
 from leopard_project.config import CONFIG_DIR, load_seed_bundle, normalize_alias
 from leopard_project.report_registry import load_report_registry, report_object_by_key, report_object_by_name
+from leopard_project.sector_lifecycle import is_active_report_object_on
 
 from .models import ALLOWED_TRANSITIONS, Report, ReportFile, ReportSection, ReportStatus, SectorMention, UnmappedTerm
 from .repository import ReportRepository
@@ -1500,7 +1501,7 @@ def _parse_legacy_layout_history_matrix(layout_text: str) -> dict[str, Any]:
             if len(following_statuses) == 1:
                 statuses.extend(following_statuses)
                 consumed_status_lines.add(index + 1)
-        if len(statuses) < len(dates) - 1 and canonical is not None and report_object.lifecycle != "historical_carry":
+        if len(statuses) < len(dates) - 1 and canonical is not None and report_object.lifecycle != "historical_only":
             # This is normally the isolated last cell of the preceding
             # wrapped row.  It is not an independent canonical row, and its
             # predecessor has already been checked for exact cardinality.
@@ -1522,7 +1523,7 @@ def _parse_legacy_layout_history_matrix(layout_text: str) -> dict[str, Any]:
             # the inverse: only its later dates are present.  Both cases are
             # visible in the PDF itself and are represented without filling a
             # status across an absent date.
-            if canonical is not None and report_object.lifecycle != "historical_carry":
+            if canonical is not None and report_object.lifecycle != "historical_only":
                 # Canonical active rows must be complete; partial output is a
                 # parser failure, not an invitation to infer a lifecycle.
                 unresolved_rows.append({
@@ -1534,7 +1535,7 @@ def _parse_legacy_layout_history_matrix(layout_text: str) -> dict[str, Any]:
                 })
                 continue
             blanks = ["blank"] * (len(dates) - len(statuses))
-            statuses = statuses + blanks if report_object.lifecycle == "historical_carry" else blanks + statuses
+            statuses = statuses + blanks if report_object.lifecycle == "historical_only" else blanks + statuses
         if len(statuses) != len(dates):
             unresolved_rows.append({
                 "source_page": current_page,
@@ -1925,6 +1926,35 @@ def _configured_report_display_names() -> set[str]:
     return {_normalized_sector_token(item.sector_name) for item in load_report_registry()}
 
 
+def _active_report_object_keys_in_text(value: str, report_date: date | None) -> set[str]:
+    """Match configured object names without splitting a longer legacy name.
+
+    Longest non-overlapping source labels win.  An inactive parent label is
+    therefore rejected as a whole after its split; it is never reinterpreted
+    as mentions of the shorter child labels contained inside its name.
+    """
+    candidates: list[tuple[int, int, Any]] = []
+    for report_object in load_report_registry():
+        pattern_parts = []
+        for character in report_object.sector_name:
+            if character.isspace():
+                continue
+            pattern_parts.append(r"[/／]" if character in "/／" else re.escape(character))
+        pattern = r"\s*".join(pattern_parts)
+        for match in re.finditer(pattern, value, re.I):
+            candidates.append((match.start(), match.end(), report_object))
+    selected: list[tuple[int, int, Any]] = []
+    for start, end, report_object in sorted(candidates, key=lambda item: (-(item[1] - item[0]), item[0])):
+        if any(start < selected_end and end > selected_start for selected_start, selected_end, _ in selected):
+            continue
+        selected.append((start, end, report_object))
+    return {
+        report_object.sector_key
+        for _, _, report_object in selected
+        if is_active_report_object_on(report_object.sector_key, report_date)
+    }
+
+
 def _history_shape_matches_report_date(history_matrix: dict[str, Any], report_date: date | None) -> bool:
     """Bind a legacy display shape to its explicitly configured lifecycle window."""
     shape = history_matrix.get("accepted_structure")
@@ -2032,7 +2062,12 @@ def parse_report_text(
             "validation_flags": sorted(set(history_matrix.get("validation_flags", []) + ["history_shape_outside_lifecycle_window"])),
         }
     template_version = _report_template_version(text, history_matrix)
-    assessments = parse_v23_assessments(text, layout_text, positioned_pages, template_version=template_version)
+    assessments = [
+        item for item in parse_v23_assessments(
+            text, layout_text, positioned_pages, template_version=template_version,
+        )
+        if is_active_report_object_on(item["sector_key"], date_result["value"])
+    ]
     history_latest = {
         item["sector_key"]: item["statuses"][-1]
         for item in history_matrix.get("rows", [])
@@ -2050,13 +2085,11 @@ def parse_report_text(
     focus_region_match = re.search(r"(?ms)^\s*板块主线\s*(.+?)(?=^\s*核心定性[：:]|\Z)", text)
     explicit_focus, _ = _explicit_field(text, ("重点板块",))
     focus_region = focus_region_match.group(1) if focus_region_match else explicit_focus
-    focus_keys = {
-        sector.sector_key for sector in load_report_registry()
-        if sector.sector_name in focus_region
-    }
+    focus_keys = _active_report_object_keys_in_text(focus_region, date_result["value"])
     for alias in bundle.aliases:
         if alias.confirmed and alias.alias in focus_region:
-            focus_keys.add(alias.sector_key)
+            if is_active_report_object_on(alias.sector_key, date_result["value"]):
+                focus_keys.add(alias.sector_key)
     mention_keys = set(assessment_by_key) | focus_keys
     mentions: list[SectorMention] = []
     for sector_key in sorted(mention_keys, key=lambda key: sector_by_key[key].display_order):

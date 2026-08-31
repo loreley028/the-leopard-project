@@ -26,5 +26,38 @@ def load_sector_lifecycle_splits() -> tuple[SectorLifecycleSplit, ...]:
     ) for item in document["splits"])
 
 
-def parent_status_lineage_for_child(sector_key: str) -> SectorLifecycleSplit | None:
+def lifecycle_split_for_child(sector_key: str) -> SectorLifecycleSplit | None:
     return next((item for item in load_sector_lifecycle_splits() if sector_key in item.child_sector_keys), None)
+
+
+def lifecycle_role_on_report_date(
+    sector_key: str,
+    report_date: date | None,
+    *,
+    splits: tuple[SectorLifecycleSplit, ...] | None = None,
+) -> str:
+    """Resolve a report object's role without transferring facts across objects.
+
+    A split parent is valid only before the configured effective date.  Each
+    child becomes independently valid on that date.  With no historical date,
+    the result describes the current catalogue.
+    """
+    configured = splits if splits is not None else load_sector_lifecycle_splits()
+    parent = next((item for item in configured if item.parent_sector_key == sector_key), None)
+    if parent is not None:
+        if report_date is not None and report_date < parent.effective_report_date:
+            return "active"
+        return "historical_only"
+    child = next((item for item in configured if sector_key in item.child_sector_keys), None)
+    if child is not None and report_date is not None and report_date < child.effective_report_date:
+        return "not_yet_active"
+    return "active"
+
+
+def is_active_report_object_on(
+    sector_key: str,
+    report_date: date | None,
+    *,
+    splits: tuple[SectorLifecycleSplit, ...] | None = None,
+) -> bool:
+    return lifecycle_role_on_report_date(sector_key, report_date, splits=splits) == "active"

@@ -8,7 +8,7 @@ from leopard_project.config import load_seed_bundle
 from leopard_project.dormant_sectors import classify_dormant_sector
 from leopard_project.market_paths import load_market_path_registry, report_topic_sector
 from leopard_project.providers.capabilities import load_provider_capabilities
-from leopard_project.report_registry import load_report_registry, reader_report_registry
+from leopard_project.report_registry import reader_report_registry
 from leopard_project.security_proxy_observation import APPROVED, load_security_proxy_registry
 from sqlalchemy import desc, select
 
@@ -117,7 +117,7 @@ def objective_change_summary(current: Report, previous: Report | None) -> dict:
     }
 
 
-def sector_payloads(repo: ReportRepository, *, include_historical: bool = False) -> list[dict]:
+def sector_payloads(repo: ReportRepository) -> list[dict]:
     from .enhanced import EnhancedReportService, assessment_path_payload, assessment_payload, effective_statuses, path_entry_payload, path_statuses
 
     bundle = load_seed_bundle()
@@ -153,7 +153,7 @@ def sector_payloads(repo: ReportRepository, *, include_historical: bool = False)
         market_paths_by_parent.setdefault(market_path.parent_report_topic, []).append(market_path)
     controlled_dates = market_core_completed_dates(repo.session)
     output: list[dict] = []
-    for report_object in (load_report_registry() if include_historical else reader_report_registry()):
+    for report_object in reader_report_registry():
         report_key = report_object.sector_key
         candidates = market_paths_by_parent.get(report_key, [])
         # The hotel/restaurant report topic keeps the pre-existing hotel path

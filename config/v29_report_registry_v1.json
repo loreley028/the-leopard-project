@@ -4,7 +4,7 @@
   "display_row_count": 74,
   "active_object_count": 71,
   "description": "Reader-facing Report registry. It is intentionally independent from the 66-topic market registry: unavailable market observations never remove a formal Report object.",
-  "historical_carry_sector_keys": [
+  "historical_only_sector_keys": [
     "innovative_drug_medicine",
     "battery_lithium",
     "photovoltaic_energy_storage"

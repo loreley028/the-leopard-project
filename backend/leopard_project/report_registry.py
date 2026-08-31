@@ -24,7 +24,7 @@ class ReportObject:
 def load_report_registry() -> tuple[ReportObject, ...]:
     """Return the V2.9 Report universe without coupling it to market support."""
     document = json.loads((CONFIG_DIR / "v29_report_registry_v1.json").read_text(encoding="utf-8"))
-    carry = set(document["historical_carry_sector_keys"])
+    historical_only = set(document["historical_only_sector_keys"])
     base = sorted(load_seed_bundle().sectors, key=lambda item: item.overall_order)
     objects = [
         ReportObject(
@@ -34,7 +34,7 @@ def load_report_registry() -> tuple[ReportObject, ...]:
             group_order=item.group_order,
             within_group_order=item.within_group_order,
             display_order=item.overall_order,
-            lifecycle="historical_carry" if item.sector_key in carry else "active",
+            lifecycle="historical_only" if item.sector_key in historical_only else "active",
             market_sector_key=item.sector_key,
         )
         for item in base

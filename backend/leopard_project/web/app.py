@@ -439,7 +439,7 @@ def create_app(settings: WebSettings | None = None, session_factory: sessionmake
         current: Principal | None = Depends(optional_principal),
         session: Session = Depends(db_session),
     ) -> list[dict]:
-        rows = sector_payloads(ReportRepository(session), include_historical=bool(current and current.role == "admin"))
+        rows = sector_payloads(ReportRepository(session))
         rows = [item for item in rows if search.strip() in item["sector_name"]]
         if low_attention_only:
             rows = [item for item in rows if item["is_low_attention"]]
@@ -504,7 +504,7 @@ def create_app(settings: WebSettings | None = None, session_factory: sessionmake
     @app.get("/api/v1/sectors/{sector_key}")
     def sector_detail(sector_key: str, current: Principal | None = Depends(optional_principal), session: Session = Depends(db_session)) -> dict:
         repo = ReportRepository(session)
-        sector = next((item for item in sector_payloads(repo, include_historical=bool(current and current.role == "admin")) if item["sector_key"] == sector_key), None)
+        sector = next((item for item in sector_payloads(repo) if item["sector_key"] == sector_key), None)
         if sector is None:
             raise WebDomainError("sector_not_found", "Sector not found", 404)
         sector["timeline"] = [
@@ -799,6 +799,7 @@ def create_app(settings: WebSettings | None = None, session_factory: sessionmake
         from leopard_project.security_proxy_daily import market_core_security_symbols
         from leopard_project.security_proxy_observation import APPROVED, load_security_proxy_registry
         from leopard_project.report_registry import load_report_registry
+        from leopard_project.sector_lifecycle import is_active_report_object_on
         from leopard_project.dormant_sectors import classify_dormant_sector
         from .market_date_axis import market_core_completed_dates
         now = datetime.now(SHANGHAI)
@@ -821,7 +822,8 @@ def create_app(settings: WebSettings | None = None, session_factory: sessionmake
             for item in active_objects
         }
         for entry in session.scalars(select(SectorPathHistoryEntry).where(SectorPathHistoryEntry.sector_key.in_(entries_by_sector))):
-            entries_by_sector[entry.sector_key].append(entry)
+            if is_active_report_object_on(entry.sector_key, entry.path_report_date):
+                entries_by_sector[entry.sector_key].append(entry)
         completed_dates = market_core_completed_dates(session)
         dormant_count = sum(classify_dormant_sector(entries_by_sector[item.sector_key], completed_dates).is_dormant for item in active_objects)
         return {

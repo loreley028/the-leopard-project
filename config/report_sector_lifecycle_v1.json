@@ -1,6 +1,6 @@
 {
   "schema_version": "v1",
-  "description": "Reader lifecycle mapping for historical merged report topics. Status inheritance is a Report Fact only; no market fact may be inherited.",
+  "description": "Reader lifecycle mapping for historical merged report topics. Parents remain historical facts only; children start independent lifecycles on the effective report date.",
   "splits": [
     {
       "parent_sector_key": "battery_lithium",

@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 
 from leopard_project.config import load_seed_bundle
 from leopard_project.report_registry import ReportObject, load_report_registry
+from leopard_project.sector_lifecycle import is_active_report_object_on
 
 from .models import (
     PathHistoryImport,
@@ -172,7 +173,11 @@ def sync_path_history(
             continue
         for sector_key, source_row in source_by_sector.items():
             for path_date, status in zip(source_resolved_dates, source_row.get("statuses") or []):
-                if status != "blank" and status in valid_statuses:
+                if (
+                    status != "blank"
+                    and status in valid_statuses
+                    and is_active_report_object_on(sector_key, path_date)
+                ):
                     source_cells.append((sector_key, path_date, status, source))
     # First source wins for a date whose own PDF is absent.  A formal PDF for
     # that exact report date always takes precedence.  This means the order in
@@ -197,7 +202,12 @@ def sync_path_history(
                 status = str(correction["path_status"])
             except (KeyError, TypeError, ValueError):
                 continue
-            if sector_key in report_objects and status in valid_statuses and correction.get("source_evidence"):
+            if (
+                sector_key in report_objects
+                and status in valid_statuses
+                and correction.get("source_evidence")
+                and is_active_report_object_on(sector_key, path_date)
+            ):
                 corrections.append((sector_key, path_date, status, source))
     for sector_key, path_date, status, source in corrections:
         canonical_cells[(sector_key, path_date)] = (status, source, "explicit_history_correction")

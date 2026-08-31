@@ -14,6 +14,7 @@ from leopard_project.dormant_sectors import classify_dormant_sector
 from leopard_project.market_paths import load_market_path_registry, market_path_for_key, report_topic_sector
 from leopard_project.providers.capabilities import load_provider_capabilities, provider_capability_summary
 from leopard_project.report_registry import load_report_registry, reader_report_registry, report_object_by_key
+from leopard_project.sector_lifecycle import is_active_report_object_on
 from leopard_project.security_proxy_observation import APPROVED, load_security_proxy_registry
 from leopard_project.trading_calendar import load_calendar, report_market_date
 
@@ -217,16 +218,18 @@ def register_enhanced_routes(
         report = readable(required_report(report_id, session), current)
         service = EnhancedReportService(session)
         snapshots = snapshot_map(service, report.id)
-        reader_keys = {item.sector_key for item in reader_report_registry()}
-        include_historical = current is not None and current.role == "admin"
+        reader_keys = {
+            item.sector_key for item in load_report_registry()
+            if is_active_report_object_on(item.sector_key, report.report_date)
+        }
         assessments = []
         for item in service.assessments(report.id):
-            if not include_historical and item.sector_key not in reader_keys:
+            if item.sector_key not in reader_keys:
                 continue
             payload = assessment_payload(item, snapshots.get(item.sector_key))
             payload["active_holding_interval"] = service.holding_interval_for_sector(report, item.sector_key)
             assessments.append(payload)
-        paths = [path_entry_payload(item) for item in service.path_entries(report.id) if include_historical or item.sector_key in reader_keys]
+        paths = [path_entry_payload(item) for item in service.path_entries(report.id) if item.sector_key in reader_keys]
         report_defense = report_defense_payload(report)
         # This is deliberately a view-only companion to the immutable EOD
         # ledger.  The live anchor has its own short cache, so the existing
@@ -244,7 +247,7 @@ def register_enhanced_routes(
             "path_entries": paths,
             "sector_assessments": assessments,
             "status_groups": [{"status": key, "count": len(value), "items": value} for key, value in groups.items()],
-            "market_snapshots": [item for key, item in snapshots.items() if include_historical or key in reader_keys],
+            "market_snapshots": [item for key, item in snapshots.items() if key in reader_keys],
             "report_defense": report_defense,
             "recent_defense_line_validations": recent_defense_line_validations(session),
             "defense_line_trend": defense_line_trend(session),
@@ -279,13 +282,14 @@ def register_enhanced_routes(
         # controlled mapped date; they must never truncate the objective range.
         market_dates = market_core_completed_dates(session)
         maximum_market_date = market_dates[-1] if market_dates else None
-        all_report_objects = load_report_registry()
-        include_historical = current is not None and current.role == "admin"
-        report_objects = all_report_objects if include_historical else reader_report_registry()
+        report_objects = reader_report_registry()
         reader_keys = {item.sector_key for item in report_objects}
         entries = [item for item in session.scalars(select(SectorPathHistoryEntry).where(
             SectorPathHistoryEntry.path_report_date.in_(report_dates)
-        )) if item.sector_key in reader_keys] if report_dates else []
+        )) if (
+            item.sector_key in reader_keys
+            and is_active_report_object_on(item.sector_key, item.path_report_date)
+        )] if report_dates else []
         # A detailed published report remains a valid report-fact overlay even
         # when its date is absent from the frozen full-PDF ledger.  It does not
         # create a report-date column: it only overlays its mapped trade day.
@@ -305,7 +309,10 @@ def register_enhanced_routes(
             report_paths = service.path_entries(published_report.id)
             path_keys = {path.sector_key for path in report_paths}
             for path in report_paths:
-                if path.sector_key not in reader_keys:
+                if (
+                    path.sector_key not in reader_keys
+                    or not is_active_report_object_on(path.sector_key, published_report.report_date)
+                ):
                     continue
                 frozen = frozen_report_cells.get((path.sector_key, published_report.report_date))
                 if frozen is not None and not path.explicitly_mentioned:
@@ -323,7 +330,11 @@ def register_enhanced_routes(
                     is_detailed_report_overlay=True,
                 ))
             for assessment in service.assessments(published_report.id):
-                if assessment.sector_key not in reader_keys or assessment.sector_key in path_keys:
+                if (
+                    assessment.sector_key not in reader_keys
+                    or assessment.sector_key in path_keys
+                    or not is_active_report_object_on(assessment.sector_key, published_report.report_date)
+                ):
                     continue
                 fallback_entries.append(SimpleNamespace(
                     id=f"assessment-path:{assessment.id}",
@@ -338,11 +349,6 @@ def register_enhanced_routes(
                     is_detailed_report_overlay=True,
                 ))
         entries.extend(fallback_entries)
-        # The three manually versioned split lineages expose their parent
-        # status only before the split.  These virtual rows deliberately have
-        # no market date or frozen market value.
-        for report_object in report_objects:
-            entries.extend(service.inherited_parent_status_entries(report_object.sector_key, through=report.report_date))
         weekday_labels = ["周一", "周二", "周三", "周四", "周五", "周六", "周日"]
         bundle = load_seed_bundle()
         proxy_definitions = {
@@ -461,7 +467,6 @@ def register_enhanced_routes(
             }
         def matrix_cell(sector, market_date: date) -> dict:
             entry = by_sector_market_date.get((sector.sector_key, market_date))
-            inherited_status = bool(entry and getattr(entry, "inherited_from_sector_key", None))
             source = reports_by_id.get(entry.source_report_id) if entry else None
             dated_report = reports_by_date.get(entry.path_report_date) if entry else None
             status = path_statuses().get(entry.path_status) if entry else None
@@ -471,17 +476,17 @@ def register_enhanced_routes(
                 "sector_name": sector.sector_name,
                 "trading_date": market_date.isoformat(),
                 "report_present": entry is not None,
-                "report_id": entry.source_report_id if inherited_status else dated_report.id if dated_report else entry.source_report_id if entry else None,
-                "detail_report_id": None if inherited_status else dated_report.id if dated_report else entry.detail_report_id if entry else None,
-                "has_detailed_report": bool(entry and not inherited_status and (dated_report or entry.detail_report_id)),
+                "report_id": dated_report.id if dated_report else entry.source_report_id if entry else None,
+                "detail_report_id": dated_report.id if dated_report else entry.detail_report_id if entry else None,
+                "has_detailed_report": bool(entry and (dated_report or entry.detail_report_id)),
                 "report_date": entry.path_report_date.isoformat() if entry else None,
                 "path_status": entry.path_status if entry else None,
                 "path_status_label": status["label"] if status else None,
                 "path_status_color": status["color"] if status else None,
-                "explicitly_mentioned": bool(entry and not inherited_status and source and entry.path_status != "not_mentioned"),
+                "explicitly_mentioned": bool(entry and source and entry.path_status != "not_mentioned"),
                 "judgement_summary": "",
                 "source_text_reference": "",
-                "review_status": "historical_parent_status_inheritance" if inherited_status else "frozen_history" if entry else "market_timeline_only",
+                "review_status": "frozen_history" if entry else "market_timeline_only",
                 "manually_modified": False,
                 "revision_id": entry.source_report_id if entry else None,
                 "daily_return": float(entry.frozen_daily_pct_change) if entry and entry.frozen_daily_pct_change is not None else None,
@@ -537,9 +542,11 @@ def register_enhanced_routes(
         report = readable(required_report(report_id, session), current)
         service = EnhancedReportService(session)
         snapshots = snapshot_map(service, report.id)
-        include_historical = current is not None and current.role == "admin"
-        reader_keys = {item.sector_key for item in reader_report_registry()}
-        return [assessment_payload(item, snapshots.get(item.sector_key)) for item in service.assessments(report.id) if include_historical or item.sector_key in reader_keys]
+        reader_keys = {
+            item.sector_key for item in load_report_registry()
+            if is_active_report_object_on(item.sector_key, report.report_date)
+        }
+        return [assessment_payload(item, snapshots.get(item.sector_key)) for item in service.assessments(report.id) if item.sector_key in reader_keys]
 
     @app.get("/api/v1/reports/{report_id}/market-snapshots", response_model=list[ApiListItem])
     def report_market_snapshots(report_id: str, current: Principal | None = Depends(optional_principal), session: Session = Depends(db_session)) -> list[dict]:
@@ -563,7 +570,7 @@ def register_enhanced_routes(
         report_object = report_object_by_key().get(sector_key)
         if report_object is None:
             raise WebDomainError("sector_not_found", "Sector not found", 404)
-        if report_object.lifecycle == "historical_carry" and (current is None or current.role != "admin"):
+        if report_object.lifecycle != "active":
             raise WebDomainError("sector_not_found", "Sector not found", 404)
         market_path = market_path_for_key(sector_key)
         market_key = market_path.market_path_key if market_path is not None else sector_key
@@ -604,6 +611,8 @@ def register_enhanced_routes(
         detailed_history = []
         canonical_latest = service.latest_explicit_sector_facts(reports).get(report_key)
         for report in reports:
+            if not is_active_report_object_on(report_key, report.report_date):
+                continue
             entry = session.scalar(select(SectorPathEntry).where(SectorPathEntry.report_id == report.id, SectorPathEntry.sector_key == report_key))
             assessment = assessment_by_report[report.id]
             if entry or assessment:

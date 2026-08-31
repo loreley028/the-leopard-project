@@ -7,6 +7,7 @@ from pathlib import Path
 from sqlalchemy import func, select
 
 from leopard_project.config import load_seed_bundle
+from leopard_project.sector_lifecycle import is_active_report_object_on
 from leopard_project.web.database import create_session_factory
 from leopard_project.web.models import Report, ReportFile, SectorPathHistoryEntry
 from leopard_project.web.path_history import audit_frozen_path_history, sync_path_history
@@ -130,7 +131,12 @@ def test_report_local_history_is_import_order_independent(tmp_path: Path) -> Non
                 SectorPathHistoryEntry.path_report_date == date(2026, 8, 3),
             ).order_by(SectorPathHistoryEntry.sector_key))]
             assert values == [("oil_petrochemical", "hold"), ("rare_earth", "hold")]
-            assert session.scalar(select(func.count()).select_from(SectorPathHistoryEntry)) == 3 * 66
+            expected_rows = sum(
+                is_active_report_object_on(item.sector_key, report_date)
+                for report_date in (date(2026, 8, 3), date(2026, 8, 4), date(2026, 8, 17))
+                for item in load_seed_bundle().sectors
+            )
+            assert session.scalar(select(func.count()).select_from(SectorPathHistoryEntry)) == expected_rows
             if expected is None:
                 expected = actual
             else:

@@ -19,7 +19,7 @@ from leopard_project.web.repository import ReportRepository
 from leopard_project.security_proxy_daily import market_core_security_symbols
 from leopard_project.live_market_anchor_daily import intraday_defense_overlay
 from leopard_project.web.live_market_anchor import structure_leopard_defense_line
-from leopard_project.web.services import ReportService, _history_shape_matches_report_date, _main_fields, extract_layout_text, extract_positioned_pages, extract_text_layer, parse_report_text
+from leopard_project.web.services import ReportService, _active_report_object_keys_in_text, _history_shape_matches_report_date, _main_fields, extract_layout_text, extract_positioned_pages, extract_text_layer, parse_report_text
 
 
 def pseudo_pdf(text: str) -> bytes:
@@ -96,6 +96,13 @@ def test_v29_0810_contract_is_metadata_not_date_specific() -> None:
     assert metadata["defense_lines"]["primary_defense_line"] == 3864.27
     assert metadata["defense_lines"]["secondary_defense_line"] == 3847.09
     assert metadata["matrix_statistics"] == {"display_rows": None, "active_objects": None}
+
+
+def test_report_object_name_matching_respects_generic_split_boundaries() -> None:
+    assert _active_report_object_keys_in_text("电池/锂电池", date(2026, 7, 29)) == {"battery_lithium"}
+    assert _active_report_object_keys_in_text("电池/锂电池", date(2026, 7, 30)) == set()
+    assert _active_report_object_keys_in_text("电 池 ／ 锂 电 池", date(2026, 7, 30)) == set()
+    assert _active_report_object_keys_in_text("电池、锂电池", date(2026, 7, 30)) == {"battery", "lithium_battery"}
 
 
 def test_v29_0811_matrix_statistics_contract_is_not_hardcoded() -> None:
@@ -347,6 +354,8 @@ def test_authoritative_v30_0827_latest_board_and_sector_detail_have_substantive_
     assert response.json()["publication"] == "published"
 
     latest = client.get(f"/api/v1/reports/{report_id}/enhanced").json()
+    historical_parents = {"innovative_drug_medicine", "battery_lithium", "photovoltaic_energy_storage"}
+    assert not historical_parents & {item["sector_key"] for item in latest["sector_assessments"]}
     latest_facts = {
         item["sector_key"]: item
         for item in latest["sector_assessments"]
@@ -357,6 +366,19 @@ def test_authoritative_v30_0827_latest_board_and_sector_detail_have_substantive_
     assert not {"innovative_drug_medicine", "battery_lithium"} & set(latest_facts)
     assert "医药" not in latest_facts["agriculture_breeding"]["main_basis"]
     assert "医药" not in latest_facts["securities"]["main_basis"]
+    board_rows = client.get("/api/v1/sectors?include_low_attention=true&page_size=100").json()
+    board_keys = {item["sector_key"] for item in board_rows}
+    assert len(board_keys) == 71
+    assert not historical_parents & board_keys
+    for parent_key in historical_parents:
+        assert client.get(f"/api/v1/sectors/{parent_key}").status_code == 404
+        assert client.get(f"/api/v1/sectors/{parent_key}/research").status_code == 404
+    matrix_keys = {
+        item["sector_key"]
+        for item in client.get(f"/api/v1/reports/{report_id}/path-matrix?periods=20").json()["rows"]
+    }
+    assert not historical_parents & matrix_keys
+    assert {"innovative_drug", "medical_biology", "battery", "lithium_battery", "photovoltaic", "energy_storage"} <= matrix_keys
     board_facts = {
         item["sector_key"]: item
         for item in client.get("/api/v1/sectors").json()

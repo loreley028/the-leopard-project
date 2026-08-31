@@ -9,15 +9,14 @@ from decimal import Decimal
 from functools import lru_cache
 from pathlib import Path
 from typing import Any, Sequence
-from types import SimpleNamespace
 from zoneinfo import ZoneInfo
 
 from sqlalchemy import desc, func, select
 from sqlalchemy.orm import Session
 
 from leopard_project.config import CONFIG_DIR, load_seed_bundle, normalize_alias
-from leopard_project.report_registry import load_report_registry, report_object_by_key
-from leopard_project.sector_lifecycle import parent_status_lineage_for_child
+from leopard_project.report_registry import load_report_registry, reader_report_registry
+from leopard_project.sector_lifecycle import is_active_report_object_on
 
 from .models import (
     EnhancedReportRevision,
@@ -274,10 +273,16 @@ class EnhancedReportService:
                 select(SectorAssessment).where(SectorAssessment.report_id.in_(report_ids))
             )
         }
+        current_sector_keys = {item.sector_key for item in reader_report_registry()}
         output: dict[str, tuple[Report, SectorPathEntry | None, SectorAssessment]] = {}
         for report in ordered_reports:
             for (report_id, sector_key), assessment in assessments.items():
-                if report_id != report.id or sector_key in output:
+                if (
+                    report_id != report.id
+                    or sector_key in output
+                    or sector_key not in current_sector_keys
+                    or not is_active_report_object_on(sector_key, report.report_date)
+                ):
                     continue
                 entry = entries.get((report_id, sector_key))
                 if (
@@ -910,51 +915,15 @@ class EnhancedReportService:
             "fetched_at": fetched_at.isoformat(),
         }
 
-    def inherited_parent_status_entries(self, sector_key: str, through: date | None = None) -> list[Any]:
-        """Expose a split parent's pre-split Report Facts under an active child.
-
-        This intentionally carries only path status and report provenance.  It
-        leaves market dates, frozen returns, and detail report links empty so
-        no historical parent market fact can leak into the child's timeline.
-        """
-        lineage = parent_status_lineage_for_child(sector_key)
-        if lineage is None:
-            return []
-        query = select(SectorPathHistoryEntry).where(
-            SectorPathHistoryEntry.sector_key == lineage.parent_sector_key,
-            SectorPathHistoryEntry.path_report_date < lineage.effective_report_date,
-        )
-        if through is not None:
-            query = query.where(SectorPathHistoryEntry.path_report_date <= through)
-        parent_rows = list(self.session.scalars(query.order_by(desc(SectorPathHistoryEntry.path_report_date))))
-        child_name = report_object_by_key()[sector_key].sector_name
-        return [SimpleNamespace(
-            id=f"inherited:{sector_key}:{item.id}",
-            sector_key=sector_key,
-            sector_name=child_name,
-            path_report_date=item.path_report_date,
-            path_status=item.path_status,
-            source_report_id=item.source_report_id,
-            detail_report_id=None,
-            market_as_of_date=None,
-            frozen_daily_pct_change=None,
-            market_data_status="unavailable",
-            source_pdf_sha256=item.source_pdf_sha256,
-            template_version=item.template_version,
-            source_kind="historical_parent_status_inheritance",
-            inherited_from_sector_key=lineage.parent_sector_key,
-        ) for item in parent_rows]
-
     def path_history(self, sector_key: str, limit: int | None = None, through: date | None = None) -> list[Any]:
         query = select(SectorPathHistoryEntry).where(SectorPathHistoryEntry.sector_key == sector_key)
         if through is not None:
             query = query.where(SectorPathHistoryEntry.path_report_date <= through)
-        direct = list(self.session.scalars(query.order_by(desc(SectorPathHistoryEntry.path_report_date))))
-        inherited = self.inherited_parent_status_entries(sector_key, through=through)
-        by_date = {item.path_report_date: item for item in direct}
-        by_date.update({item.path_report_date: item for item in inherited if item.path_report_date not in by_date})
-        merged = sorted(by_date.values(), key=lambda item: item.path_report_date, reverse=True)
-        return merged[:limit] if limit is not None else merged
+        direct = [
+            item for item in self.session.scalars(query.order_by(desc(SectorPathHistoryEntry.path_report_date)))
+            if is_active_report_object_on(sector_key, item.path_report_date)
+        ]
+        return direct[:limit] if limit is not None else direct
 
     def holding_intervals_for_sector(self, sector_key: str, through: date | None = None) -> dict[str, Any]:
         entries = list(reversed(self.path_history(sector_key, through=through)))
