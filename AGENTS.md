@@ -13,12 +13,42 @@ Do not reintroduce superseded project codenames.
 
 ## Current phase
 
-The repository is at Phase 2A-0 Upload-to-Interpretation acceptance revision.
+The repository is in production maintenance and controlled release mode. Local
+development remains the default. Production actions are prohibited by default
+and require explicit, session-scoped user authorization for the exact release,
+production target, and operation scope. That authorization does not persist
+across sessions and must not be expanded by implication.
+
+For an explicitly authorized production cutover, verify the immutable tag/SHA;
+perform read-only prechecks; record the current release and rollback target;
+take a verified backup before any data-affecting change; stage an immutable
+release; make only scope-limited changes; switch releases atomically where
+applicable; run health and appropriate local/public smoke checks; stop on any
+failed gate; and roll back using the recorded release/backup. Do not touch
+unrelated services.
+
+Alibaba Cloud, ECS, and SSH access are prohibited by default. They are allowed
+only for the explicitly authorized production operation in the current session,
+including its scoped precheck, deployment, validation, or rollback.
+
+Production database writes are prohibited by default. Deployment permission
+does not authorize schema migrations, direct SQL, reconciliation, report
+ingestion, or Market Core backfill. Each data-affecting operation requires
+separate, explicit current-session authorization.
+
+Application deployment authorization does not include Nginx, DNS/TLS, security
+groups, systemd timers, Market Core configuration, or other services unless
+the user explicitly includes them in scope. Server-side source hotfixes outside
+an immutable release are prohibited.
+
+Even when production access is explicitly authorized, never force-push, move a
+released tag, rebase or amend released history, rewrite destructive Git history,
+or make unapproved direct SQL, production database, report reconciliation,
+Nginx, DNS/TLS, Market Core backfill, timer, or other-service changes.
 
 - Each enhanced report is the product body. The primary Admin path is PDF upload → automatic local interpretation → populated result → one-click confirmed publication.
 - Do not expose local parse, enhanced parse, date entry, 66 dropdowns or market snapshot freezing as ordinary required steps. Keep them collapsed as advanced recovery/review capabilities.
-- Market data is auxiliary; do not start collection, scheduling or Provider promotion.
-- Do not connect to Alibaba Cloud, deploy, expose public access or write a production database.
+- Market data is auxiliary; do not start collection, scheduling or Provider promotion without separate explicit authorization.
 - Do not request Tushare credentials, implement a formal Tushare Provider or approve candidate/production roles.
 - Do not call an external LLM or online AI service for PDF parsing.
 - Do not modify the PDF specification/business logic or integrate HSTECH market data.
@@ -27,7 +57,6 @@ The repository is at Phase 2A-0 Upload-to-Interpretation acceptance revision.
   commercialization review gate in force; do not copy its source or assets.
 - Do not use Nintendo characters, logos, screenshots, audio, icons, fonts or
   other official game assets, and do not imply endorsement or affiliation.
-- Do not start Phase 1B-2, five-day observation or Phase 2A-1 without explicit approval.
 
 ## Invariants
 
