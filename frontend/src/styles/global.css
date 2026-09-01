@@ -228,6 +228,9 @@ button, a, input, textarea, [tabindex] { outline-offset: 4px; }
 .matrix-controls .matrix-dormant-toggle input[type="checkbox"] { box-sizing: border-box; flex: 0 0 auto; width: 17px; height: 17px; min-height: 0; margin: 0; padding: 0; accent-color: var(--text-bark); }
 .path-matrix-shell { width: 100%; min-width: 0; padding: 1rem; overflow: hidden; border: 1px solid var(--border-soft); border-radius: var(--radius-card); background: var(--surface-cream); }
 .matrix-caption { margin: .2rem 0 .8rem; color: var(--text-muted); font-size: .82rem; }
+.matrix-report-calendar { margin: -.3rem 0 .8rem; color: var(--text-muted); font-size: .82rem; }
+.report-calendar-no-live { color: #7a6d58; font-weight: 700; }
+.effective-source { color: var(--text-muted); white-space: nowrap; }
 .matrix-viewport { width: 100%; max-width: 100%; max-height: 70vh; overflow: auto; border: 1px solid var(--border-soft); }
 .path-matrix { --matrix-date-column: 94px; --matrix-sector-column: 142px; --matrix-current-column: 130px; width: max-content; min-width: 100%; table-layout: fixed; border-collapse: separate; border-spacing: 1px; }
 .path-matrix .matrix-date-column { width: var(--matrix-date-column); }

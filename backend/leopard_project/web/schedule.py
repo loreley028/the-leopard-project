@@ -7,6 +7,31 @@ from datetime import date
 from leopard_project.config import CONFIG_DIR
 
 
+NO_LIVE = "no_live"
+
+
+def canonical_report_day_state(
+    *,
+    persisted_state: str | None,
+    has_published_report: bool,
+    has_report: bool,
+    expected_state: str,
+) -> str:
+    """Resolve calendar-only state without manufacturing a report fact.
+
+    ``skipped`` is accepted only as a read-compatible spelling for old rows.
+    A genuine report always wins, because an uploaded/published PDF is the
+    external source of truth rather than a prior calendar annotation.
+    """
+    if has_published_report:
+        return "published"
+    if has_report:
+        return "needs_confirmation"
+    if persisted_state in {NO_LIVE, "skipped"}:
+        return NO_LIVE
+    return expected_state
+
+
 @dataclass(frozen=True)
 class ReportSchedulePolicy:
     timezone: str

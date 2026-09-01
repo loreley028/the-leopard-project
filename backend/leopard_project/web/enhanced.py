@@ -32,6 +32,7 @@ from .models import (
     SectorPathHistoryEntry,
     SectorPathEntry,
 )
+from .effective_strategy import EffectiveStrategy, ReportStrategyFact, effective_strategy_for_trading_day
 from .services import (
     WebDomainError,
     extract_layout_text,
@@ -295,6 +296,62 @@ class EnhancedReportService:
                     continue
                 output[sector_key] = (report, entry, assessment)
         return output
+
+    def effective_strategy_for_sector(
+        self,
+        sector_key: str,
+        trading_day: date | None,
+        reports: Sequence[Report] | None = None,
+    ) -> EffectiveStrategy:
+        """Resolve the current strategy only from persisted published facts.
+
+        Calendar-only no-live days have no ``Report``/assessment/path entry,
+        and therefore cannot appear in this input or alter its provenance.
+        """
+        if trading_day is None:
+            return EffectiveStrategy(None, None, None, None, None, False)
+        ordered_reports = list(reports) if reports is not None else list(self.session.scalars(
+            select(Report).where(
+                Report.status == "published",
+                Report.is_current.is_(True),
+            ).order_by(Report.report_date, Report.published_at, Report.created_at)
+        ))
+        report_ids = [item.id for item in ordered_reports if item.report_date]
+        if not report_ids:
+            return EffectiveStrategy(None, None, None, None, None, False)
+        entries = {
+            item.report_id: item
+            for item in self.session.scalars(select(SectorPathEntry).where(
+                SectorPathEntry.report_id.in_(report_ids), SectorPathEntry.sector_key == sector_key,
+            ))
+        }
+        assessments = {
+            item.report_id: item
+            for item in self.session.scalars(select(SectorAssessment).where(
+                SectorAssessment.report_id.in_(report_ids), SectorAssessment.sector_key == sector_key,
+            ))
+        }
+        facts: list[ReportStrategyFact] = []
+        for report in ordered_reports:
+            if report.report_date is None or not is_active_report_object_on(sector_key, report.report_date):
+                continue
+            entry = entries.get(report.id)
+            assessment = assessments.get(report.id)
+            if entry is not None:
+                facts.append(ReportStrategyFact(
+                    report_id=report.id,
+                    report_date=report.report_date,
+                    reported_status=entry.path_status,
+                    explicitly_mentioned=entry.explicitly_mentioned,
+                ))
+            elif assessment is not None:
+                facts.append(ReportStrategyFact(
+                    report_id=report.id,
+                    report_date=report.report_date,
+                    reported_status=assessment.current_path_status,
+                    explicitly_mentioned=assessment.explicitly_mentioned,
+                ))
+        return effective_strategy_for_trading_day(facts, trading_day)
 
     def ensure_structure(self, report: Report, actor: str = "system") -> None:
         bundle = load_seed_bundle()

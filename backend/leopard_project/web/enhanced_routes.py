@@ -37,6 +37,7 @@ from .models import (
     MarketRefreshItem,
     MarketRefreshRun,
     Report,
+    ReportDay,
     ReportSectorMarketSnapshot,
     ReportStatus,
     SectorDailyBar,
@@ -386,6 +387,35 @@ def register_enhanced_routes(
             for item in published_reports
             if item.report_date
         }
+        # The report calendar is an independent display overlay.  It is not
+        # folded into the trading-date matrix cells and therefore cannot
+        # create a synthetic SectorPathEntry/assessment for a no-live day.
+        calendar_start = available_dates[0] if available_dates else report.report_date
+        no_live_days = list(session.scalars(select(ReportDay).where(
+            ReportDay.report_date >= calendar_start,
+            ReportDay.report_date <= report.report_date,
+            ReportDay.state.in_(("no_live", "skipped")),
+        ))) if calendar_start and report.report_date else []
+        report_calendar = [
+            {
+                "report_date": item.report_date.isoformat(),
+                "state": "published",
+                "display_label": "报告",
+                "report_id": item.id,
+            }
+            for item in published_reports
+            if item.report_date and calendar_start and calendar_start <= item.report_date <= report.report_date
+        ] + [
+            {
+                "report_date": item.report_date.isoformat(),
+                "state": "no_live",
+                "display_label": "休",
+                "report_id": None,
+            }
+            for item in no_live_days
+            if item.report_date not in reports_by_date
+        ]
+        report_calendar.sort(key=lambda item: item["report_date"])
 
         def entry_precedence(entry: SectorPathHistoryEntry | SimpleNamespace) -> tuple[int, float, date, str]:
             source = reports_by_id.get(entry.source_report_id)
@@ -523,6 +553,7 @@ def register_enhanced_routes(
             "default_period": "20",
             "available_period_count": len(all_trading_dates),
             "date_axis_kind": "market_trading_day",
+            "report_calendar": report_calendar,
             "dates": columns,
             "groups": [
                 {

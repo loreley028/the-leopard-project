@@ -40,8 +40,10 @@ def test_real_local_runtime_and_schedule_states(tmp_path: Path) -> None:
     assert runtime["build_commit"] == "unknown"
     days = web.get("/api/v1/admin/report-days?start=2026-07-24&end=2026-07-26").json()
     assert [item["state"] for item in days] == ["normally_no_report", "normally_no_report", "pending_upload"]
-    assert web.post("/api/v1/admin/report-days/2026-07-24/skip", json={"reason": "确认无直播"}).json()["state"] == "skipped"
+    assert web.post("/api/v1/admin/report-days/2026-07-24/skip", json={"reason": "确认无直播"}).json()["state"] == "no_live"
     assert web.delete("/api/v1/admin/report-days/2026-07-24/skip").status_code == 204
+    assert web.post("/api/v1/admin/report-days/2026-07-24/no-live", json={"reason": "确认无直播"}).json()["state"] == "no_live"
+    assert web.delete("/api/v1/admin/report-days/2026-07-24/no-live").status_code == 204
 
 
 def test_real_local_rejects_fixture_refresh(tmp_path: Path) -> None:

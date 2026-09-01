@@ -132,8 +132,8 @@ export const api = {
     };
   }>("/admin/operations/status"),
   reportDays: (start: string, end: string) => request<Array<{ report_date: string; weekday: string; expected_status: string; state: string; skip_reason: string; reports: Report[] }>>(`/admin/report-days?start=${start}&end=${end}`),
-  skipReportDay: (day: string, reason = "") => request(`/admin/report-days/${day}/skip`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ reason }) }),
-  cancelReportDaySkip: (day: string) => request<void>(`/admin/report-days/${day}/skip`, { method: "DELETE" }),
+  confirmNoLiveDay: (day: string, reason = "") => request(`/admin/report-days/${day}/no-live`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ reason }) }),
+  cancelNoLiveDay: (day: string) => request<void>(`/admin/report-days/${day}/no-live`, { method: "DELETE" }),
   adminReports: () => request<Report[]>("/admin/reports"),
   adminReport: (id: string) => request<Report>(`/admin/reports/${id}`),
   interpret: (file: File, reportDate?: string) => { const body = new FormData(); body.append("file", file); if (reportDate) body.append("report_date_hint", reportDate); return request<{ report: Report; interpretation: Interpretation; duplicate: boolean; publication: "published" | "already_published" | "needs_review"; interpretation_error: { code: string; message: string } | null; processing_steps: string[] }>("/admin/reports/interpret", { method: "POST", body }); },

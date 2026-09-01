@@ -25,7 +25,7 @@ from .models import (
     LiveMarketAnchorDaily, Report, ReportDay, ReportStatus, SecurityProxyDaily,
     SectorDailyBar, SectorPathHistoryEntry, SectorResearchPreference, SpecificationDocument,
 )
-from .schedule import ReportSchedulePolicy
+from .schedule import NO_LIVE, ReportSchedulePolicy, canonical_report_day_state
 from .repository import ReportRepository
 from .schemas import LoginRequest, PrincipalResponse, PublishConfirmationRequest, ReportPatch, ResolveTermRequest, ReviewIssueResolutionRequest, WithdrawRequest
 from .serializers import objective_change_summary, report_payload, sector_payloads
@@ -607,10 +607,11 @@ def create_app(settings: WebSettings | None = None, session_factory: sessionmake
             day_reports = [item for item in reports if item.report_date == day]
             record = persisted.get(day)
             default = "pending_upload" if policy.report_expected(day) else "normally_no_report"
-            state = record.state if record else (
-                "published" if any(item.status == "published" and item.is_current for item in day_reports)
-                else "needs_confirmation" if day_reports
-                else default
+            state = canonical_report_day_state(
+                persisted_state=record.state if record else None,
+                has_published_report=any(item.status == "published" and item.is_current for item in day_reports),
+                has_report=bool(day_reports),
+                expected_state=default,
             )
             output.append({
                 "report_date": day.isoformat(),
@@ -623,17 +624,27 @@ def create_app(settings: WebSettings | None = None, session_factory: sessionmake
             day += timedelta(days=1)
         return output
 
-    @app.post("/api/v1/admin/report-days/{report_date}/skip")
-    def skip_report_day(report_date: date, payload: dict, current: Principal = Depends(admin), session: Session = Depends(db_session)) -> dict:
+    def confirm_no_live_day(report_date: date, payload: dict, current: Principal, session: Session) -> dict:
+        if session.scalar(select(Report.id).where(Report.report_date == report_date).limit(1)) is not None:
+            raise WebDomainError("report_day_has_report", "已有报告的日期不能标记为无直播", 409)
         record = session.scalar(select(ReportDay).where(ReportDay.report_date == report_date))
         if record is None:
             record = ReportDay(report_date=report_date)
             session.add(record)
-        record.state = "skipped"
+        record.state = NO_LIVE
         record.skip_reason = str(payload.get("reason", ""))[:1000]
         record.confirmed_by = current.username
         session.commit()
         return {"report_date": report_date.isoformat(), "state": record.state, "skip_reason": record.skip_reason}
+
+    @app.post("/api/v1/admin/report-days/{report_date}/no-live")
+    def no_live_report_day(report_date: date, payload: dict, current: Principal = Depends(admin), session: Session = Depends(db_session)) -> dict:
+        return confirm_no_live_day(report_date, payload, current, session)
+
+    @app.post("/api/v1/admin/report-days/{report_date}/skip")
+    def skip_report_day(report_date: date, payload: dict, current: Principal = Depends(admin), session: Session = Depends(db_session)) -> dict:
+        """Backward-compatible alias; new callers use the explicit no-live route."""
+        return confirm_no_live_day(report_date, payload, current, session)
 
     @app.delete("/api/v1/admin/report-days/{report_date}/skip", status_code=204)
     def cancel_report_day_skip(report_date: date, current: Principal = Depends(admin), session: Session = Depends(db_session)) -> None:
@@ -641,6 +652,10 @@ def create_app(settings: WebSettings | None = None, session_factory: sessionmake
         if record:
             session.delete(record)
             session.commit()
+
+    @app.delete("/api/v1/admin/report-days/{report_date}/no-live", status_code=204)
+    def cancel_no_live_report_day(report_date: date, current: Principal = Depends(admin), session: Session = Depends(db_session)) -> None:
+        cancel_report_day_skip(report_date, current, session)
 
     @app.get("/api/v1/admin/reports/{report_id}")
     def admin_report(report_id: str, current: Principal = Depends(admin), session: Session = Depends(db_session)) -> dict:

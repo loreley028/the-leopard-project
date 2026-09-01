@@ -10,6 +10,7 @@ from leopard_project.market_paths import load_market_path_registry, report_topic
 from leopard_project.providers.capabilities import load_provider_capabilities
 from leopard_project.report_registry import reader_report_registry
 from leopard_project.security_proxy_observation import APPROVED, load_security_proxy_registry
+from leopard_project.trading_calendar import controlled_trading_day_on_or_before
 from sqlalchemy import desc, select
 
 from .models import MarketRefreshItem, MarketRefreshRun, Report, SectorDailyBar, SectorResearchPreference
@@ -220,7 +221,15 @@ def sector_payloads(repo: ReportRepository) -> list[dict]:
         ):
             statuses.append(latest_report_assessment.current_path_status)
         effective = effective_statuses(statuses)
-        current_effective = effective[-1] if effective else None
+        # Board/Reader strategy is a controlled-trading-day projection, not a
+        # restatement of the latest report-local marker.  In particular, a
+        # report uploaded after a session cannot rewrite that session.
+        strategy = enhanced.effective_strategy_for_sector(
+            report_key,
+            controlled_trading_day_on_or_before(datetime.now(SHANGHAI).date()),
+            published,
+        )
+        current_effective = strategy.effective_status or (effective[-1] if effective else None)
         explicit_statuses = [status for status in statuses if status != "not_mentioned"]
         intervals = enhanced.holding_intervals_for_sector(report_key, published[0].report_date if published else None)
         holding = intervals["active_holding_interval"]
@@ -268,6 +277,11 @@ def sector_payloads(repo: ReportRepository) -> list[dict]:
             "reported_status": statuses[-1] if statuses else "not_mentioned",
             "effective_status": current_effective,
             "effective_status_label": path_statuses()[current_effective]["label"] if current_effective else "暂无",
+            "effective_source_report_id": strategy.source_report_id,
+            "effective_source_report_date": strategy.source_report_date.isoformat() if strategy.source_report_date else None,
+            "effective_from_trading_date": strategy.effective_from.isoformat() if strategy.effective_from else None,
+            "effective_display_signal": strategy.display_signal,
+            "effective_derived_from_transition": strategy.derived_from_transition,
             "latest_market": None,
             "latest_complete_market": None,
             "primary_market": primary_market,

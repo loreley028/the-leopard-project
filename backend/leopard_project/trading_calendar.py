@@ -148,3 +148,24 @@ def report_market_date(day: date, path: Path = RULES_PATH) -> date | None:
     if evaluation.status != CalendarStatus.CONFIRMED_NON_TRADING_DAY:
         return None
     return max((candidate for candidate in rules.trading_dates() if candidate < day), default=None)
+
+
+def next_controlled_trading_day(day: date, path: Path = RULES_PATH) -> date | None:
+    """Return the first confirmed trading day strictly after ``day``.
+
+    Report facts become actionable on this date.  The helper deliberately uses
+    the controlled calendar only: it neither queries nor depends on Market
+    Core rows, so missing market data cannot invent or delay a report fact.
+    """
+    rules = load_calendar(path)
+    if rules is None:
+        return None
+    return min((candidate for candidate in rules.trading_dates() if candidate > day), default=None)
+
+
+def controlled_trading_day_on_or_before(day: date, path: Path = RULES_PATH) -> date | None:
+    """Return the latest controlled trading day at or before a calendar day."""
+    rules = load_calendar(path)
+    if rules is None:
+        return None
+    return max((candidate for candidate in rules.trading_dates() if candidate <= day), default=None)

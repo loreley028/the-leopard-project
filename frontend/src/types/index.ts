@@ -290,6 +290,11 @@ export interface Sector {
   reported_status?: PathStatus;
   effective_status?: PathStatus | null;
   effective_status_label?: string;
+  effective_source_report_id?: string | null;
+  effective_source_report_date?: string | null;
+  effective_from_trading_date?: string | null;
+  effective_display_signal?: PathStatus | null;
+  effective_derived_from_transition?: boolean;
   active_holding_interval?: HoldingInterval | null;
   historical_holding_intervals?: HoldingInterval[];
   strict_holding_interval?: HoldingInterval | null;
@@ -656,6 +661,7 @@ export interface PathMatrix {
   default_period?: string;
   available_period_count?: number;
   history_origin?: string;
+  report_calendar?: Array<{ report_date: string; state: "published" | "no_live"; display_label: string; report_id: string | null }>;
 }
 
 export interface ExactDateMarketOverlay {
