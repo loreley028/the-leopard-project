@@ -308,7 +308,7 @@ def test_v30_new_defense_section_recovers_close_only_execution_rule() -> None:
         "大盘猎豹 2026年8月31日直播总结 V3.0\n"
         "新攻防线\n"
         "核心攻防线由3930.1点下移至3924.47点。\n"
-        "下一交易日只认收盘：在线上继续进攻，收盘跌破则取消进攻、退回防守。\n"
+        "下一交易日只认收盘：在线上继续\n进攻，收盘跌破则取消进攻、退回防守。\n"
         "量价与资金\n成交额保持观察。\n"
     )
     fields, provenance = _main_fields(text)
@@ -324,7 +324,7 @@ def test_v30_new_defense_section_recovers_close_only_execution_rule() -> None:
     assert fields["market_path"] == "下一交易日只认收盘：在线上继续进攻，收盘跌破则取消进攻、退回防守。"
     assert provenance["market_path"]["extraction_method"] == "pdf_text_layer"
     assert structured.stand_above_condition is not None
-    assert structured.break_below_condition is not None
+    assert structured.break_below_condition == "收盘跌破3924.47点，取消进攻、退回防守"
     assert "收盘" in (structured.validation_conditions or "")
 
 
@@ -421,7 +421,7 @@ def test_v30_new_defense_section_reader_uses_parsed_line_and_conditions(automati
     assert defense["defense_line_value"] == 3924.47
     assert defense["defense_line_source"] == "parsed_defense_line"
     assert defense["stand_above_condition"] is not None
-    assert defense["break_below_condition"] is not None
+    assert defense["break_below_condition"] == "收盘跌破3924.47点，取消进攻、退回防守"
     assert "收盘" in (defense["validation_conditions"] or "")
 
 

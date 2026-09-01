@@ -29,6 +29,8 @@ _DEFENSE_PATTERNS = (
 )
 _STAND_ABOVE_PATTERN = re.compile(r"站上|站稳|在线上|站在[^，,。；;\n]{0,24}(?:之上|上方)|收复|突破")
 _VALIDATION_CONDITION_PATTERN = re.compile(r"时间|宽度|量能|成交量|资金|持续")
+_BREAK_BELOW_PATTERN = re.compile(r"跌破|跌回|失守|以下|下方")
+_IMPLICIT_BREAK_BELOW_PATTERN = re.compile(r"(?:收盘\s*)?跌破\s*(?:该线)?\s*(?:则|后)\s*(.+)")
 
 
 @dataclass(frozen=True)
@@ -80,9 +82,26 @@ def _structured_defense_line(value: str, source: str) -> DefenseLine | None:
         value=next(iter(candidates)),
         source=source,
         stand_above_condition=next((item for item in sentences if _STAND_ABOVE_PATTERN.search(item)), None),
-        break_below_condition=next((item for item in sentences if re.search(r"跌破|失守|以下|下方", item)), None),
+        break_below_condition=next((item for item in sentences if _BREAK_BELOW_PATTERN.search(item)), None),
         validation_conditions=_validation_condition(sentences),
     )
+
+
+def _formatted_line(value: Decimal) -> str:
+    return format(value, "f").rstrip("0").rstrip(".")
+
+
+def _break_below_condition(sentences: tuple[str, ...], primary: Decimal) -> str | None:
+    """Bind a bounded report-level implicit break rule to its parsed line."""
+    explicit = next((item for item in sentences if _BREAK_BELOW_PATTERN.search(item) and re.search(r"\d", item)), None)
+    if explicit:
+        return explicit
+    for item in sentences:
+        match = _IMPLICIT_BREAK_BELOW_PATTERN.search(item)
+        if match:
+            consequence = match.group(1).strip("，, ")
+            return f"收盘跌破{_formatted_line(primary)}点，{consequence}"
+    return None
 
 
 def structure_leopard_defense_line(
@@ -101,7 +120,7 @@ def structure_leopard_defense_line(
             primary,
             "parsed_defense_line",
             next((item for item in sentences if _STAND_ABOVE_PATTERN.search(item)), None),
-            next((item for item in sentences if re.search(r"跌破|失守|以下|下方", item)), None),
+            _break_below_condition(sentences, primary),
             _validation_condition(sentences),
         )
     return (

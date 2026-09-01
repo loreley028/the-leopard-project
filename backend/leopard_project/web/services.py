@@ -276,9 +276,13 @@ def _v30_execution_field(text: str) -> tuple[str, tuple[int, int] | None]:
             r"核心(?:攻防线|成本线|线)\s*(?:从|由)?\s*\d{3,5}(?:[.]\d+)?\s*点?",
             section_text,
         )
-        close_rule = re.search(r"下一交易日\s*只认\s*收盘\s*[：:]\s*(.+)", section_text)
+        # PDF text layers may wrap the execution sentence across lines.  The
+        # enclosing section is already bounded and has a verified core line,
+        # so retain the complete close-only instruction rather than just its
+        # first visual line.
+        close_rule = re.search(r"下一交易日\s*只认\s*收盘\s*[：:]\s*([\s\S]+)", section_text)
         if has_core_line and close_rule:
-            value = _compact(f"下一交易日只认收盘：{close_rule.group(1)}")[:1400]
+            value = re.sub(r"\s+", "", f"下一交易日只认收盘：{close_rule.group(1)}")[:1400]
             start = defense_section.start(1) + close_rule.start()
             return value, (start, start + len(value))
 
