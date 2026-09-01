@@ -27,7 +27,8 @@ _DEFENSE_PATTERNS = (
     re.compile(_NUMBER + r"\s*点?\s*(?:以下|上方|附近|上下|作为|为|是|继续防守|攻防)"),
     re.compile(r"(?:站上|跌破|失守|收复|突破)\s*" + _NUMBER + r"\s*点?"),
 )
-_STAND_ABOVE_PATTERN = re.compile(r"站上|站稳|站在[^，,。；;\n]{0,24}(?:之上|上方)|收复|突破")
+_STAND_ABOVE_PATTERN = re.compile(r"站上|站稳|在线上|站在[^，,。；;\n]{0,24}(?:之上|上方)|收复|突破")
+_VALIDATION_CONDITION_PATTERN = re.compile(r"时间|宽度|量能|成交量|资金|持续")
 
 
 @dataclass(frozen=True)
@@ -52,6 +53,14 @@ def _sentences(value: str) -> tuple[str, ...]:
     return tuple(item.strip() for item in re.split(r"[。；;\n]+", value or "") if item.strip())
 
 
+def _validation_condition(sentences: tuple[str, ...]) -> str | None:
+    """Prefer an explicit close-only rule without displacing older evidence."""
+    return (
+        next((item for item in sentences if "只认收盘" in item), None)
+        or next((item for item in sentences if _VALIDATION_CONDITION_PATTERN.search(item)), None)
+    )
+
+
 def _candidate_values(value: str) -> set[Decimal]:
     candidates: set[Decimal] = set()
     for pattern in _DEFENSE_PATTERNS:
@@ -72,7 +81,7 @@ def _structured_defense_line(value: str, source: str) -> DefenseLine | None:
         source=source,
         stand_above_condition=next((item for item in sentences if _STAND_ABOVE_PATTERN.search(item)), None),
         break_below_condition=next((item for item in sentences if re.search(r"跌破|失守|以下|下方", item)), None),
-        validation_conditions=next((item for item in sentences if re.search(r"时间|宽度|量能|成交量|资金|持续", item)), None),
+        validation_conditions=_validation_condition(sentences),
     )
 
 
@@ -93,7 +102,7 @@ def structure_leopard_defense_line(
             "parsed_defense_line",
             next((item for item in sentences if _STAND_ABOVE_PATTERN.search(item)), None),
             next((item for item in sentences if re.search(r"跌破|失守|以下|下方", item)), None),
-            next((item for item in sentences if re.search(r"时间|宽度|量能|成交量|资金|持续", item)), None),
+            _validation_condition(sentences),
         )
     return (
         _structured_defense_line(market_path, "market_path")

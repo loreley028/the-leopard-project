@@ -259,6 +259,29 @@ def _v30_execution_field(text: str) -> tuple[str, tuple[int, int] | None]:
     )
     if next_session:
         return _compact(next_session.group(1))[:1400], next_session.span(1)
+
+    # V3.0 may put a next-session instruction directly below a named
+    # defense-line heading instead of a standalone discipline heading. Require
+    # both that bounded report-level section and an explicit core-line fact,
+    # so sector prose about a next-day close cannot become market execution.
+    defense_section = re.search(
+        r"(?ms)^\s*(?:新攻防线|核心攻防线|核心线)\s*(?:[：:]|\n)\s*(.+?)"
+        r"(?=^\s*(?:量价与资金|量能结构|板块结构|执行重点|核心定性|风险提示|"
+        r"(?:第\s*\d+\s*页\s*)?[一二三四五六七八九十]+[、.．])\s*(?:[：:]|\n)|\Z)",
+        text,
+    )
+    if defense_section:
+        section_text = defense_section.group(1)
+        has_core_line = re.search(
+            r"核心(?:攻防线|成本线|线)\s*(?:从|由)?\s*\d{3,5}(?:[.]\d+)?\s*点?",
+            section_text,
+        )
+        close_rule = re.search(r"下一交易日\s*只认\s*收盘\s*[：:]\s*(.+)", section_text)
+        if has_core_line and close_rule:
+            value = _compact(f"下一交易日只认收盘：{close_rule.group(1)}")[:1400]
+            start = defense_section.start(1) + close_rule.start()
+            return value, (start, start + len(value))
+
     trend = re.search(
         r"(?ms)^\s*趋势纪律\s*(?:[：:]|\n)\s*(.+?)"
         r"(?=^\s*(?:量能结构|板块结构|执行重点|核心定性)\s*(?:[：:]|\n)|\Z)",
@@ -374,10 +397,11 @@ def _extract_defense_line_candidates(text: str, layout_text: str = "") -> list[d
     number = r"(\d{3,5}(?:[.]\d+)?)"
     # The two values must be recorded separately.  Do not reduce these to the
     # first or last number in a paragraph.
-    for match in re.finditer(rf"(?:核心(?:攻防线|成本线|线))\s*(?:由)?\s*{number}\s*点?\s*(?:继续)?上移至\s*{number}\s*点?", text):
-        add(match, 2, "primary", "high", "core_line_moved")
-        add(match, 1, "secondary", "high", "core_line_moved")
-    for match in re.finditer(rf"(?:核心(?:攻防线|成本线|线))\s*(?:从|由)\s*{number}\s*点?\s*(?:继续)?下调(?:到|至)\s*{number}\s*点?", text):
+    for match in re.finditer(
+        rf"(?:核心(?:攻防线|成本线|线))\s*(?:从|由)?\s*{number}\s*点?\s*(?:继续)?"
+        rf"(?:上移至|下移至|上调(?:到|至)|下调(?:到|至))\s*{number}\s*点?",
+        text,
+    ):
         add(match, 2, "primary", "high", "core_line_moved")
         add(match, 1, "secondary", "high", "core_line_moved")
     for match in re.finditer(rf"{number}\s*点?\s*(?:成为|作为)第一层(?:纪律线|防线)", text):

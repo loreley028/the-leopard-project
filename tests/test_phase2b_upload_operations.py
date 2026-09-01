@@ -258,6 +258,28 @@ def test_v29_downward_defense_line_move_keeps_new_line_as_primary() -> None:
     assert defense["secondary_defense_line"] == 3900.0
 
 
+@pytest.mark.parametrize(("wording", "primary", "secondary"), [
+    ("由3844点上移至3846点", 3846.0, 3844.0),
+    ("从3844点上移至3846点", 3846.0, 3844.0),
+    ("由3846点下移至3844点", 3844.0, 3846.0),
+    ("从3846点下移至3844点", 3844.0, 3846.0),
+    ("由3844点上调至3846点", 3846.0, 3844.0),
+    ("由3846点下调至3844点", 3844.0, 3846.0),
+])
+def test_core_defense_line_move_wording_keeps_new_line_primary(
+    wording: str, primary: float, secondary: float,
+) -> None:
+    fields, *_ = parse_report_text(
+        f"大盘猎豹 2026年8月16日直播总结 V3.0\n核心攻防线{wording}。",
+        "defense-line-move-wording",
+    )
+    defense = fields["interpretation_meta"]["defense_lines"]
+    assert defense["primary_defense_line"] == primary
+    assert defense["secondary_defense_line"] == secondary
+    assert defense["primary_evidence"][0]["section"] == "core_line_moved"
+    assert defense["primary_evidence"][0]["source_text"] == f"核心攻防线{wording}"
+
+
 @pytest.mark.parametrize("wording", ("为", "是", "提高到", "仍为"))
 def test_explicit_core_defense_line_continuity_wording_is_supported(wording: str) -> None:
     fields, *_ = parse_report_text(
@@ -279,6 +301,40 @@ def test_v30_discipline_routing_is_fallback_only() -> None:
         "执行结论：旧路由保持权威。\n数据与历史说明\n下一交易日新纪律：不得抢占。\n三、后续正文"
     )
     assert explicit["market_path"] == "旧路由保持权威。"
+
+
+def test_v30_new_defense_section_recovers_close_only_execution_rule() -> None:
+    text = (
+        "大盘猎豹 2026年8月31日直播总结 V3.0\n"
+        "新攻防线\n"
+        "核心攻防线由3930.1点下移至3924.47点。\n"
+        "下一交易日只认收盘：在线上继续进攻，收盘跌破则取消进攻、退回防守。\n"
+        "量价与资金\n成交额保持观察。\n"
+    )
+    fields, provenance = _main_fields(text)
+    defense = parse_report_text(text, "v30-new-defense")[0]["interpretation_meta"]["defense_lines"]
+    structured = structure_leopard_defense_line(
+        fields["market_path"], fields["core_view"], defense["primary_defense_line"],
+    )
+
+    assert defense["primary_defense_line"] == 3924.47
+    assert defense["secondary_defense_line"] == 3930.1
+    assert defense["candidates"]
+    assert defense["primary_evidence"][0]["source_text"] == "核心攻防线由3930.1点下移至3924.47点"
+    assert fields["market_path"] == "下一交易日只认收盘：在线上继续进攻，收盘跌破则取消进攻、退回防守。"
+    assert provenance["market_path"]["extraction_method"] == "pdf_text_layer"
+    assert structured.stand_above_condition is not None
+    assert structured.break_below_condition is not None
+    assert "收盘" in (structured.validation_conditions or "")
+
+
+def test_v30_sector_next_day_prose_cannot_become_market_execution_conclusion() -> None:
+    fields, provenance = _main_fields(
+        "板块观点详细汇总\n半导体：下一交易日若上涨则持有，收盘确认后再加仓。\n"
+        "软件开发：下一交易日若下跌则观察。\n"
+    )
+    assert fields["market_path"] == ""
+    assert provenance["market_path"]["extraction_method"] == "explicit_absence_notice"
 
 
 def test_authoritative_v30_0827_defense_line_and_conditions_regression() -> None:
@@ -340,6 +396,33 @@ def test_authoritative_v30_0827_reader_uses_parsed_defense_line(automatic_web) -
     assert overlay["defense_line_value"] == 3930.1
     assert overlay["source_report_id"] == response.json()["report"]["id"]
     assert overlay["source_report_date"] == "2026-08-27"
+
+
+def test_v30_new_defense_section_reader_uses_parsed_line_and_conditions(automatic_web) -> None:
+    client, _ = automatic_web
+    text = (
+        "大盘猎豹 2026年8月31日直播总结 V3.0\n"
+        "核心结论：指数继续进攻。\n"
+        "新攻防线\n"
+        "核心攻防线由3930.1点下移至3924.47点。\n"
+        "下一交易日只认收盘：在线上继续进攻，收盘跌破则取消进攻、退回防守。\n"
+        "量价与资金\n成交额保持观察。\n"
+    )
+    response = upload(client, "v30-new-defense.pdf", text)
+    assert response.status_code == 201
+    report_id = response.json()["report"]["id"]
+
+    enhanced = client.get(f"/api/v1/reports/{report_id}/enhanced")
+    assert enhanced.status_code == 200
+    body = enhanced.json()
+    defense = body["report_defense"]
+    assert body["report"]["market_path"]
+    assert body["report"]["reader_fact_provenance"]["execution_conclusion"]["extraction_method"] == "pdf_text_layer"
+    assert defense["defense_line_value"] == 3924.47
+    assert defense["defense_line_source"] == "parsed_defense_line"
+    assert defense["stand_above_condition"] is not None
+    assert defense["break_below_condition"] is not None
+    assert "收盘" in (defense["validation_conditions"] or "")
 
 
 def test_authoritative_v30_0827_latest_board_and_sector_detail_have_substantive_parity(automatic_web) -> None:
