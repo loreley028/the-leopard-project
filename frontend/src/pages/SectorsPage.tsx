@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "../routes/router";
 import { api } from "../api/client";
-import type { IntradayStatus, PrimaryMarketHistoryRow, Principal, Sector } from "../types";
+import type { IntradayStatus, MarketCoreCurrentQuotes, PrimaryMarketHistoryRow, Principal, Sector } from "../types";
 import { formatPct } from "../utils/format";
 import { intradaySystemLabel, timeOnly } from "../utils/intraday";
 
@@ -37,10 +37,24 @@ function RecentTen({ days }: { days: PrimaryMarketHistoryRow[] | undefined }) {
   </span>;
 }
 
-function PrimaryMarketCell({ item }: { item: Sector }) {
+const quoteTime = (value: string | null | undefined) => value?.match(/T(\d{2}:\d{2}:\d{2})/)?.[1] ?? timeOnly(value);
+
+function PrimaryMarketCell({ item, current }: { item: Sector; current?: NonNullable<MarketCoreCurrentQuotes["sectors"]>[number] }) {
   const market = item.primary_market;
-  if (!market?.name || market.close == null) return <span className="two-line-cell">—</span>;
-  return <span className="two-line-cell primary-market-cell"><b>{market.name}</b><small className={marketTone(market.daily_pct_change)}>{market.trade_date?.slice(5)} {formatPct(market.daily_pct_change)}</small></span>;
+  const quote = current?.instruments[0];
+  const name = quote?.name || market?.name;
+  const code = quote?.security_code || market?.security_code;
+  if (!name || !code) return <span className="two-line-cell">—</span>;
+  const available = current?.market_status === "available" && quote?.status === "available" && quote.current != null && quote.quote_datetime;
+  return <span className="two-line-cell primary-market-cell">
+    <b>{name}</b>
+    <small className="primary-security-code">{code}</small>
+    {available ? <>
+      <small>现价 <strong>{quote.current?.toFixed(3)}</strong></small>
+      <small className={marketTone(quote.pct_change)}>今日 {formatPct(quote.pct_change)}</small>
+      <small>行情时间 {quoteTime(quote.quote_datetime)}</small>
+    </> : <small className="market-unavailable">行情暂不可用</small>}
+  </span>;
 }
 
 function PrimaryTenDay({ item }: { item: Sector }) {
@@ -65,6 +79,7 @@ function GroupReportDateAxis({ rows }: { rows: Sector[] }) {
 export function SectorsPage() {
   const [sectors, setSectors] = useState<Sector[]>([]);
   const [intraday, setIntraday] = useState<IntradayStatus>();
+  const [currentQuotes, setCurrentQuotes] = useState<MarketCoreCurrentQuotes>();
   const [principal, setPrincipal] = useState<Principal>();
   const [showDormant, setShowDormant] = useState(false);
   const [search, setSearch] = useState("");
@@ -83,8 +98,8 @@ export function SectorsPage() {
         // Anonymous Viewer reads are intentional.  A 401 from the optional
         // identity endpoint must not discard the already-public sector and
         // market-status responses.
-        const [items, status, me] = await Promise.all([api.sectors(true), api.intradayStatus(), api.me().catch(() => null)]);
-        if (!disposed) { setSectors(items); setIntraday(status); setPrincipal(me ?? undefined); failures = 0; }
+        const [items, status, current, me] = await Promise.all([api.sectors(true), api.intradayStatus(), api.marketCurrent("matrix").catch(() => null), api.me().catch(() => null)]);
+        if (!disposed) { setSectors(items); setIntraday(status); setCurrentQuotes(current ?? undefined); setPrincipal(me ?? undefined); failures = 0; }
       }
       catch { failures = Math.min(3, failures + 1); }
       finally { if (!disposed && document.visibilityState === "visible") schedule(); }
@@ -94,6 +109,7 @@ export function SectorsPage() {
     return () => { disposed = true; window.clearTimeout(timer); document.removeEventListener("visibilitychange", visible); };
   }, []);
   const reportTopics = sectors;
+  const currentBySector = useMemo(() => new Map((currentQuotes?.sectors ?? []).map(item => [item.sector_key, item])), [currentQuotes]);
   const groups = useMemo(() => Array.from(new Map(
     [...reportTopics].sort((a, b) => a.group_order - b.group_order || a.overall_order - b.overall_order)
       .map(item => [item.group_order, item.group_name]),
@@ -134,7 +150,7 @@ export function SectorsPage() {
 <td><span className="status-pair"><small>本期</small><b>{item.current_path_status_label}</b><small>有效</small><b>{item.effective_status_label ?? "暂无"}</b>{item.effective_source_report_date && <small className="effective-source">来源 {item.effective_source_report_date.slice(5)}{item.effective_derived_from_transition ? " · 由转持延续" : ""}</small>}</span></td>
 <td><span className="mini-path-strip">{(item.recent_path ?? []).slice(-10).map(entry => <i key={`${entry.report_id}-${entry.report_date}`} className={`path-${entry.path_status}`} title={`${entry.report_date} ${entry.path_status_label}`}><b>{entry.path_status_label.slice(0, 1)}</b></i>)}</span></td>
 <td><LatestViewCell item={item} /></td>
-<td><PrimaryMarketCell item={item} /></td>
+<td><PrimaryMarketCell item={item} current={currentBySector.get(item.sector_key)} /></td>
 <td><PrimaryTenDay item={item} /></td>
 <td><PrimaryTenDayDetails item={item} /></td>
 <td><span className="two-line-cell holding-cell" title={`绝对：${item.strict_holding_interval?.start_report_date ?? "—"}起；广义：${item.broad_holding_interval?.start_report_date ?? "—"}起`}><small>绝对 {item.strict_holding_interval?.status === "active" ? shortDate(item.strict_holding_interval.start_report_date) + " → 至今" : "—"}</small><small>广义 {item.broad_holding_interval?.status === "active" ? shortDate(item.broad_holding_interval.start_report_date) + " → 至今" : "—"}</small></span></td>

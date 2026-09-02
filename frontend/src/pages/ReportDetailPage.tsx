@@ -38,7 +38,7 @@ const positionTone = (position: ReportDefense["defense_position"] | DefenseLineV
 function ReportOverview({ enhanced, market, broad }: { enhanced: EnhancedReport; market: MarketCoreShanghai | null; broad: MarketCoreBroadMarket | null }) {
   const { report } = enhanced;
   const defense = enhanced.report_defense;
-  const defenseSource = defense.defense_line_source === "market_path" ? "大盘路径" : defense.defense_line_source === "core_view" ? "核心判断安全回退" : null;
+  const defenseSource = defense.defense_line_source === "website_md" ? "网站MD结构化字段" : defense.defense_line_source === "parsed_defense_line" ? "结构化攻防线" : defense.defense_line_source === "market_path" ? "大盘路径" : defense.defense_line_source === "core_view" ? "核心判断安全回退" : null;
   const liveCurrent = market?.live.status === "available" ? market.live.current : null;
   const distancePoints = liveCurrent != null && defense.defense_line_value != null ? liveCurrent - defense.defense_line_value : null;
   const distancePct = distancePoints != null && defense.defense_line_value ? distancePoints / defense.defense_line_value * 100 : null;
@@ -173,7 +173,7 @@ export function ReportDetailPage({ latest = false }: { latest?: boolean }) {
     <nav className="report-tabs" aria-label="增强报告章节"><a href="#overview">报告概览</a><a href="#path">历史路径</a><a href="#assessments">板块观点</a><a href="#source">原始PDF</a></nav>
     <section id="overview"><h2>报告概览</h2><ReportOverview enhanced={enhanced} market={marketCoreShanghai} broad={broadMarket} /></section>
     <section id="path"><h2>历史路径矩阵</h2>{matrix ? <IslandPathMatrix matrix={matrix} currentMarket={matrixCurrent} period={period} onPeriodChange={setPeriod} /> : <p>路径矩阵加载中…</p>}</section>
-    <section id="assessments"><h2>{chineseDate(report.report_date)}板块观点详细汇总</h2><p className="muted">按原PDF分组展示五列主体；路径历史来自矩阵，详细观点历史来自已上传PDF，两者分别保存。</p>{GROUP_ORDER.map(group => grouped.get(group)?.length ? <AssessmentTable key={group} title={group} items={grouped.get(group)!} /> : null)}<details className="advanced-review"><summary>本期未提及 {unmentioned} 个板块</summary><p>“未提”只表示本期PDF没有明确观点，不代表既有观点失效。</p></details></section>
+    <section id="assessments"><h2>{chineseDate(report.report_date)}板块观点详细汇总</h2><p className="muted">按本期结构化报告事实分组展示五列主体；路径历史与详细观点分别保存。</p>{GROUP_ORDER.map(group => grouped.get(group)?.length ? <AssessmentTable key={group} title={group} items={grouped.get(group)!} /> : null)}<details className="advanced-review"><summary>本期未提及 {unmentioned} 个板块</summary><p>“未提”只表示本期报告没有明确观点，不代表既有观点失效。</p></details></section>
     <section id="source"><h2>原始PDF</h2>{previewLoaded ? <PdfPagePreview reportId={report.id} /> : <div className="pdf-preview-placeholder"><p>打开或刷新报告不会请求PDF；点击后仅加载内存渲染的逐页图片，不会写入下载目录。</p><button type="button" onClick={() => setPreviewLoaded(true)}>加载逐页预览</button></div>}<p><a href={publicResourcePath(report.pdf_download_url)}>下载原始PDF</a></p><p>{enhanced.data_notice} 来源追溯由Admin保留，Viewer正文不重复展示原文摘录。</p></section>
   </article>;
 }

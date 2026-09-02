@@ -193,11 +193,19 @@ def register_enhanced_routes(
 
     def report_defense_payload(report: Report) -> dict:
         metadata = json.loads(report.interpretation_meta_json or "{}")
+        structured_defense = metadata.get("defense_lines") or {}
         defense = live_market_anchor.defense_payload(
             market_path=report.market_path,
             core_view=report.core_view,
-            parsed_primary=(metadata.get("defense_lines") or {}).get("primary_defense_line"),
+            parsed_primary=structured_defense.get("primary_defense_line"),
         )
+        if metadata.get("source_kind") == "website_md":
+            defense.update({
+                "defense_line_source": "website_md",
+                "stand_above_condition": structured_defense.get("stand_above_condition"),
+                "break_below_condition": structured_defense.get("break_below_condition"),
+                "validation_conditions": structured_defense.get("validation_condition"),
+            })
         return {
             **{
                 key: defense[key]

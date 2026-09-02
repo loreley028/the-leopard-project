@@ -285,7 +285,8 @@ button, a, input, textarea, [tabindex] { outline-offset: 4px; }
 .sector-table th:nth-child(2), .sector-table td:nth-child(2) { width: 9rem; min-width: 8rem; }
 .sector-table th:nth-child(3), .sector-table td:nth-child(3) { width: 6rem; min-width: 6rem; }
 .sector-table th:nth-child(4), .sector-table td:nth-child(4) { width: 15.8rem; min-width: 15.8rem; }
-.sector-table th:nth-child(5), .sector-table td:nth-child(5), .sector-table th:nth-child(6), .sector-table td:nth-child(6) { width: 6.2rem; min-width: 6.2rem; }
+.sector-table th:nth-child(5), .sector-table td:nth-child(5) { width: 6.2rem; min-width: 6.2rem; }
+.sector-table th:nth-child(6), .sector-table td:nth-child(6) { width: 8.4rem; min-width: 8.4rem; }
 .sector-table th:nth-child(7), .sector-table td:nth-child(7) { width: 5.2rem; min-width: 5.2rem; }
 .sector-table th:nth-child(8), .sector-table td:nth-child(8) { width: 5.5rem; min-width: 5.5rem; }
 .sector-table th:nth-child(9), .sector-table td:nth-child(9), .sector-table th:nth-child(10), .sector-table td:nth-child(10) { width: 7rem; min-width: 7rem; }
@@ -439,9 +440,17 @@ button, a, input, textarea, [tabindex] { outline-offset: 4px; }
 .admin-primary-nav a { padding: .55rem .8rem; border-radius: 999px; background: #e7efdc; font-weight: 800; text-decoration: none; }
 .specification-form { display: grid; gap: .8rem; max-width: 42rem; }
 .specification-form label { display: grid; gap: .3rem; font-weight: 800; }
+.dual-report-upload { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; margin-bottom: 1rem; }
+.dual-report-upload section { display: grid; gap: .55rem; padding: .85rem; border: 1px solid var(--border-soft); border-radius: 14px; background: rgb(255 255 255 / 55%); }
+.dual-report-upload h2 { margin: 0; font-size: 1rem; }
+.md-metadata-preview { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: .55rem; margin: 1rem 0; }
+.md-metadata-preview div { min-width: 0; padding: .55rem; border-radius: 9px; background: #f6f8f1; }
+.md-metadata-preview dt { color: var(--text-muted); font-size: .7rem; }
+.md-metadata-preview dd { margin: .2rem 0 0; overflow-wrap: anywhere; font-size: .8rem; font-weight: 600; }
 .warning-confirmation { display: grid; gap: .7rem; padding: 1rem; border: 1px solid #b45309; border-radius: 12px; background: #fff7ed; }
 @media (max-width: 760px) { .hero { grid-template-columns: 1fr; } .hero-island { min-height: 125px; } }
 @media (max-width: 760px) {
+  .dual-report-upload, .md-metadata-preview { grid-template-columns: 1fr; }
   .research-hero { grid-template-columns: 1fr; }
   .hero-research-summary { margin-right: 0; }
   .metric-grid { grid-template-columns: repeat(2, 1fr); }
@@ -515,6 +524,8 @@ button, a, input, textarea, [tabindex] { outline-offset: 4px; }
 .two-line-cell, .realtime-cell { display: grid; min-height: 2.6rem; align-content: center; gap: .12rem; white-space: nowrap; }
 .two-line-cell b, .realtime-cell b { font-size: 14px; font-weight: 600; font-variant-numeric: tabular-nums; }
 .two-line-cell small, .realtime-cell small { margin: 0 !important; font-size: 11px; font-weight: 400; line-height: 1.2; }
+.primary-market-cell .primary-security-code { color: #64748b; font-variant-numeric: tabular-nums; letter-spacing: .02em; }
+.primary-market-cell .market-unavailable { color: #8a5b23; }
 .board-latest-view { min-width: 12rem; max-width: 22rem; white-space: normal; }
 .board-latest-view small { display: -webkit-box !important; overflow: hidden; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
 .realtime-cell .up, .two-line-cell .up, .ma-cell .up { color: #b91c1c; }

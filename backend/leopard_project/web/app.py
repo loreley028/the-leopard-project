@@ -29,7 +29,8 @@ from .schedule import NO_LIVE, ReportSchedulePolicy, canonical_report_day_state
 from .repository import ReportRepository
 from .schemas import LoginRequest, PrincipalResponse, PublishConfirmationRequest, ReportPatch, ResolveTermRequest, ReviewIssueResolutionRequest, WithdrawRequest
 from .serializers import objective_change_summary, report_payload, sector_payloads
-from .services import ReportService, WebDomainError
+from .services import ReportService, WebDomainError, detect_report_date, extract_text_layer, validate_pdf
+from .website_md import WebsiteMdImportService, parse_website_md
 from .enhanced import EnhancedReportService
 from .enhanced_routes import register_enhanced_routes
 from .intraday import IntradayRefreshCoordinator
@@ -519,13 +520,92 @@ def create_app(settings: WebSettings | None = None, session_factory: sessionmake
         current: Principal = Depends(admin),
         session: Session = Depends(db_session),
         file: UploadFile = File(...),
+        md_file: UploadFile | None = File(default=None),
         report_date_hint: date | None = Form(default=None),
     ) -> dict:
         payload = await file.read()
         repo = ReportRepository(session)
         service = ReportService(repo, settings.upload_dir)
+        document = None
+        md_validation = None
+        if md_file is not None:
+            validate_pdf(file.filename or "upload.pdf", file.content_type or "", payload, service.policy)
+            md_payload = await md_file.read()
+            document = parse_website_md(md_payload, md_file.filename or "upload.md")
+            pdf_text = extract_text_layer(payload)
+            if not pdf_text:
+                raise WebDomainError("pdf_text_unavailable", "PDF 无可靠文本层，无法核对 PDF/MD 日期", 422)
+            pdf_date = detect_report_date(pdf_text, file.filename or "upload.pdf")
+            if pdf_date.get("value") != document.report_date or pdf_date.get("confidence") != "high":
+                raise WebDomainError("pdf_md_report_date_mismatch", "PDF 报告日期与网站 MD report_date 不一致", 409)
+            if report_date_hint and report_date_hint != document.report_date:
+                raise WebDomainError("report_date_conflict", "所选直播日期与网站 MD report_date 不一致", 409)
+            md_validation = document.validation_payload()
         report, duplicate = service.upload(file.filename or "upload.pdf", file.content_type or "", payload, current.username)
         interpretation_error = None
+        if document is not None:
+            existing_metadata = json.loads(report.interpretation_meta_json or "{}")
+            existing_md = existing_metadata.get("website_md") or {}
+            if duplicate and existing_md.get("sha256") != document.sha256:
+                raise WebDomainError(
+                    "duplicate_pdf_website_md_conflict",
+                    "该 PDF 已存在，但网站 MD 身份不同；系统不会静默覆盖结构化事实",
+                    409,
+                )
+            should_import_md = not duplicate or existing_md.get("sha256") != document.sha256
+            if should_import_md:
+                report = WebsiteMdImportService(session, service).apply(
+                    report,
+                    document,
+                    md_file.filename or "upload.md",
+                    current.username,
+                )
+            if settings.auto_publish_uploads and report.status != ReportStatus.PUBLISHED.value:
+                try:
+                    service.reject_same_date_conflict(report)
+                    warnings = service._validate_publishable(report)
+                    if warnings:
+                        raise WebDomainError(
+                            "automatic_publish_requires_review",
+                            "网站 MD 仍存在需人工检查项，报告未自动发布",
+                            409,
+                        )
+                    WebsiteMdImportService(session, service).stage_incremental_history(
+                        report, document, current.username,
+                    )
+                    report = service.publish(
+                        report,
+                        current.username,
+                        confirm_warnings=True,
+                        warning_note="automatic_strict_website_md_upload",
+                    )
+                except WebDomainError as exc:
+                    session.rollback()
+                    if exc.code == "report_date_conflict":
+                        service.mark_staged_conflict(report, current.username)
+                        raise
+                    interpretation_error = {"code": exc.code, "message": str(exc)}
+                    report = repo.by_id(report.id) or report
+            enhanced = EnhancedReportService(session)
+            interpretation = enhanced.interpretation(report)
+            interpretation["review_workflow"] = ReviewWorkflowService(session).payload(report, interpretation["path_entry_count"])
+            return {
+                "report": report_payload(report, admin=True),
+                "interpretation": interpretation,
+                "duplicate": duplicate,
+                "publication": "already_published" if duplicate and report.status == ReportStatus.PUBLISHED.value else (
+                    "published" if report.status == ReportStatus.PUBLISHED.value else "needs_review"
+                ),
+                "interpretation_error": interpretation_error,
+                "md_validation": md_validation,
+                "processing_steps": [
+                    "正在校验PDF与MD",
+                    "正在核对报告日期和MD schema",
+                    "正在导入当天结构化观点",
+                    "正在写入增量路径与日历标记",
+                    "解读完成" if report.interpretation_status != "failed" else "解读失败",
+                ],
+            }
         should_interpret = not duplicate or report.status in {
             ReportStatus.UPLOADED.value,
             ReportStatus.PARSING.value,
@@ -573,6 +653,7 @@ def create_app(settings: WebSettings | None = None, session_factory: sessionmake
                 "published" if report.status == ReportStatus.PUBLISHED.value else "needs_review"
             ),
             "interpretation_error": interpretation_error,
+            "md_validation": None,
             "processing_steps": [
                 "正在校验PDF",
                 "正在读取报告",
@@ -763,12 +844,24 @@ def create_app(settings: WebSettings | None = None, session_factory: sessionmake
         repo = ReportRepository(session)
         confirmation = payload or PublishConfirmationRequest()
         report = required_report(report_id, session)
+        report_service = ReportService(repo, settings.upload_dir)
         # Snapshotting is an internal part of the one-click publication path.
         # Missing auxiliary market data remains non-blocking, while any bars
         # already available for the confirmed date become immutable evidence.
         if report.market_as_of_date_confirmed and report.market_as_of_date:
             EnhancedReportService(session).freeze_market_snapshot(report, current.username)
-        return report_payload(ReportService(repo, settings.upload_dir).publish(
+        metadata = json.loads(report.interpretation_meta_json or "{}")
+        if metadata.get("source_kind") == "website_md" and report.status != ReportStatus.PUBLISHED.value:
+            website_md = metadata.get("website_md") or {}
+            document = parse_website_md(
+                report.raw_text.encode("utf-8"),
+                str(website_md.get("filename") or "report.md"),
+            )
+            report_service.reject_same_date_conflict(report)
+            WebsiteMdImportService(session, report_service).stage_incremental_history(
+                report, document, current.username,
+            )
+        return report_payload(report_service.publish(
             report, current.username,
             confirm_warnings=confirmation.confirm_warnings, warning_note=confirmation.warning_note,
         ), admin=True)

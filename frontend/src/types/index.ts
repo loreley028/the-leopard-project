@@ -629,7 +629,7 @@ export interface LiveMarketAnchorHistory {
 
 export interface ReportDefense {
   defense_line_value: number | null;
-  defense_line_source: "market_path" | "core_view" | null;
+  defense_line_source: "market_path" | "core_view" | "parsed_defense_line" | "website_md" | null;
   stand_above_condition: string | null;
   break_below_condition: string | null;
   validation_conditions: string | null;
