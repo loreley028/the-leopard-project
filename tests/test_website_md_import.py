@@ -53,6 +53,8 @@ def test_website_md_0901_fixture_validates_actual_registry_counts() -> None:
     }
     assert (document.primary_line, document.previous_line) == (3920.0, 3924.47)
     assert "只认收盘" in document.defense["validation_condition"]
+    semiconductor = next(item for item in document.sector_updates if item["sector"] == "半导体")
+    assert semiconductor["qualification"] == "观察区"
 
 
 def test_website_md_does_not_trust_declared_checks() -> None:

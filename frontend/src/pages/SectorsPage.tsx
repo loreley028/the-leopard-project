@@ -17,15 +17,17 @@ function LatestViewCell({ item }: { item: Sector }) {
   const fact = item.latest_explicit_view;
   if (!fact) return <span className="two-line-cell"><b>暂无</b><small>无明确报告观点</small></span>;
   const assessment = fact.assessment;
+  const statusLabel = assessment.path_status_label.replace(/\*\*|__/g, "");
+  const viewpointContext = /^(持有区|观察区|风险转折|回避区)\s*·/.test(assessment.current_judgement ?? "") ? "" : assessment.current_judgement;
   const detail = [assessment.main_basis, assessment.observation_condition].filter(Boolean).join("；");
   const title = [
-    `${fact.report_date} · ${assessment.path_status_label}`,
-    assessment.current_judgement,
+    `${fact.report_date} · ${statusLabel}`,
+    viewpointContext,
     assessment.main_basis,
     assessment.observation_condition,
   ].filter(Boolean).join("\n");
   return <span className="two-line-cell board-latest-view" title={title}>
-    <b>{assessment.current_judgement || assessment.path_status_label}</b>
+    <b>{statusLabel}</b>
     <small>{shortDate(fact.report_date)}{detail ? ` · ${detail}` : ""}</small>
   </span>;
 }

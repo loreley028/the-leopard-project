@@ -24,7 +24,7 @@ from leopard_project.web.models import (
 
 
 DAY_1 = date(2026, 8, 27)
-NO_LIVE_DAY = date(2026, 8, 30)
+NO_LIVE_DAY = date(2026, 8, 28)
 DAY_2 = date(2026, 8, 31)
 SECTOR = "semiconductor"
 
@@ -179,6 +179,14 @@ def test_generic_no_live_three_date_acceptance(tmp_path: Path) -> None:
     assert timeline[(DAY_1.isoformat(), "published")]["report_id"] == "r0827"
     assert timeline[(NO_LIVE_DAY.isoformat(), "no_live")]["display_label"] == "休"
     assert timeline[(DAY_2.isoformat(), "published")]["report_id"] == "r0831"
+    semiconductor = next(item for item in matrix["rows"] if item["sector_key"] == SECTOR)
+    no_live_cell = next(item for item in semiconductor["cells"] if item["trading_date"] == NO_LIVE_DAY.isoformat())
+    report_cell = next(item for item in semiconductor["cells"] if item["trading_date"] == DAY_2.isoformat())
+    assert no_live_cell["report_present"] is False and no_live_cell["path_status"] is None
+    assert report_cell["report_present"] is True and report_cell["path_status"] == "strong_watch"
+    bank = next(item for item in matrix["rows"] if item["sector_key"] == "bank")
+    bank_report_cell = next(item for item in bank["cells"] if item["trading_date"] == DAY_2.isoformat())
+    assert bank_report_cell["report_present"] is True and bank_report_cell["path_status"] == "not_mentioned"
 
 
 def test_turn_hold_matures_once_and_no_live_cannot_repeat_it() -> None:
