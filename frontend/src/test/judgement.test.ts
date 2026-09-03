@@ -7,6 +7,13 @@ describe("judgement presentation policy", () => {
     expect(judgementDetail("watch", "观察；")).toBe("");
   });
 
+  it("does not expose internal qualification combined with the status", () => {
+    expect(judgementDetail("turn_hold", "持有区 · 转持")).toBe("");
+    expect(judgementDetail("strong_watch", "观察区 · **强观**")).toBe("");
+    expect(judgementDetail("turn_weak", "风险转折 · 转弱")).toBe("");
+    expect(judgementDetail("avoid", "回避区 · 不碰")).toBe("");
+  });
+
   it("retains substantive judgement text", () => {
     expect(judgementDetail("watch", "观察需求验证和量价结构。"))
       .toBe("观察需求验证和量价结构。");
