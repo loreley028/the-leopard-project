@@ -1,16 +1,17 @@
-import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
+import { Fragment, lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation, useParams } from "../routes/router";
 import { api, publicResourcePath } from "../api/client";
 import { IslandCard } from "../components/island/IslandCard";
-import { IslandPathMatrix } from "../components/island/IslandPathMatrix";
 import { IslandStatusBadge } from "../components/island/IslandStatusBadge";
 import { BroadMarketOverview, MarketCoreShanghaiReader } from "../components/market/MarketCoreReader";
 import { DefenseDistanceTrend } from "../components/market/DefenseDistanceTrend";
-import { PdfPagePreview } from "../components/PdfPagePreview";
-import type { DefenseLineValidation, EnhancedReport, MarketCoreBroadMarket, MarketCoreCurrentQuotes, MarketCoreShanghai, MarketSnapshot, PathMatrix, ReportDefense, SectorAssessment } from "../types";
+import type { DefenseLineValidation, EnhancedReport, MarketCoreBroadMarket, MarketCoreCurrentQuotes, MarketCoreShanghai, MarketSnapshot, PathMatrix, Report, ReportDefense, SectorAssessment } from "../types";
 import { formatPct } from "../utils/format";
 import { judgementDetail, pdfGroup } from "../utils/judgement";
 import { useMarketCurrentPolling } from "../hooks/useMarketCurrentPolling";
+
+const IslandPathMatrix = lazy(() => import("../components/island/IslandPathMatrix").then(module => ({ default: module.IslandPathMatrix })));
+const PdfPagePreview = lazy(() => import("../components/PdfPagePreview").then(module => ({ default: module.PdfPagePreview })));
 
 const GROUP_ORDER = ["B1 继续持有", "B2 重点观察区", "B3 当前不碰"];
 const chineseDate = (value: string | null) => value ? `${Number(value.slice(0, 4))}年${Number(value.slice(5, 7))}月${Number(value.slice(8, 10))}日` : "待确认日期";
@@ -126,6 +127,7 @@ export function ReportDetailPage({ latest = false }: { latest?: boolean }) {
   const { reportId: routeReportId = "" } = useParams();
   const location = useLocation();
   const [latestReportId, setLatestReportId] = useState("");
+  const [latestReport, setLatestReport] = useState<Report | null>(null);
   const reportId = latest ? latestReportId : routeReportId;
   const [period, setPeriod] = useState("20");
   const [enhanced, setEnhanced] = useState<EnhancedReport | null>();
@@ -134,7 +136,9 @@ export function ReportDetailPage({ latest = false }: { latest?: boolean }) {
   const [matrix, setMatrix] = useState<PathMatrix | null>(null);
   const [matrixCurrent, setMatrixCurrent] = useState<MarketCoreCurrentQuotes | null>(null);
   const [previewLoaded, setPreviewLoaded] = useState(false);
-  useEffect(() => { if (latest) api.latestReport().then(item => setLatestReportId(item.id)).catch(() => setEnhanced(null)); }, [latest]);
+  const [matrixRequestedFor, setMatrixRequestedFor] = useState("");
+  const pathSectionRef = useRef<HTMLElement | null>(null);
+  useEffect(() => { if (latest) api.latestReport().then(item => { setLatestReport(item); setLatestReportId(item.id); }).catch(() => setEnhanced(null)); }, [latest]);
   useEffect(() => { if (reportId) api.enhancedReport(reportId).then(setEnhanced).catch(() => setEnhanced(null)); }, [reportId]);
   useEffect(() => { api.marketShanghai().then(setMarketCoreShanghai).catch(() => setMarketCoreShanghai(null)); }, []);
   useEffect(() => { api.marketBroad().then(setBroadMarket).catch(() => setBroadMarket(null)); }, []);
@@ -151,7 +155,6 @@ export function ReportDetailPage({ latest = false }: { latest?: boolean }) {
     return current;
   }, []);
   useMarketCurrentPolling(refreshOverviewCurrent, Boolean(marketCoreShanghai || broadMarket));
-  useEffect(() => { if (reportId) api.pathMatrix(reportId, period).then(setMatrix).catch(() => setMatrix(null)); }, [reportId, period]);
   const refreshMatrixCurrent = useCallback(async () => { const result = await api.marketCurrent("matrix"); setMatrixCurrent(result); return result; }, []);
   useMarketCurrentPolling(refreshMatrixCurrent, Boolean(matrix), 60_000);
   const grouped = useMemo(() => {
@@ -161,7 +164,39 @@ export function ReportDetailPage({ latest = false }: { latest?: boolean }) {
     }
     return result;
   }, [enhanced]);
-  if (enhanced === undefined) return <p role="status">加载增强报告…</p>;
+  useEffect(() => {
+    if (!reportId || !enhanced) return;
+    if (typeof IntersectionObserver === "undefined") {
+      setMatrixRequestedFor(reportId);
+      return;
+    }
+    const target = pathSectionRef.current;
+    if (!target) return;
+    const observer = new IntersectionObserver(entries => {
+      if (entries.some(entry => entry.isIntersecting)) {
+        setMatrixRequestedFor(reportId);
+        observer.disconnect();
+      }
+    }, { rootMargin: "400px 0px" });
+    observer.observe(target);
+    return () => observer.disconnect();
+  }, [enhanced, reportId]);
+  useEffect(() => {
+    setMatrix(null);
+    setMatrixCurrent(null);
+    if (!reportId || matrixRequestedFor !== reportId) return;
+    let active = true;
+    api.pathMatrix(reportId, period).then(value => { if (active) setMatrix(value); }).catch(() => { if (active) setMatrix(null); });
+    return () => { active = false; };
+  }, [matrixRequestedFor, period, reportId]);
+  if (enhanced === undefined) return latestReport ? <article className="page enhanced-report report-summary-loading">
+    <header className="report-header"><div><IslandStatusBadge status={latestReport.status} /><p className="eyebrow">直播总结动态加强版 · {chineseDate(latestReport.report_date)}</p><h1>{latestReport.title}</h1></div></header>
+    <section className="report-priority-facts" aria-label="报告核心内容">
+      <div><p className="eyebrow">核心定性</p><p>{latestReport.core_view || "报告未单列核心定性。"}</p></div>
+      <div><p className="eyebrow">执行结论</p><p>{latestReport.market_path || "报告未单列执行结论。"}</p></div>
+    </section>
+    <p role="status">详细报告与行情辅助加载中…</p>
+  </article> : <p role="status">加载报告…</p>;
   if (!enhanced) return <p role="alert">暂无已发布报告。</p>;
   const { report } = enhanced;
   const origin = (location.state as { from?: string } | null)?.from === "library" ? "报告库" : "最新报告";
@@ -170,10 +205,10 @@ export function ReportDetailPage({ latest = false }: { latest?: boolean }) {
   return <article className="page enhanced-report">
     {!latest && <nav className="breadcrumbs" aria-label="面包屑"><Link to={origin === "报告库" ? "/reports" : "/"}>{origin}</Link><span>/</span><span>{report.report_date}</span></nav>}
     <header className="report-header"><div><IslandStatusBadge status={report.status} /><p className="eyebrow">直播总结动态加强版 · {chineseDate(report.report_date)}</p><h1>{report.title}</h1></div><div className="date-contract"><span>报告日期<strong>{report.report_date}</strong></span><span>报告核心观点<strong>攻防线与板块观点</strong></span></div></header>
-    <nav className="report-tabs" aria-label="增强报告章节"><a href="#overview">报告概览</a><a href="#path">历史路径</a><a href="#assessments">板块观点</a><a href="#source">原始PDF</a></nav>
+    <nav className="report-tabs" aria-label="增强报告章节"><a href="#overview">报告概览</a><a href="#path" onClick={() => setMatrixRequestedFor(reportId)}>历史路径</a><a href="#assessments">板块观点</a><a href="#source">原始PDF</a></nav>
     <section id="overview"><h2>报告概览</h2><ReportOverview enhanced={enhanced} market={marketCoreShanghai} broad={broadMarket} /></section>
-    <section id="path"><h2>历史路径矩阵</h2>{matrix ? <IslandPathMatrix matrix={matrix} currentMarket={matrixCurrent} period={period} onPeriodChange={setPeriod} /> : <p>路径矩阵加载中…</p>}</section>
+    <section id="path" ref={pathSectionRef}><h2>历史路径矩阵</h2>{matrix ? <Suspense fallback={<p>路径矩阵组件加载中…</p>}><IslandPathMatrix matrix={matrix} currentMarket={matrixCurrent} period={period} onPeriodChange={setPeriod} /></Suspense> : <p>{matrixRequestedFor === reportId ? "路径矩阵加载中…" : "滚动到此处后加载路径矩阵。"}</p>}</section>
     <section id="assessments"><h2>{chineseDate(report.report_date)}板块观点详细汇总</h2><p className="muted">按本期结构化报告事实分组展示五列主体；路径历史与详细观点分别保存。</p>{GROUP_ORDER.map(group => grouped.get(group)?.length ? <AssessmentTable key={group} title={group} items={grouped.get(group)!} /> : null)}<details className="advanced-review"><summary>本期未提及 {unmentioned} 个板块</summary><p>“未提”只表示本期报告没有明确观点，不代表既有观点失效。</p></details></section>
-    <section id="source"><h2>原始PDF</h2>{previewLoaded ? <PdfPagePreview reportId={report.id} /> : <div className="pdf-preview-placeholder"><p>打开或刷新报告不会请求PDF；点击后仅加载内存渲染的逐页图片，不会写入下载目录。</p><button type="button" onClick={() => setPreviewLoaded(true)}>加载逐页预览</button></div>}<p><a href={publicResourcePath(report.pdf_download_url)}>下载原始PDF</a></p><p>{enhanced.data_notice} 来源追溯由Admin保留，Viewer正文不重复展示原文摘录。</p></section>
+    <section id="source"><h2>原始PDF</h2>{previewLoaded ? <Suspense fallback={<p>PDF预览组件加载中…</p>}><PdfPagePreview reportId={report.id} /></Suspense> : <div className="pdf-preview-placeholder"><p>打开或刷新报告不会请求PDF；点击后仅加载内存渲染的逐页图片，不会写入下载目录。</p><button type="button" onClick={() => setPreviewLoaded(true)}>加载逐页预览</button></div>}<p><a href={publicResourcePath(report.pdf_download_url)}>下载原始PDF</a></p><p>{enhanced.data_notice} 来源追溯由Admin保留，Viewer正文不重复展示原文摘录。</p></section>
   </article>;
 }

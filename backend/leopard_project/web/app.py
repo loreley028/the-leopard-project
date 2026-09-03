@@ -41,6 +41,7 @@ from .intraday import intraday_policy, resolve_intraday_data_status
 from .security_proxy_viewer import OfficialBoardAvailability, SecurityProxyViewerCache, SecurityProxyViewerService
 from .live_market_anchor import LiveMarketAnchorCache, LiveShanghaiMarketAnchorService
 from .market_core import MarketCoreReadService
+from .viewer_cache import ViewerResponseCache, ViewerResponseCacheMiddleware
 from leopard_project.providers.tencent_standard_quote import TencentStandardSecurityQuoteProvider
 from leopard_project.security_proxy_observation import SecurityProxyObservationService
 from leopard_project.live_market_anchor_daily import SHANGHAI_COMPOSITE_SYMBOL
@@ -147,6 +148,8 @@ def create_app(settings: WebSettings | None = None, session_factory: sessionmake
     })
     app = FastAPI(title="The Leopard Project", version="2A-0", docs_url="/api/v1/docs")
     app.state.data_mode = settings.data_mode
+    app.state.viewer_response_cache = ViewerResponseCache()
+    app.add_middleware(ViewerResponseCacheMiddleware, cache=app.state.viewer_response_cache)
     intraday = IntradayRefreshCoordinator(sessions)
     eod_backfill = EodBackfillCoordinator(sessions)
     app.state.intraday_coordinator = intraday
