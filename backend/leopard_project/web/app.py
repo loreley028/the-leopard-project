@@ -28,7 +28,7 @@ from .models import (
 from .schedule import NO_LIVE, ReportSchedulePolicy, canonical_report_day_state
 from .repository import ReportRepository
 from .schemas import LoginRequest, PrincipalResponse, PublishConfirmationRequest, ReportPatch, ResolveTermRequest, ReviewIssueResolutionRequest, WithdrawRequest
-from .serializers import objective_change_summary, report_payload, sector_payloads
+from .serializers import objective_change_summary, report_payload, sector_payloads, sector_view_payloads
 from .services import ReportService, WebDomainError, detect_report_date, extract_text_layer, validate_pdf
 from .website_md import WebsiteMdImportService, parse_website_md
 from .enhanced import EnhancedReportService
@@ -481,6 +481,20 @@ def create_app(settings: WebSettings | None = None, session_factory: sessionmake
             rows.sort(key=lambda item: (item["group_order"], item["overall_order"]))
         start = (page - 1) * page_size
         return rows[start:start + page_size]
+
+    @app.get("/api/v1/sectors/view")
+    def sector_view(
+        include_low_attention: bool = False,
+        low_attention_only: bool = False,
+        session: Session = Depends(db_session),
+    ) -> list[dict]:
+        rows = sector_view_payloads(ReportRepository(session))
+        if low_attention_only:
+            rows = [item for item in rows if item["is_low_attention"]]
+        elif not include_low_attention:
+            rows = [item for item in rows if not item["is_low_attention"]]
+        rows.sort(key=lambda item: (item["group_order"], item["overall_order"]))
+        return rows
 
     @app.post("/api/v1/admin/sectors/{sector_key}/pin")
     def pin_sector(sector_key: str, current: Principal = Depends(admin), session: Session = Depends(db_session)) -> dict:

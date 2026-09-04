@@ -13,6 +13,7 @@ from starlette.types import ASGIApp, Message, Receive, Scope, Send
 # changes, selected according to the least-stable field in each payload.
 ENHANCED_CACHE_SECONDS = 5
 SECTORS_CACHE_SECONDS = 15 * 60
+SECTOR_VIEW_CACHE_SECONDS = 12 * 60 * 60
 PATH_MATRIX_CACHE_SECONDS = 90 * 60
 REPORTS_CACHE_SECONDS = 12 * 60 * 60
 
@@ -87,6 +88,8 @@ class ViewerResponseCacheMiddleware:
         if headers.get(b"cookie"):
             return None
         path = scope["path"]
+        if path == "/api/v1/sectors/view":
+            return SECTOR_VIEW_CACHE_SECONDS
         if path == "/api/v1/sectors":
             return SECTORS_CACHE_SECONDS
         if path == "/api/v1/reports":

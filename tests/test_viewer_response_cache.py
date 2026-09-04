@@ -7,6 +7,7 @@ from leopard_project.web.viewer_cache import (
     ENHANCED_CACHE_SECONDS,
     PATH_MATRIX_CACHE_SECONDS,
     REPORTS_CACHE_SECONDS,
+    SECTOR_VIEW_CACHE_SECONDS,
     SECTORS_CACHE_SECONDS,
     ViewerResponseCache,
     ViewerResponseCacheMiddleware,
@@ -14,7 +15,7 @@ from leopard_project.web.viewer_cache import (
 
 
 def cached_app() -> tuple[FastAPI, dict[str, int]]:
-    calls = {"sectors": 0, "matrix": 0, "reports": 0, "enhanced": 0, "latest": 0, "realtime": 0}
+    calls = {"sectors": 0, "sector_view": 0, "matrix": 0, "reports": 0, "enhanced": 0, "latest": 0, "realtime": 0}
     state = {"version": 1}
     app = FastAPI()
     app.add_middleware(ViewerResponseCacheMiddleware, cache=ViewerResponseCache())
@@ -22,6 +23,11 @@ def cached_app() -> tuple[FastAPI, dict[str, int]]:
     @app.get("/api/v1/sectors")
     def sectors() -> dict:
         calls["sectors"] += 1
+        return {"items": ["semiconductor", "cpo"], "version": state["version"]}
+
+    @app.get("/api/v1/sectors/view")
+    def sector_view() -> dict:
+        calls["sector_view"] += 1
         return {"items": ["semiconductor", "cpo"], "version": state["version"]}
 
     @app.get("/api/v1/reports/report-1/path-matrix")
@@ -89,6 +95,7 @@ def test_publish_immediately_exposes_new_latest_and_all_report_derived_payloads(
     app, calls = cached_app()
     cached_paths = (
         "/api/v1/sectors",
+        "/api/v1/sectors/view",
         "/api/v1/reports",
         "/api/v1/reports/report-1/enhanced",
         "/api/v1/reports/report-1/path-matrix?periods=20",
@@ -104,20 +111,27 @@ def test_publish_immediately_exposes_new_latest_and_all_report_derived_payloads(
             refreshed = client.get(path)
             assert refreshed.headers["x-leopard-cache"] == "miss"
             assert refreshed.json()["version"] == 2
-    assert calls == {"sectors": 2, "matrix": 2, "reports": 2, "enhanced": 2, "latest": 2, "realtime": 0}
+    assert calls == {"sectors": 2, "sector_view": 2, "matrix": 2, "reports": 2, "enhanced": 2, "latest": 2, "realtime": 0}
 
 
-def test_no_live_mutation_immediately_invalidates_path_matrix() -> None:
+def test_no_live_mutation_immediately_invalidates_static_view_and_path_matrix() -> None:
     app, calls = cached_app()
     path = "/api/v1/reports/report-1/path-matrix?periods=20"
+    sector_view_path = "/api/v1/sectors/view"
     with TestClient(app) as client:
         assert client.get(path).headers["x-leopard-cache"] == "miss"
         assert client.get(path).headers["x-leopard-cache"] == "hit"
+        assert client.get(sector_view_path).headers["x-leopard-cache"] == "miss"
+        assert client.get(sector_view_path).headers["x-leopard-cache"] == "hit"
         assert client.post("/api/v1/admin/report-days/2026-09-03/no-live").status_code == 200
         refreshed = client.get(path)
+        refreshed_sector_view = client.get(sector_view_path)
     assert refreshed.headers["x-leopard-cache"] == "miss"
     assert refreshed.json()["version"] == 2
+    assert refreshed_sector_view.headers["x-leopard-cache"] == "miss"
+    assert refreshed_sector_view.json()["version"] == 2
     assert calls["matrix"] == 2
+    assert calls["sector_view"] == 2
 
 
 def test_realtime_market_endpoint_is_never_held_by_viewer_response_cache() -> None:
@@ -135,6 +149,7 @@ def test_realtime_market_endpoint_is_never_held_by_viewer_response_cache() -> No
 def test_ttls_follow_payload_dynamicity_and_use_invalidation_as_primary_policy() -> None:
     assert ENHANCED_CACHE_SECONDS == 5
     assert SECTORS_CACHE_SECONDS == 15 * 60
+    assert SECTOR_VIEW_CACHE_SECONDS == 12 * 60 * 60
     assert PATH_MATRIX_CACHE_SECONDS == 90 * 60
     assert REPORTS_CACHE_SECONDS == 12 * 60 * 60
 

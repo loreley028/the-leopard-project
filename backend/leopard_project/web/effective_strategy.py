@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import date
-from typing import Iterable
+from typing import Callable, Iterable
 
 from leopard_project.trading_calendar import next_controlled_trading_day
 
@@ -34,6 +34,8 @@ class EffectiveStrategy:
 def effective_strategy_for_trading_day(
     facts: Iterable[ReportStrategyFact],
     trading_day: date,
+    *,
+    next_trading_day: Callable[[date], date | None] = next_controlled_trading_day,
 ) -> EffectiveStrategy:
     """Project persisted explicit report facts to one controlled trading day.
 
@@ -44,7 +46,7 @@ def effective_strategy_for_trading_day(
     """
     active: EffectiveStrategy | None = None
     for fact in sorted(facts, key=lambda item: (item.report_date, item.report_id)):
-        effective_from = next_controlled_trading_day(fact.report_date)
+        effective_from = next_trading_day(fact.report_date)
         if effective_from is None or effective_from > trading_day:
             continue
         if not fact.explicitly_mentioned or fact.reported_status == "not_mentioned":

@@ -6,7 +6,7 @@ within the controlled completed-day window all say ``not_mentioned``.
 """
 from __future__ import annotations
 
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 from datetime import date
 
@@ -32,6 +32,7 @@ def classify_dormant_sector(
     *,
     window_size: int = DORMANT_WINDOW_TRADING_DAYS,
     minimum_overlays: int = MINIMUM_REPORT_OVERLAYS,
+    market_date_for_report: Callable[[date], date | None] = report_market_date,
 ) -> DormantSectorEvidence:
     """Classify one active Report Object without inventing report coverage.
 
@@ -46,7 +47,7 @@ def classify_dormant_sector(
     markers = tuple(
         str(entry.path_status)
         for entry in entries
-        if report_market_date(entry.path_report_date) in date_set
+        if market_date_for_report(entry.path_report_date) in date_set
     )
     return DormantSectorEvidence(
         is_dormant=len(markers) >= minimum_overlays and all(marker == "not_mentioned" for marker in markers),

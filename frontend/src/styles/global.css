@@ -522,6 +522,8 @@ button, a, input, textarea, [tabindex] { outline-offset: 4px; }
 .market-system-strip { display: flex; flex-wrap: wrap; gap: .45rem 1rem; align-items: center; padding: .7rem .85rem; border: 1px solid var(--border-soft); border-radius: 14px; background: rgb(255 250 240 / 84%); font-size: .78rem; }
 .market-system-strip strong { font-size: .9rem; }
 .market-system-strip small { color: var(--text-muted); }
+.data-load-notice { margin: .55rem 0; color: var(--text-muted); font-size: .78rem; }
+.data-load-notice.error, .market-enrichment-state { color: #8a5b23; }
 .sector-table td small, .sector-table th small { display: block; margin-top: .25rem; color: var(--text-muted); }
 .status-pair { display: grid; grid-template-columns: auto 1fr; gap: .12rem .3rem; align-items: baseline; min-height: 2.6rem; align-content: center; white-space: nowrap; }
 .status-pair small { margin: 0 !important; font-size: 11px; font-weight: 400; }

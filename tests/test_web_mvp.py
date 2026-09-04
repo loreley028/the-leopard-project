@@ -9,13 +9,15 @@ import pytest
 warnings.filterwarnings("ignore", message="Using `httpx` with `starlette.testclient` is deprecated.*")
 
 from starlette.testclient import TestClient
-from sqlalchemy import func, select
+from sqlalchemy import event, func, select
 
 from leopard_project.config import CONFIG_DIR
 from leopard_project.web.app import WebSettings, create_app
 from leopard_project.web.database import create_session_factory
+from leopard_project.web.enhanced import EnhancedReportService
 from leopard_project.web.models import ReportRevision, ReportStatus
 from leopard_project.web.repository import ReportRepository
+from leopard_project.web.serializers import sector_view_payloads
 from leopard_project.web.schedule import ReportSchedulePolicy
 from leopard_project.web.services import ReportService, UploadPolicy, WebDomainError, validate_pdf
 
@@ -112,12 +114,77 @@ def test_public_read_only_routes_do_not_require_a_viewer_session(web) -> None:
     client, _, _ = web
     assert client.get("/api/v1/reports").status_code == 200
     assert client.get("/api/v1/sectors").status_code == 200
+    assert client.get("/api/v1/sectors/view").status_code == 200
     assert client.get("/api/v1/sectors/semiconductor").status_code == 200
     assert client.get("/api/v1/market/intraday/status").status_code == 200
     assert client.get("/api/v1/market-paths/cpo/viewer-observation").status_code == 200
     assert client.post("/api/v1/admin/reports").status_code == 401
     assert client.post("/api/v1/admin/reports/unknown/publish").status_code == 401
     assert client.delete("/api/v1/admin/sectors/semiconductor/pin").status_code == 401
+
+
+def test_sector_view_matches_full_report_semantics_without_market_enrichment(web) -> None:
+    client, sessions, _ = web
+    login(client)
+    complete_report(client)
+    client.post("/api/v1/auth/logout")
+
+    static_rows = client.get("/api/v1/sectors/view", params={"include_low_attention": True}).json()
+    full_rows = client.get("/api/v1/sectors", params={"include_low_attention": True}).json()
+    static_by_key = {item["sector_key"]: item for item in static_rows}
+    full_by_key = {item["sector_key"]: item for item in full_rows}
+    assert static_by_key.keys() == full_by_key.keys()
+    semantic_fields = (
+        "sector_name", "group_name", "group_order", "overall_order",
+        "latest_view", "latest_view_date", "latest_view_report_id", "latest_explicit_view",
+        "mentioned_in_latest_published", "market_support_status", "data_status",
+        "current_path_status", "current_path_status_label", "reported_status",
+        "effective_status", "effective_status_label", "effective_source_report_id",
+        "effective_source_report_date", "effective_from_trading_date",
+        "effective_display_signal", "effective_derived_from_transition", "recent_path",
+        "recent_mention_count", "is_low_attention", "is_dormant_20d",
+        "dormant_report_overlay_count", "is_pinned_for_research", "status_changed",
+    )
+    for key, static in static_by_key.items():
+        full = full_by_key[key]
+        for field in semantic_fields:
+            assert static.get(field) == full.get(field), f"{key}.{field}"
+        assert static["primary_market"] is None
+        assert static["latest_market"] is None
+        assert static["recent_10_trading_days"] == []
+
+    engine = sessions.kw["bind"]
+    query_count = 0
+
+    def count_query(*_args) -> None:
+        nonlocal query_count
+        query_count += 1
+
+    event.listen(engine, "before_cursor_execute", count_query)
+    try:
+        with sessions() as session:
+            direct_rows = sector_view_payloads(ReportRepository(session))
+    finally:
+        event.remove(engine, "before_cursor_execute", count_query)
+    assert len(direct_rows) == len(static_rows)
+    assert query_count == 11
+
+
+def test_sector_view_does_not_call_market_or_holding_enrichment(web, monkeypatch) -> None:
+    client, _, _ = web
+    login(client)
+    complete_report(client)
+
+    def forbidden(*_args, **_kwargs):
+        raise AssertionError("lightweight sector view entered market enrichment")
+
+    monkeypatch.setattr(EnhancedReportService, "latest_market", forbidden)
+    monkeypatch.setattr(EnhancedReportService, "latest_intraday", forbidden)
+    monkeypatch.setattr(EnhancedReportService, "holding_intervals_for_sector", forbidden)
+    monkeypatch.setattr("leopard_project.web.serializers.primary_history", forbidden)
+    response = client.get("/api/v1/sectors/view", params={"include_low_attention": True})
+    assert response.status_code == 200
+    assert response.json()
 
 
 def test_published_report_is_public_but_admin_mutations_require_admin(web) -> None:

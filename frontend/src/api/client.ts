@@ -108,6 +108,7 @@ export const api = {
   marketCurrent: (scope: string) => request<MarketCoreCurrentQuotes>(`/market/current/${encodeURIComponent(scope)}`),
   pathMatrix: (id: string, period = "20") => request<PathMatrix>(`/reports/${id}/path-matrix?periods=${encodeURIComponent(period)}`),
   reportAssessments: (id: string) => request<SectorAssessment[]>(`/reports/${id}/sector-assessments`),
+  sectorView: (includeLowAttention = false, lowAttentionOnly = false) => request<Sector[]>(`/sectors/view?include_low_attention=${includeLowAttention}&low_attention_only=${lowAttentionOnly}`),
   sectors: (includeLowAttention = false, lowAttentionOnly = false) => request<Sector[]>(`/sectors?include_low_attention=${includeLowAttention}&low_attention_only=${lowAttentionOnly}`),
   sector: (key: string) => request<Sector>(`/sectors/${key}`),
   sectorResearch: (key: string, pathPeriods = 20, marketDays = 20) => request<SectorResearch>(`/sectors/${key}/research?path_periods=${pathPeriods}&market_days=${marketDays}`),
