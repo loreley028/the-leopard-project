@@ -37,7 +37,6 @@ export function IslandPathMatrix({ matrix, currentMarket, period, onPeriodChange
   const [research, setResearch] = useState<SectorResearch | null>(null);
   const viewport = useRef<HTMLDivElement>(null);
   const desktopGroups = useRef(new Map<string, HTMLTableRowElement>());
-  const mobileGroups = useRef(new Map<string, HTMLElement>());
   useEffect(() => { if (viewport.current) viewport.current.scrollLeft = viewport.current.scrollWidth; }, [matrix]);
   useEffect(() => {
     setResearch(null);
@@ -57,11 +56,11 @@ export function IslandPathMatrix({ matrix, currentMarket, period, onPeriodChange
       const name = (visible[0]?.target as HTMLElement | undefined)?.dataset.groupName;
       if (name) setActiveGroup(name);
     }, { rootMargin: "-140px 0px -65% 0px", threshold: [0, 1] });
-    [...desktopGroups.current.values(), ...mobileGroups.current.values()].forEach(item => observer.observe(item));
+    desktopGroups.current.forEach(item => observer.observe(item));
     return () => observer.disconnect();
   }, [groups]);
   const jumpToGroup = (name: string) => {
-    const target = (window.matchMedia("(max-width: 760px)").matches ? mobileGroups : desktopGroups).current.get(name);
+    const target = desktopGroups.current.get(name);
     target?.scrollIntoView({ behavior: "smooth", block: "start" });
     setActiveGroup(name);
   };
@@ -86,7 +85,6 @@ export function IslandPathMatrix({ matrix, currentMarket, period, onPeriodChange
         ])}</tbody>
       </table>
     </div>
-    <div className="matrix-mobile" aria-label="移动端板块最近五个交易日行情">{groups.map(({ group_name: group, rows: items }) => <section className="matrix-mobile-group" data-group-name={group} ref={node => { if (node) mobileGroups.current.set(group, node); else mobileGroups.current.delete(group); }} key={group}><h3>{group}</h3>{items.map(row => <details key={row.sector_key}><summary>{row.sector_name}</summary><ol>{row.cells.slice(-5).map(cell => <li key={cell.trading_date}><time>{cell.trading_date}</time><button type="button" className="matrix-mobile-path-tile" onClick={() => setSelected({ ...cell, sector_name: row.sector_name, sector_key: row.sector_key })}><span className={`matrix-report-layer ${cell.path_status ? `path-${cell.path_status}` : "path-no-report"}`} style={cell.path_status_color ? { backgroundColor: cell.path_status_color } : undefined}>{reportStatus(cell, noLiveDates.has(cell.trading_date))}</span><ExactDateMarketLayer cell={{ ...cell, sector_name: row.sector_name, sector_key: row.sector_key }} /></button></li>)}</ol></details>)}</section>)}</div>
     <IslandDialog open={Boolean(selected)} title={selected ? `${selected.sector_name} · 行情 ${selected.trading_date}` : "路径详情"} onClose={() => setSelected(undefined)}>
       {selected && <div className="stack matrix-dialog-content">{noLiveDates.has(selected.trading_date) ? <p className="muted">该交易日无直播。</p> : selected.report_present ? <p><strong>报告观点：</strong>{reportStatus(selected)}<br /><small>报告日期：{selected.report_date}</small></p> : <p className="muted">该交易日无对应报告观点。</p>}{selected.market_overlay?.kind === "unavailable" && <p className="notice">该交易日暂无可靠主观察标的行情。</p>}{selected.market_overlay?.kind === "primary" && <section className="matrix-market-detail"><strong>主观察标的</strong>{selected.market_overlay.primary && <div className="matrix-primary-observation"><span>{selected.market_overlay.primary.name} · {selected.market_overlay.primary.security_code}</span><small>{selected.market_overlay.primary.role === "etf" ? "代理ETF" : "核心公司"}</small><b>收盘 {selected.market_overlay.primary.close.toFixed(2)} · {formatPct(selected.market_overlay.primary.pct_change)}</b></div>}{selected.market_overlay.instruments.length > 0 && <><strong className="matrix-related-heading">相关证券</strong><ul>{selected.market_overlay.instruments.map(item => <li key={`${item.name}-${item.trading_date}`}><span>{item.name} · {item.security_code}<small>{item.role === "etf" ? "代理ETF" : "核心公司"}</small></span><span>收盘 {item.close.toFixed(2)} · {formatPct(item.pct_change)}</span></li>)}</ul></>}<p className="matrix-disclosure">以下为相关证券逐项表现，不代表板块指数或综合收益。</p></section>}{selected.has_detailed_report ? <><p><strong>报告依据：</strong>{selectedHistory?.assessment.main_basis || "—"}</p><p><strong>观察条件：</strong>{selectedHistory?.assessment.observation_condition || "—"}</p></> : selected.report_present ? <p className="muted">该日为历史路径记录，无独立报告正文。</p> : null}<p>{selected.detail_report_id && <><Link to={`/reports/${selected.detail_report_id}`}>来源报告</Link>{selected.market_available !== false && " · "}</>}{selected.market_available !== false && <Link to={`/sectors/${selected.sector_key}`}>板块档案</Link>}</p></div>}
     </IslandDialog>
