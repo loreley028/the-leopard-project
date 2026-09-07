@@ -99,6 +99,11 @@ def test_pdf_type_header_size_and_path_validation() -> None:
         validate_pdf("..\\escape.pdf", "application/pdf", b"%PDF-ok", policy)
 
 
+def test_configured_pdf_upload_limit_is_20_mib() -> None:
+    policy = UploadPolicy.load()
+    assert policy.max_file_size_bytes == 20 * 1024 * 1024
+
+
 def test_auth_cookie_roles_and_no_registration(web) -> None:
     client, _, _ = web
     assert client.get("/api/v1/auth/me").status_code == 401
