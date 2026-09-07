@@ -29,7 +29,7 @@ const readText = (file: File) => new Promise<string>((resolve, reject) => {
 
 function previewWebsiteMd(text: string): MdPreview {
   const activeObjectCount = Number(scalar(text, "active_object_count"));
-  const updatedSectorCount = (fencedSection(text, 4).match(/^\s*-\s+sector:/gm) ?? []).length;
+  const updatedSectorCount = (fencedSection(text, 4).match(/^\s*-\s+["']?sector["']?\s*:/gm) ?? []).length;
   const unmentionedSectorCount = (fencedSection(text, 5).match(/^\s*-\s+["']/gm) ?? []).length;
   const schema = scalar(text, "schema");
   const schemaVersion = scalar(text, "schema_version");
