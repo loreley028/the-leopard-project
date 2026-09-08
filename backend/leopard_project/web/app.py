@@ -3,9 +3,7 @@ from __future__ import annotations
 import os
 import json
 import hashlib
-import struct
 import threading
-import zlib
 from dataclasses import dataclass
 from datetime import date, timedelta, datetime, timezone
 from pathlib import Path
@@ -42,6 +40,7 @@ from .security_proxy_viewer import OfficialBoardAvailability, SecurityProxyViewe
 from .live_market_anchor import LiveMarketAnchorCache, LiveShanghaiMarketAnchorService
 from .market_core import MarketCoreReadService
 from .viewer_cache import ViewerResponseCache, ViewerResponseCacheMiddleware
+from .pdf_preview import preview_page_count, preview_page_png
 from leopard_project.providers.tencent_standard_quote import TencentStandardSecurityQuoteProvider
 from leopard_project.security_proxy_observation import SecurityProxyObservationService
 from leopard_project.live_market_anchor_daily import SHANGHAI_COMPOSITE_SYMBOL
@@ -50,35 +49,6 @@ from leopard_project.daily_market_advance import market_freshness_status
 
 COOKIE_NAME = "leopard_session"
 SHANGHAI = ZoneInfo("Asia/Shanghai")
-
-
-def _png_chunk(kind: bytes, data: bytes) -> bytes:
-    return struct.pack(">I", len(data)) + kind + data + struct.pack(">I", zlib.crc32(kind + data) & 0xFFFFFFFF)
-
-
-def _pdf_bitmap_png(bitmap) -> bytes:
-    """Encode PDFium's in-memory bitmap without persisting a derived preview."""
-    mode = bitmap.mode
-    source_channels = bitmap.n_channels
-    if mode not in {"BGR", "BGRA", "BGRX", "RGB", "RGBA"}:
-        raise WebDomainError("pdf_preview_unavailable", f"Unsupported PDF preview bitmap mode: {mode}", 422)
-    alpha = mode in {"BGRA", "RGBA"}
-    output_channels = 4 if alpha else 3
-    raw = bytes(bitmap.buffer)
-    scanlines = bytearray()
-    for row_index in range(bitmap.height):
-        row = raw[row_index * bitmap.stride : row_index * bitmap.stride + bitmap.width * source_channels]
-        scanlines.append(0)
-        for offset in range(0, len(row), source_channels):
-            pixel = row[offset : offset + source_channels]
-            if mode.startswith("BGR"):
-                scanlines.extend((pixel[2], pixel[1], pixel[0]))
-            else:
-                scanlines.extend(pixel[:3])
-            if alpha:
-                scanlines.append(pixel[3])
-    header = struct.pack(">IIBBBBB", bitmap.width, bitmap.height, 8, 6 if output_channels == 4 else 2, 0, 0, 0)
-    return b"\x89PNG\r\n\x1a\n" + _png_chunk(b"IHDR", header) + _png_chunk(b"IDAT", zlib.compress(bytes(scanlines), 6)) + _png_chunk(b"IEND", b"")
 
 
 @dataclass(frozen=True)
@@ -377,13 +347,7 @@ def create_app(settings: WebSettings | None = None, session_factory: sessionmake
         item = ReportRepository(session).by_id(report_id)
         if item is None or (item.status != ReportStatus.PUBLISHED.value and (current is None or current.role != "admin")):
             raise WebDomainError("report_not_found", "Published report not found", 404)
-        from pypdfium2 import PdfDocument
-
-        document = PdfDocument(settings.upload_dir / item.file.storage_filename)
-        try:
-            page_count = len(document)
-        finally:
-            document.close()
+        page_count = preview_page_count(settings.upload_dir / item.file.storage_filename)
         return {
             "page_count": page_count,
             "page_urls": [f"/api/v1/reports/{item.id}/pdf/preview/pages/{page}" for page in range(1, page_count + 1)],
@@ -401,16 +365,7 @@ def create_app(settings: WebSettings | None = None, session_factory: sessionmake
         item = ReportRepository(session).by_id(report_id)
         if item is None or (item.status != ReportStatus.PUBLISHED.value and (current is None or current.role != "admin")):
             raise WebDomainError("report_not_found", "Published report not found", 404)
-        from pypdfium2 import PdfDocument
-
-        document = PdfDocument(settings.upload_dir / item.file.storage_filename)
-        try:
-            if page_number < 1 or page_number > len(document):
-                raise WebDomainError("pdf_page_not_found", "PDF page not found", 404)
-            bitmap = document[page_number - 1].render(scale=1.6)
-            png = _pdf_bitmap_png(bitmap)
-        finally:
-            document.close()
+        png = preview_page_png(settings.upload_dir / item.file.storage_filename, page_number)
         return Response(
             png, media_type="image/png",
             headers={"Cache-Control": "private, max-age=300", "Content-Disposition": "inline"},
@@ -426,6 +381,18 @@ def create_app(settings: WebSettings | None = None, session_factory: sessionmake
             media_type="application/pdf",
             filename=f"report-{item.report_date}.pdf",
             content_disposition_type="attachment",
+        )
+
+    @app.get("/api/v1/reports/{report_id}/pdf/open")
+    def report_pdf_open(report_id: str, current: Principal | None = Depends(optional_principal), session: Session = Depends(db_session)) -> FileResponse:
+        item = ReportRepository(session).by_id(report_id)
+        if item is None or (item.status != ReportStatus.PUBLISHED.value and (current is None or current.role != "admin")):
+            raise WebDomainError("report_not_found", "Published report not found", 404)
+        return FileResponse(
+            settings.upload_dir / item.file.storage_filename,
+            media_type="application/pdf",
+            filename=f"report-{item.report_date}.pdf",
+            content_disposition_type="inline",
         )
 
     @app.get("/api/v1/sectors")
