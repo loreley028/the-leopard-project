@@ -156,6 +156,36 @@ afterEach(() => vi.unstubAllGlobals());
 
 describe("Viewer research pages", () => {
   beforeEach(() => mockApi());
+  it("switches report assessment presentation without refetching and preserves long names and palette", async () => {
+    let mobile = true;
+    let resize = () => {};
+    vi.stubGlobal("matchMedia", () => ({ get matches() { return mobile; }, addEventListener: (_: string, listener: () => void) => { resize = listener; }, removeEventListener: vi.fn() }));
+    mockApi({ enhancedReport: { ...enhanced, sector_assessments: [{ ...assessment, sector_name: "农业/养殖" }] } });
+    renderAt("/");
+    const card = await screen.findByRole("article", { name: "农业/养殖板块观点" });
+    expect(within(card).getByRole("heading", { name: "农业/养殖" })).toBeInTheDocument();
+    expect(card.querySelector("header .path-chip")).toHaveClass("path-hold");
+    expect(within(card).getByText("暂无数据")).toBeInTheDocument();
+    expect(card.querySelector(".mobile-assessment-market dl")).toBeNull();
+    expect(document.querySelector(".pdf-assessment-table")).toBeNull();
+    mobile = false;
+    fireEvent(window, new Event("resize"));
+    await import("@testing-library/react").then(({ act }) => act(() => resize()));
+    expect(screen.getByRole("table", { name: "B1 继续持有" })).toBeInTheDocument();
+    expect(document.querySelector(".mobile-assessment-card")).toBeNull();
+    expect(vi.mocked(fetch).mock.calls.filter(([url]) => String(url).endsWith("/reports/report-1/enhanced"))).toHaveLength(1);
+  });
+  it("shows only available mobile market fields including zero", async () => {
+    vi.stubGlobal("matchMedia", () => ({ matches: true, addEventListener: vi.fn(), removeEventListener: vi.fn() }));
+    mockApi({ enhancedReport: { ...enhanced, sector_assessments: [{ ...assessment, market: { ...sectors[0].latest_market!, daily_pct_change: 0, return_5d: null, return_20d: null } }] } });
+    renderAt("/");
+    const card = await screen.findByRole("article", { name: "半导体板块观点" });
+    const market = card.querySelector(".mobile-assessment-market")!;
+    expect(market).toHaveTextContent("0.00%");
+    expect(market).not.toHaveTextContent("近5日");
+    expect(market).not.toHaveTextContent("近20日");
+    expect(market).not.toHaveTextContent("—");
+  });
   it("loads route pages as separate chunks instead of putting Admin in the viewer entry", () => {
     const source = readFileSync(resolve(process.cwd(), "src/App.tsx"), "utf8");
     expect(source).toContain("lazy(() => import(\"./pages/HomePage\")");
@@ -214,7 +244,13 @@ describe("Viewer research pages", () => {
   it("uses one responsive sector DOM for desktop table and mobile cards", async () => { renderAt("/sectors"); const table = await screen.findByRole("table", { name: /板块研究档案/ }); expect(table.querySelectorAll(".sector-card-row")).toHaveLength(67); expect(document.querySelectorAll(".sector-table")).toHaveLength(1); const css = readFileSync(resolve(process.cwd(), "src/styles/global.css"), "utf8"); expect(css).toContain("/* Mobile Web V1: one responsive Viewer DOM, with desktop behavior unchanged. */"); expect(css).toMatch(/@media \(max-width: 820px\)[\s\S]*\.sector-table \{[\s\S]*min-width: 0/); expect(css).toMatch(/\.sector-card-row \{[\s\S]*grid-template-columns: repeat\(2, minmax\(0, 1fr\)\)/); expect(css).toMatch(/\.sector-table \.mini-path-strip \{[\s\S]*overflow-x: auto/); });
   it("collapses mobile advanced filters without changing filter state", async () => { const user = userEvent.setup(); renderAt("/sectors"); const toggle = await screen.findByRole("button", { name: /筛选/ }); expect(toggle).toHaveAttribute("aria-expanded", "false"); expect(toggle).not.toHaveClass("active"); await user.click(toggle); expect(toggle).toHaveAttribute("aria-expanded", "true"); expect(toggle.closest(".sector-filter-area")).toHaveClass("mobile-filters-open"); await user.selectOptions(screen.getByLabelText("路径状态"), "watch"); expect(toggle).toHaveTextContent("筛选 · 1"); expect(toggle).toHaveClass("active"); await user.click(toggle); expect(toggle).toHaveAttribute("aria-expanded", "false"); expect(screen.getByLabelText("路径状态")).toHaveValue("watch"); });
   it("promotes the effective status in the mobile card while retaining both status facts", async () => { renderAt("/sectors"); const sector = await screen.findByRole("link", { name: "恒生科技" }); const card = sector.closest(".sector-card-row"); expect(card?.querySelector(".mobile-card-status")).toHaveTextContent("观察"); expect(card?.querySelector(".mobile-card-status")).toHaveClass("path-watch"); expect(card?.querySelector(".status-current-detail")).toHaveTextContent("本期观察"); expect(card?.querySelector(".status-effective-detail")).toHaveTextContent("有效观察"); expect(card?.querySelector(".status-pair")).toHaveAttribute("data-statuses-match", "true"); const css = readFileSync(resolve(process.cwd(), "src/styles/global.css"), "utf8"); expect(css).toMatch(/\.status-pair\[data-statuses-match="true"\] \.status-effective-detail \{ display: none; \}/); });
-  it("keeps only the report tabs sticky on mobile", () => { const shellCss = readFileSync(resolve(process.cwd(), "src/components/island/island.css"), "utf8"); const globalCss = readFileSync(resolve(process.cwd(), "src/styles/global.css"), "utf8"); expect(shellCss).toMatch(/@media \(max-width: 820px\)[\s\S]*\.island-nav \{[\s\S]*position: static/); expect(globalCss).toMatch(/@media \(max-width: 820px\)[\s\S]*\.report-tabs \{[\s\S]*top: max\(\.4rem, env\(safe-area-inset-top\)\)/); expect(globalCss).toMatch(/\.enhanced-report > section \{ scroll-margin-top: 5rem; \}/); });
+  it("keeps one mobile sticky navigation with clearance for sections, cards and group headings", () => {
+    const shellCss = readFileSync(resolve(process.cwd(), "src/components/island/island.css"), "utf8");
+    const css = readFileSync(resolve(process.cwd(), "src/styles/global.css"), "utf8");
+    expect(shellCss).toMatch(/@media \(max-width: 820px\)[\s\S]*\.island-nav \{[\s\S]*position: static/);
+    expect(css).toContain("top: max(.4rem, env(safe-area-inset-top))");
+    expect(css).toMatch(/\.enhanced-report > section,[\s\S]*\.mobile-assessment-card,[\s\S]*\.mobile-assessment-group > h3 \{ scroll-margin-top: var\(--report-nav-clearance, 5rem\)/);
+  });
   it("keeps the complete lazy-loaded history matrix as one scrollable mobile table", async () => { renderAt("/reports/report-1"); expect(await screen.findByRole("table", { name: /板块历史路径矩阵/ })).toBeInTheDocument(); expect(document.querySelectorAll(".matrix-desktop .path-matrix")).toHaveLength(1); expect(document.querySelector(".matrix-mobile")).toBeNull(); const source = readFileSync(resolve(process.cwd(), "src/components/island/IslandPathMatrix.tsx"), "utf8"); expect(source).not.toContain("移动端板块最近五个交易日行情"); const css = readFileSync(resolve(process.cwd(), "src/styles/global.css"), "utf8"); expect(css).toMatch(/\.path-matrix-shell \.matrix-desktop \{ display: block; \}/); expect(css).toMatch(/\.matrix-viewport \{[\s\S]*overflow: auto/); });
   it("marks the report library for single-column mobile report cards", async () => { renderAt("/reports"); const table = await screen.findByRole("table", { name: "已发布报告" }); expect(table.closest(".reports-library")).not.toBeNull(); const css = readFileSync(resolve(process.cwd(), "src/styles/global.css"), "utf8"); expect(css).toMatch(/\.reports-library tr \{[\s\S]*grid-template-columns: repeat\(2, minmax\(0, 1fr\)\)/); expect(css).toMatch(/\.reports-library td:nth-child\(7\) a \{[\s\S]*min-height: 44px/); });
   it("keeps the public sector catalog when an anonymous auth probe returns 401", async () => { const normalFetch = globalThis.fetch; vi.stubGlobal("fetch", vi.fn((input: RequestInfo | URL) => String(input).endsWith("/auth/me") ? response({ error: { code: "authentication_required", message: "anonymous" } }, 401) : normalFetch(input))); renderAt("/sectors", null); const table = await screen.findByRole("table", { name: /板块研究档案/ }); expect(within(table).getAllByRole("row")).toHaveLength(76); expect(screen.getByText("实时行情 8/66")).toBeInTheDocument(); });

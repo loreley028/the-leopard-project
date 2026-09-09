@@ -110,7 +110,29 @@ function MarketStrip({ market, holding }: { market: MarketSnapshot | null; holdi
   </div>;
 }
 
-function AssessmentTable({ title, items }: { title: string; items: SectorAssessment[] }) {
+function MobileAssessmentMarket({ item }: { item: SectorAssessment }) {
+  const market = item.market;
+  const fields = [
+    ["日期", market?.trade_date],
+    ...([['当日', market?.daily_pct_change], ['近5日', market?.return_5d], ['近10日', market?.return_10d], ['近20日', market?.return_20d], ['相对MA5', market?.close_vs_ma5_pct], ['相对MA20', market?.close_vs_ma20_pct], ['本轮持有', item.active_holding_interval?.status === 'active' ? item.active_holding_interval.return_pct : null]] as const).map(([label, value]) => [label, value == null ? null : pct(value)]),
+    ...([['量/MA5', market?.volume_ratio_5d], ['量/MA20', market?.volume_ratio_20d]] as const).map(([label, value]) => [label, value == null ? null : ratio(value)]),
+  ].filter(([, value]) => value != null && value !== '');
+  return <section className="mobile-assessment-market"><h5>行情辅助</h5>{fields.length ? <dl>{fields.map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{value}</dd></div>)}</dl> : <p className="muted">暂无数据</p>}</section>;
+}
+
+function AssessmentTable({ title, items, mobile }: { title: string; items: SectorAssessment[]; mobile: boolean }) {
+  if (mobile) return <section className="pdf-assessment-group mobile-assessment-group"><h3>{title}</h3>{items.map(item => {
+    const detail = judgementDetail(item.current_path_status, item.current_judgement);
+    return <article className="mobile-assessment-card" key={item.id} aria-label={`${item.sector_name}板块观点`}>
+      <header><h4><Link to={`/sectors/${item.sector_key}`}>{item.sector_name}</Link></h4><span className={`path-chip path-${item.current_path_status}`}>{item.path_status_label}</span></header>
+      {item.recent_path_summary && <p className="mobile-assessment-path">{item.recent_path_summary} · 最近转折</p>}
+      {detail && <p className="mobile-assessment-judgement">{detail}</p>}
+      <section><h5>主要依据</h5><p>{item.main_basis || "—"}</p></section>
+      <section><h5>观察条件</h5><p>{item.observation_condition || "—"}</p></section>
+      <MobileAssessmentMarket item={item} />
+      <a className="mobile-assessment-history" href="#path">查看历史路径</a>
+    </article>;
+  })}</section>;
   return <section className="pdf-assessment-group"><h3>{title}</h3><div className="table-wrap"><table className="pdf-assessment-table"><caption className="sr-only">{title}</caption>
     <thead><tr><th>板块</th><th>历史路径（最近转折）</th><th>当期判断</th><th>主要依据</th><th>观察条件</th></tr></thead>
     <tbody>{items.map(item => { const detail = judgementDetail(item.current_path_status, item.current_judgement); return <Fragment key={item.id}><tr>
@@ -124,6 +146,15 @@ function AssessmentTable({ title, items }: { title: string; items: SectorAssessm
 }
 
 export function ReportDetailPage({ latest = false }: { latest?: boolean }) {
+  const [mobileAssessments, setMobileAssessments] = useState(() => typeof window.matchMedia === "function" && window.matchMedia("(max-width: 820px)").matches);
+  useEffect(() => {
+    if (typeof window.matchMedia !== "function") return;
+    const query = window.matchMedia("(max-width: 820px)");
+    const update = () => setMobileAssessments(query.matches);
+    update();
+    query.addEventListener("change", update);
+    return () => query.removeEventListener("change", update);
+  }, []);
   const { reportId: routeReportId = "" } = useParams();
   const location = useLocation();
   const [latestReportId, setLatestReportId] = useState("");
@@ -137,7 +168,53 @@ export function ReportDetailPage({ latest = false }: { latest?: boolean }) {
   const [matrixCurrent, setMatrixCurrent] = useState<MarketCoreCurrentQuotes | null>(null);
   const [previewLoaded, setPreviewLoaded] = useState(false);
   const [matrixRequestedFor, setMatrixRequestedFor] = useState("");
+  const reportTabsRef = useRef<HTMLElement | null>(null);
   const pathSectionRef = useRef<HTMLElement | null>(null);
+  useEffect(() => {
+    const tabs = reportTabsRef.current;
+    const article = tabs?.parentElement;
+    if (!mobileAssessments || !tabs || !article) return;
+    const updateOffset = () => {
+      const offset = tabs.getBoundingClientRect().height + (parseFloat(getComputedStyle(tabs).top) || 0) + 12;
+      article.style.setProperty("--report-nav-clearance", `${offset}px`);
+    };
+    updateOffset();
+    const observer = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(updateOffset);
+    observer?.observe(tabs);
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    let touching = false;
+    const revealHeading = () => {
+      if (touching) return;
+      const nav = tabs.getBoundingClientRect();
+      if (nav.top > (parseFloat(getComputedStyle(tabs).top) || 0) + 1) return;
+      const heading = Array.from(article.querySelectorAll(".mobile-assessment-card > header, .mobile-assessment-group > h3")).find(node => {
+        const bounds = node.getBoundingClientRect();
+        return bounds.top < nav.bottom + 11 && bounds.bottom > nav.top;
+      });
+      if (heading) window.scrollBy({ top: heading.getBoundingClientRect().top - nav.bottom - 12, behavior: "instant" });
+    };
+    const onScroll = () => { clearTimeout(timer); timer = setTimeout(revealHeading, 180); };
+    const event = "onscrollend" in document ? "scrollend" : "scroll";
+    const listener = event === "scrollend" ? revealHeading : onScroll;
+    const touchStart = () => { touching = true; clearTimeout(timer); };
+    const touchEnd = (touch: TouchEvent) => {
+      touching = touch.touches.length > 0;
+      if (!touching && event === "scroll") onScroll();
+    };
+    document.addEventListener(event, listener, { passive: true });
+    document.addEventListener("touchstart", touchStart, { passive: true });
+    document.addEventListener("touchend", touchEnd, { passive: true });
+    document.addEventListener("touchcancel", touchEnd, { passive: true });
+    return () => {
+      observer?.disconnect();
+      clearTimeout(timer);
+      document.removeEventListener(event, listener);
+      document.removeEventListener("touchstart", touchStart);
+      document.removeEventListener("touchend", touchEnd);
+      document.removeEventListener("touchcancel", touchEnd);
+      article.style.removeProperty("--report-nav-clearance");
+    };
+  }, [mobileAssessments, enhanced]);
   useEffect(() => { if (latest) api.latestReport().then(item => { setLatestReport(item); setLatestReportId(item.id); }).catch(() => setEnhanced(null)); }, [latest]);
   useEffect(() => { if (reportId) api.enhancedReport(reportId).then(setEnhanced).catch(() => setEnhanced(null)); }, [reportId]);
   useEffect(() => { api.marketShanghai().then(setMarketCoreShanghai).catch(() => setMarketCoreShanghai(null)); }, []);
@@ -205,10 +282,10 @@ export function ReportDetailPage({ latest = false }: { latest?: boolean }) {
   return <article className="page enhanced-report">
     {!latest && <nav className="breadcrumbs" aria-label="面包屑"><Link to={origin === "报告库" ? "/reports" : "/"}>{origin}</Link><span>/</span><span>{report.report_date}</span></nav>}
     <header className="report-header"><div><IslandStatusBadge status={report.status} /><p className="eyebrow">直播总结动态加强版 · {chineseDate(report.report_date)}</p><h1>{report.title}</h1></div><div className="date-contract"><span>报告日期<strong>{report.report_date}</strong></span><span>报告核心观点<strong>攻防线与板块观点</strong></span></div></header>
-    <nav className="report-tabs" aria-label="增强报告章节"><a href="#overview">报告概览</a><a href="#path" onClick={() => setMatrixRequestedFor(reportId)}>历史路径</a><a href="#assessments">板块观点</a><a href="#source">原始PDF</a></nav>
+    <nav ref={reportTabsRef} className="report-tabs" aria-label="增强报告章节"><a href="#overview">报告概览</a><a href="#path" onClick={() => setMatrixRequestedFor(reportId)}>历史路径</a><a href="#assessments">板块观点</a><a href="#source">原始PDF</a></nav>
     <section id="overview"><h2>报告概览</h2><ReportOverview enhanced={enhanced} market={marketCoreShanghai} broad={broadMarket} /></section>
     <section id="path" ref={pathSectionRef}><h2>历史路径矩阵</h2>{matrix ? <Suspense fallback={<p>路径矩阵组件加载中…</p>}><IslandPathMatrix matrix={matrix} currentMarket={matrixCurrent} period={period} onPeriodChange={setPeriod} /></Suspense> : <p>{matrixRequestedFor === reportId ? "路径矩阵加载中…" : "滚动到此处后加载路径矩阵。"}</p>}</section>
-    <section id="assessments"><h2>{chineseDate(report.report_date)}板块观点详细汇总</h2><p className="muted">按本期结构化报告事实分组展示五列主体；路径历史与详细观点分别保存。</p>{GROUP_ORDER.map(group => grouped.get(group)?.length ? <AssessmentTable key={group} title={group} items={grouped.get(group)!} /> : null)}<details className="advanced-review"><summary>本期未提及 {unmentioned} 个板块</summary><p>“未提”只表示本期报告没有明确观点，不代表既有观点失效。</p></details></section>
+    <section id="assessments"><h2>{chineseDate(report.report_date)}板块观点详细汇总</h2><p className="muted">按本期结构化报告事实分组展示五列主体；路径历史与详细观点分别保存。</p>{GROUP_ORDER.map(group => grouped.get(group)?.length ? <AssessmentTable key={group} title={group} items={grouped.get(group)!} mobile={mobileAssessments} /> : null)}<details className="advanced-review"><summary>本期未提及 {unmentioned} 个板块</summary><p>“未提”只表示本期报告没有明确观点，不代表既有观点失效。</p></details></section>
     <section id="source"><h2>原始PDF</h2>{previewLoaded ? <Suspense fallback={<p>PDF预览组件加载中…</p>}><PdfPagePreview reportId={report.id} /></Suspense> : <div className="pdf-preview-placeholder"><p>打开或刷新报告不会请求PDF；点击后仅加载内存渲染的逐页图片，不会写入下载目录。</p><button type="button" onClick={() => setPreviewLoaded(true)}>加载逐页预览</button></div>}<p><a href={publicResourcePath(report.pdf_download_url)}>下载原始PDF</a></p><p>{enhanced.data_notice} 来源追溯由Admin保留，Viewer正文不重复展示原文摘录。</p></section>
   </article>;
 }
