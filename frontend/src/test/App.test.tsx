@@ -255,6 +255,36 @@ describe("Viewer research pages", () => {
 
 describe("Admin workflow and permissions", () => {
   beforeEach(() => mockApi());
+  it.each(["\n", "\r\n"])("accepts September 9 style blank lines and unquoted lists (%j)", async newline => {
+    const user = userEvent.setup();
+    renderAt("/admin/reports/new", { username: "admin", role: "admin" });
+    await screen.findByRole("button", { name: "上传并自动发布" });
+    const md = websiteMdFixture.replace('"2026-09-01"', "'2026-09-09'")
+      .replaceAll("\n```yaml", "\n\n```yaml")
+      .replace('  - "未提55"', "  # 列表备注，不计为板块\n  - # 空列表项，不计为板块")
+      .replace('sector_updates:\n', 'sector_updates:\n- sector: CPO\n')
+      .replace(/ {2}- "(未提\d+)"/g, "- $1")
+      .replaceAll("\n", newline);
+    const inputs = Array.from(document.querySelectorAll('input[type="file"]')) as HTMLInputElement[];
+    await user.upload(inputs[0], new File(["%PDF-fixture"], "report.pdf", { type: "application/pdf" }));
+    await user.upload(inputs[1], new File([md], "report.md", { type: "text/markdown" }));
+    expect(await screen.findByText("客户端预检通过，等待服务端严格校验")).toBeInTheDocument();
+    expect(screen.getByText("updated_sector_count").parentElement).toHaveTextContent("17");
+    expect(screen.getByText("unmentioned_sector_count").parentElement).toHaveTextContent("54");
+    await user.click(screen.getByRole("button", { name: "上传并自动发布" }));
+    await waitFor(() => expect(vi.mocked(fetch).mock.calls.filter(([url]) => String(url).endsWith("/admin/reports/interpret"))).toHaveLength(1));
+  });
+  it("still blocks a genuinely incomplete MD count", async () => {
+    const user = userEvent.setup();
+    renderAt("/admin/reports/new", { username: "admin", role: "admin" });
+    await screen.findByRole("button", { name: "上传并自动发布" });
+    const inputs = Array.from(document.querySelectorAll('input[type="file"]')) as HTMLInputElement[];
+    await user.upload(inputs[0], new File(["%PDF-fixture"], "report.pdf", { type: "application/pdf" }));
+    await user.upload(inputs[1], new File([websiteMdFixture.replace('  - "未提55"', '')], "report.md", { type: "text/markdown" }));
+    expect(await screen.findByText("客户端预检未通过")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "上传并自动发布" }));
+    expect(vi.mocked(fetch).mock.calls.some(([url]) => String(url).endsWith("/admin/reports/interpret"))).toBe(false);
+  });
   it("redirects a non-admin away from admin routes", async () => { renderAt("/admin", { username: "viewer", role: "viewer" }); expect(await screen.findByRole("heading", { name: "Admin 登录" })).toBeInTheDocument(); });
   it("allows an unauthenticated visitor to read reports", async () => { renderAt("/reports", null); expect(await screen.findByRole("table", { name: "已发布报告" })).toBeInTheDocument(); });
   it("keeps the Admin entry low-profile but available to anonymous readers", async () => { renderAt("/", null); expect(await screen.findByRole("link", { name: "Admin" })).toHaveAttribute("href", "/admin/login"); });

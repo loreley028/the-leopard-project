@@ -19,7 +19,7 @@ interface MdPreview {
 }
 
 const scalar = (text: string, key: string) => text.match(new RegExp(`^${key}:\\s*["']?([^"'\\n]+)`, "m"))?.[1]?.trim() ?? "";
-const fencedSection = (text: string, headingNumber: number) => text.match(new RegExp(`##\\s+${headingNumber}\\.[^\\n]*\\n\`\`\`yaml\\s*\\n([\\s\\S]*?)\\n\`\`\``, "i"))?.[1] ?? "";
+const fencedSection = (text: string, headingNumber: number) => text.match(new RegExp(`##\\s+${headingNumber}\\.[^\\n]*\\n\\s*\`\`\`ya?ml[^\\S\\r\\n]*\\r?\\n([\\s\\S]*?)\\r?\\n\`\`\``, "i"))?.[1] ?? "";
 const readText = (file: File) => new Promise<string>((resolve, reject) => {
   const reader = new FileReader();
   reader.onload = () => resolve(String(reader.result ?? ""));
@@ -30,7 +30,7 @@ const readText = (file: File) => new Promise<string>((resolve, reject) => {
 function previewWebsiteMd(text: string): MdPreview {
   const activeObjectCount = Number(scalar(text, "active_object_count"));
   const updatedSectorCount = (fencedSection(text, 4).match(/^\s*-\s+["']?sector["']?\s*:/gm) ?? []).length;
-  const unmentionedSectorCount = (fencedSection(text, 5).match(/^\s*-\s+["']/gm) ?? []).length;
+  const unmentionedSectorCount = (fencedSection(text, 5).match(/^[ \t]*-[ \t]+[^\s#][^\r\n]*\r?$/gm) ?? []).length;
   const schema = scalar(text, "schema");
   const schemaVersion = scalar(text, "schema_version");
   const valid = schema === "leopard-website-md" && schemaVersion === "1.0" && updatedSectorCount + unmentionedSectorCount === activeObjectCount;
