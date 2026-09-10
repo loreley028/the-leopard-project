@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "../routes/router";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -158,19 +158,29 @@ describe("Viewer research pages", () => {
   beforeEach(() => mockApi());
   it("switches report assessment presentation without refetching and preserves long names and palette", async () => {
     let mobile = true;
-    let resize = () => {};
-    vi.stubGlobal("matchMedia", () => ({ get matches() { return mobile; }, addEventListener: (_: string, listener: () => void) => { resize = listener; }, removeEventListener: vi.fn() }));
+    const resizeListeners = new Set<() => void>();
+    vi.stubGlobal("matchMedia", () => ({ get matches() { return mobile; }, addEventListener: (_: string, listener: () => void) => { resizeListeners.add(listener); }, removeEventListener: (_: string, listener: () => void) => { resizeListeners.delete(listener); } }));
     mockApi({ enhancedReport: { ...enhanced, sector_assessments: [{ ...assessment, sector_name: "农业/养殖" }] } });
+    const originalFetch = vi.mocked(fetch).getMockImplementation()!;
+    let resolveEnhanced!: (value: Response) => void;
+    const enhancedResponse = new Promise<Response>(resolve => { resolveEnhanced = resolve; });
+    vi.mocked(fetch).mockImplementation((...args) => String(args[0]).endsWith("/reports/report-1/enhanced") ? enhancedResponse : originalFetch(...args));
     renderAt("/");
-    const card = await screen.findByRole("article", { name: "农业/养殖板块观点" });
+    // This test checks presentation, not the cold lazy-route loading budget.
+    await screen.findByRole("heading", { level: 1, name: report.title });
+    await waitFor(() => expect(vi.mocked(fetch).mock.calls.some(([url]) => String(url).endsWith("/reports/report-1/enhanced"))).toBe(true));
+    expect(screen.getByRole("status")).toHaveTextContent("详细报告与行情辅助加载中");
+    await act(async () => {
+      resolveEnhanced(await response({ ...enhanced, sector_assessments: [{ ...assessment, sector_name: "农业/养殖" }] }));
+    });
+    expect(screen.getByRole("navigation", { name: "增强报告章节" })).toBeInTheDocument();
+    const card = screen.getByRole("article", { name: "农业/养殖板块观点" });
     expect(within(card).getByRole("heading", { name: "农业/养殖" })).toBeInTheDocument();
     expect(card.querySelector("header .path-chip")).toHaveClass("path-hold");
     expect(within(card).getByText("暂无数据")).toBeInTheDocument();
     expect(card.querySelector(".mobile-assessment-market dl")).toBeNull();
     expect(document.querySelector(".pdf-assessment-table")).toBeNull();
-    mobile = false;
-    fireEvent(window, new Event("resize"));
-    await import("@testing-library/react").then(({ act }) => act(() => resize()));
+    act(() => { mobile = false; resizeListeners.forEach(listener => listener()); });
     expect(screen.getByRole("table", { name: "B1 继续持有" })).toBeInTheDocument();
     expect(document.querySelector(".mobile-assessment-card")).toBeNull();
     expect(vi.mocked(fetch).mock.calls.filter(([url]) => String(url).endsWith("/reports/report-1/enhanced"))).toHaveLength(1);
