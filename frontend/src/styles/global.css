@@ -857,7 +857,16 @@ button, a, input, textarea, [tabindex] { outline-offset: 4px; }
   .path-matrix-shell .matrix-controls label { min-width: 0; }
   .path-matrix-shell .matrix-desktop { display: block; }
   .path-matrix-shell .matrix-mobile { display: none; }
-  .path-matrix { --matrix-sector-column: 128px; --matrix-current-column: 128px; }
+  .path-matrix { --matrix-sector-column: 132px; --matrix-date-column: 60px; }
+  .path-matrix[data-context="combined"] .sticky-sector { text-align: left; white-space: normal; overflow-wrap: normal; word-break: normal; border-right: 1px solid #9db391; }
+  .path-matrix[data-context="combined"] thead .sticky-sector { z-index: 6; }
+  .path-matrix[data-context="combined"] .matrix-group-label { background: #e7efdc; }
+  .path-matrix[data-context="combined"] .matrix-current-cell { padding: .3rem 0 0; min-height: 0; gap: .25rem; }
+  .path-matrix[data-context="combined"] .matrix-current-security-top { gap: .15rem; }
+  .path-matrix[data-context="combined"] .matrix-current-security-top b { font-weight: 500; }
+  .path-matrix[data-context="combined"] .path-cell { min-width: 0; }
+  .path-matrix[data-context="combined"] .latest-column { border-right-width: 1px; }
+  .path-matrix[data-context="combined"] .matrix-market-layer { padding-inline: .1rem; }
   .matrix-viewport { max-height: 68vh; overscroll-behavior-inline: contain; }
 }
 
