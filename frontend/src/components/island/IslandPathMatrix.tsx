@@ -44,10 +44,18 @@ export function IslandPathMatrix({ matrix, currentMarket, period, onPeriodChange
     update();
     return () => query.removeEventListener("change", update);
   }, []);
-  const dates = useMemo(() => mobile ? [...matrix.dates].reverse() : matrix.dates, [matrix.dates, mobile]);
+  const dates = matrix.dates;
   const viewport = useRef<HTMLDivElement>(null);
+  const mobileAnchored = useRef(false);
   const desktopGroups = useRef(new Map<string, HTMLTableRowElement>());
-  useEffect(() => { if (viewport.current) viewport.current.scrollLeft = mobile ? 0 : viewport.current.scrollWidth; }, [matrix, mobile]);
+  useEffect(() => {
+    if (!viewport.current) return;
+    if (mobile) {
+      if (mobileAnchored.current || dates.length === 0) return;
+      mobileAnchored.current = true;
+    }
+    viewport.current.scrollLeft = viewport.current.scrollWidth;
+  }, [matrix, mobile, dates.length]);
   useEffect(() => {
     setResearch(null);
     if (selected?.detail_report_id) void api.sectorResearch(selected.sector_key).then(setResearch).catch(() => setResearch(null));
@@ -91,7 +99,7 @@ export function IslandPathMatrix({ matrix, currentMarket, period, onPeriodChange
       <table className="path-matrix" data-column-model="fixed" data-context={mobile ? "combined" : "separate"}><colgroup><col className="matrix-sector-column" />{!mobile && <col className="matrix-current-column" />}{dates.map(item => <col className="matrix-date-column" key={item.trading_date} />)}</colgroup><caption className="sr-only">{matrix.caption}</caption><thead><tr><th className="sticky-sector" scope="col">{mobile ? "板块 · 当前行情" : "板块"}</th>{!mobile && <th className="sticky-current matrix-current-heading" scope="col">当前行情<small>{currentMarket ? `${currentMarket.snapshot_ttl_seconds ?? 60}s 刷新` : "加载中"}</small></th>}{dates.map(item => <th className={item.trading_date === matrix.dates.at(-1)?.trading_date ? "latest-column" : ""} scope="col" key={item.trading_date} title={`完整交易日 ${item.trading_date} ${item.weekday}`}><span className="matrix-date-header">{shortDate(item.trading_date)}{!mobile && <> <b>{shortWeekday(item.weekday)}</b></>}</span></th>)}</tr></thead>
         <tbody>{groups.flatMap(({ group_name: group, rows: items }) => [
           <tr className="matrix-group" data-group-name={group} ref={node => { if (node) desktopGroups.current.set(group, node); else desktopGroups.current.delete(group); }} key={`group-${group}`}><th className="sticky-sector matrix-group-label" scope="rowgroup">{group}</th>{!mobile && <td className="sticky-current matrix-current-group" aria-hidden="true" />}<td colSpan={dates.length} aria-hidden="true" /></tr>,
-          ...items.map(row => <tr key={row.sector_key}><th className="sticky-sector" scope="row">{row.market_available === false ? <span>{row.sector_name}</span> : <Link to={`/sectors/${row.sector_key}`}>{row.sector_name}</Link>}{mobile && <CurrentMarketCell sector={currentBySector.get(row.sector_key)} compact />}</th>{!mobile && <td className="sticky-current"><CurrentMarketCell sector={currentBySector.get(row.sector_key)} /></td>}{(mobile ? [...row.cells].reverse() : row.cells).map(cell => { const noLive = noLiveDates.has(cell.trading_date); return <td key={cell.trading_date} className={cell.trading_date === matrix.dates.at(-1)?.trading_date ? "latest-column" : ""}><button type="button" className="path-cell" onClick={() => setSelected({ ...cell, sector_name: row.sector_name, sector_key: row.sector_key, market_available: row.market_available })} aria-label={cellAriaLabel(row.sector_name, cell, noLive)} title={marketOverlayTitle(cell)}><span className={`matrix-report-layer ${cell.path_status ? `path-${cell.path_status}` : "path-no-report"}`} style={cell.path_status_color ? { backgroundColor: cell.path_status_color } : undefined}><b>{reportStatus(cell, noLive)}</b></span><ExactDateMarketLayer cell={{ ...cell, sector_name: row.sector_name, sector_key: row.sector_key, market_available: row.market_available }} /></button></td>; })}</tr>),
+          ...items.map(row => <tr key={row.sector_key}><th className="sticky-sector" scope="row">{row.market_available === false ? <span>{row.sector_name}</span> : <Link to={`/sectors/${row.sector_key}`}>{row.sector_name}</Link>}{mobile && <CurrentMarketCell sector={currentBySector.get(row.sector_key)} compact />}</th>{!mobile && <td className="sticky-current"><CurrentMarketCell sector={currentBySector.get(row.sector_key)} /></td>}{row.cells.map(cell => { const noLive = noLiveDates.has(cell.trading_date); return <td key={cell.trading_date} className={cell.trading_date === matrix.dates.at(-1)?.trading_date ? "latest-column" : ""}><button type="button" className="path-cell" onClick={() => setSelected({ ...cell, sector_name: row.sector_name, sector_key: row.sector_key, market_available: row.market_available })} aria-label={cellAriaLabel(row.sector_name, cell, noLive)} title={marketOverlayTitle(cell)}><span className={`matrix-report-layer ${cell.path_status ? `path-${cell.path_status}` : "path-no-report"}`} style={cell.path_status_color ? { backgroundColor: cell.path_status_color } : undefined}><b>{reportStatus(cell, noLive)}</b></span><ExactDateMarketLayer cell={{ ...cell, sector_name: row.sector_name, sector_key: row.sector_key, market_available: row.market_available }} /></button></td>; })}</tr>),
         ])}</tbody>
       </table>
     </div>

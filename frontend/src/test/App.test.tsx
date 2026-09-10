@@ -285,7 +285,30 @@ describe("Viewer research pages", () => {
   it("reserves non-overlapping recent-ten and latest-view columns and scrolls narrower desktops", async () => { const denseStatuses = [{ status: "hold" as const, label: "持有" }, { status: "turn_hold" as const, label: "转持" }, { status: "strong_watch" as const, label: "强观" }]; const dense = sectors.map((item, index) => index ? item : { ...item, recent_path: Array.from({ length: 10 }, (_, pathIndex) => { const sample = denseStatuses[pathIndex % denseStatuses.length]; return { ...pathEntry, id: `dense-${pathIndex}`, report_id: `report-${pathIndex}`, report_date: `2026-08-${String(pathIndex + 1).padStart(2, "0")}`, path_status: sample.status, path_status_label: sample.label }; }) }); mockApi({ sectors: dense }); renderAt("/sectors"); const table = await screen.findByRole("table", { name: /板块研究档案/ }); expect(table.querySelector(".mini-path-strip")?.children).toHaveLength(10); expect(table.querySelector(".board-latest-view .path-chip")).not.toBeNull(); const css = readFileSync(resolve(process.cwd(), "src/styles/global.css"), "utf8"); expect(css).toMatch(/\.sector-table-wrap\s*\{[^}]*overflow-x:\s*auto/); expect(css).toMatch(/\.sector-table\s*\{[^}]*width:\s*100%[^}]*min-width:\s*102\.5rem[^}]*table-layout:\s*fixed/); expect(css).toMatch(/\.sector-table col\.sector-path-column\s*\{\s*width:\s*20rem/); expect(css).toMatch(/\.sector-table col\.sector-view-column\s*\{\s*width:\s*19rem/); expect(css).toMatch(/\.mini-path-strip\s*\{[^}]*display:\s*flex[^}]*flex-wrap:\s*nowrap[^}]*width:\s*100%[^}]*min-width:\s*0/); expect(css).toMatch(/\.mini-path-strip i\s*\{[^}]*flex:\s*0 0 1\.55rem/); expect(css).toMatch(/\.board-latest-view\s*\{[^}]*position:\s*static[^}]*width:\s*100%[^}]*min-width:\s*0[^}]*max-width:\s*100%[^}]*overflow:\s*hidden/); expect(css).toMatch(/\.board-latest-view \.path-chip\s*\{[^}]*position:\s*static/); const tableMinimumPixels = 102.5 * 16; expect(tableMinimumPixels).toBeGreaterThan(1440); expect(tableMinimumPixels).toBeLessThan(1680); });
   it("places the group report-date axis in the same recent-ten-periods column as row chips", async () => { renderAt("/sectors"); expect(await screen.findByText("08/05")).toBeInTheDocument(); const strip = document.querySelector(".mini-path-strip i"); expect(strip).toHaveTextContent("持"); expect(strip).not.toHaveTextContent("08/05"); const axisCell = document.querySelector(".sector-group-row .group-recent10-axis"); expect(axisCell).toHaveTextContent("08/05"); expect(axisCell?.parentElement?.querySelector("th")).not.toHaveTextContent("08/05"); });
   it("shows one stable primary in a two-line market layer without a synthetic return", async () => { const pathMatrix: PathMatrix = { ...matrix, rows: [{ ...matrix.rows[0], cells: [{ ...matrix.rows[0].cells[0], market_overlay: { kind: "primary", label: "通信ETF +1.10%", market_date: "2026-08-10", pct_change: 1.1, primary: { name: "通信ETF", security_code: "515880.SH", role: "etf", close: 1.25, pct_change: 1.1, trading_date: "2026-08-10" }, instruments: [{ name: "中际旭创", security_code: "300308.SZ", role: "leader", close: 100, pct_change: -0.5, trading_date: "2026-08-10" }] } }] }] }; mockApi({ pathMatrix }); const user = userEvent.setup(); renderAt("/reports/report-1"); await screen.findByRole("button", { name: /半导体.*通信ETF/ }); const marketLayer = document.querySelector<HTMLElement>(".matrix-desktop .matrix-market-layer"); expect(marketLayer?.querySelector("small")).toHaveClass("matrix-market-name"); expect(marketLayer).toHaveTextContent("通信ETF"); expect(marketLayer?.querySelector("em")).toHaveClass("matrix-market-pct", "a-share-positive"); const css = readFileSync(resolve(process.cwd(), "src/styles/global.css"), "utf8"); expect(css).toMatch(/\.matrix-market-layer\s*\{[^}]*display:\s*grid[^}]*grid-template-rows:\s*auto auto/); expect(css).toMatch(/\.matrix-market-name\s*\{[^}]*font-size:\s*inherit[^}]*font-weight:\s*600[^}]*text-overflow:\s*ellipsis/); expect(css).toMatch(/\.matrix-market-pct\s*\{[^}]*font-size:\s*\.84rem[^}]*font-weight:\s*700/); expect(screen.queryByText(/代理 \d|官方 \+/)).not.toBeInTheDocument(); await user.click(screen.getByRole("button", { name: /半导体.*通信ETF/ })); expect(await screen.findByText("主观察标的")).toBeInTheDocument(); expect(screen.getByText("通信ETF · 515880.SH")).toBeInTheDocument(); expect(screen.getByText("以下为相关证券逐项表现，不代表板块指数或综合收益。")).toBeInTheDocument(); expect(screen.queryByText(/平均收益|加权收益|合成指数/)).not.toBeInTheDocument(); });
-  it("combines mobile sector and current market without duplicate requests and reverses only presentation dates", async () => {
+  it.each([true, false])("anchors the latest edge once on mobile and preserves desktop behavior (mobile=%s)", async mobile => {
+    vi.stubGlobal("matchMedia", () => ({ matches: mobile, addEventListener: vi.fn(), removeEventListener: vi.fn() }));
+    const width = vi.spyOn(HTMLElement.prototype, "scrollWidth", "get").mockReturnValue(1200);
+    try {
+      const { IslandPathMatrix } = await import("../components/island/IslandPathMatrix");
+      const onPeriodChange = vi.fn();
+      const view = (data: PathMatrix, quotes: MarketCoreCurrentQuotes | null = null) => <MemoryRouter><IslandPathMatrix matrix={data} currentMarket={quotes} period="20" onPeriodChange={onPeriodChange} /></MemoryRouter>;
+      const { container, rerender } = render(view({ ...matrix, dates: [], rows: [] }));
+      const viewport = container.querySelector<HTMLDivElement>(".matrix-viewport")!;
+      if (mobile) expect(viewport.scrollLeft).toBe(0);
+      rerender(view(matrix));
+      expect(viewport.scrollLeft).toBe(1200);
+      viewport.scrollLeft = 250;
+      rerender(view(matrix));
+      expect(viewport.scrollLeft).toBe(250);
+      rerender(view(matrix, defaultCurrentMarket));
+      expect(viewport.scrollLeft).toBe(250);
+      rerender(view({ ...matrix, dates: [...matrix.dates] }, defaultCurrentMarket));
+      expect(viewport.scrollLeft).toBe(mobile ? 250 : 1200);
+      expect(container.querySelectorAll(".path-matrix")).toHaveLength(1);
+      expect(container.querySelectorAll(".matrix-current-cell")).toHaveLength(1);
+    } finally { width.mockRestore(); }
+  });
+  it("combines mobile sector and current market without duplicate requests and keeps chronological dates", async () => {
     vi.stubGlobal("matchMedia", () => ({ matches: true, addEventListener: vi.fn(), removeEventListener: vi.fn() }));
     const newer = { trading_date: "2026-07-20", weekday: "周一" };
     mockApi({ pathMatrix: { ...matrix, dates: [...matrix.dates, newer], rows: matrix.rows.map(row => ({ ...row, cells: [...row.cells, { ...row.cells[0], trading_date: newer.trading_date }] })) } });
@@ -298,8 +321,8 @@ describe("Viewer research pages", () => {
     expect(current.closest("th")?.querySelector("em")).toHaveTextContent("+9.09%");
     expect(table.querySelector(".sticky-current")).toBeNull();
     expect(table.querySelector(".matrix-current-security-code")).toBeNull();
-    expect(Array.from(table.querySelectorAll(".matrix-date-header"), node => node.textContent)).toEqual(["7/20", "7/17"]);
-    expect(table.querySelector("tbody tr:not(.matrix-group) td button")).toHaveAttribute("aria-label", expect.stringContaining("2026-07-20"));
+    expect(Array.from(table.querySelectorAll(".matrix-date-header"), node => node.textContent)).toEqual(["7/17", "7/20"]);
+    expect(table.querySelector("tbody tr:not(.matrix-group) td button")).toHaveAttribute("aria-label", expect.stringContaining("2026-07-17"));
     expect(document.querySelectorAll(".path-matrix")).toHaveLength(1);
     const urls = vi.mocked(fetch).mock.calls.map(call => String(call[0]));
     expect(urls.filter(url => url.includes("/path-matrix"))).toHaveLength(1);
