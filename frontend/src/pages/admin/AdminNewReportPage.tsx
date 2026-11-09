@@ -138,7 +138,7 @@ export function AdminNewReportPage() {
         <ol>{STEPS.map((label, index) => <li key={label} className={index <= step ? "complete" : ""} aria-current={index === step ? "step" : undefined}>{label}</li>)}</ol>
       </div>}
       <p role={message.includes("失败") || message.includes("有效") || message.includes("未通过") ? "alert" : "status"}>{message}</p>
-      <p className="muted">两份文件只在本机处理；MD 数量、schema、板块覆盖与 PDF 日期由服务端重新严格验证，不信任文件内 checks 声明。</p>
+      <p className="muted">攻防线数值与历史继承由服务端统一校验。两份文件只在本机处理；MD 数量、schema、板块覆盖与 PDF 日期由服务端重新严格验证，不信任文件内 checks 声明。</p>
     </IslandCard>
   </div>;
 }

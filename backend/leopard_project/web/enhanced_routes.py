@@ -195,8 +195,8 @@ def register_enhanced_routes(
         metadata = json.loads(report.interpretation_meta_json or "{}")
         structured_defense = metadata.get("defense_lines") or {}
         defense = live_market_anchor.defense_payload(
-            market_path=report.market_path,
-            core_view=report.core_view,
+            market_path="" if metadata.get("source_kind") == "website_md" else report.market_path,
+            core_view="" if metadata.get("source_kind") == "website_md" else report.core_view,
             parsed_primary=structured_defense.get("primary_defense_line"),
         )
         if metadata.get("source_kind") == "website_md":

@@ -281,3 +281,48 @@ def test_manual_publish_stages_the_same_incremental_md_history(tmp_path: Path) -
             SectorPathHistoryEntry.source_report_id == report_id,
             SectorPathHistoryEntry.source_kind == "website_md_incremental",
         )) == 71
+
+@pytest.mark.parametrize("value", ["bad", "-1", ".inf", ".nan", "true", "0"])
+def test_invalid_defense_numbers(value):
+    text = MD.read_text().replace("previous_line: 3924.47", f"previous_line: {value}")
+    with pytest.raises(WebDomainError):
+        parse_website_md(text.encode(), "test.md")
+
+
+@pytest.mark.parametrize("primary,previous,rest,expected,status", [
+    (3660, 3660, False, 3660, "continued"),
+    (3650, 3660, False, 3650, "changed"),
+    (None, None, True, 3660, "continued"),
+    (None, None, False, 3660, "continued"),
+])
+def test_defense_inherits_published_history(tmp_path, primary, previous, rest, expected, status):
+    from dataclasses import replace
+    from leopard_project.web.website_md import WebsiteMdImportService
+    sessions = create_session_factory(f"sqlite:///{tmp_path / 'lines.sqlite3'}")
+    with sessions() as session:
+        old = Report(id="old", report_date=date(2026, 8, 31), status="published", is_current=True,
+                     title="prior", created_by="test",
+                     interpretation_meta_json=json.dumps({"defense_lines": {"primary_defense_line": 3660}}))
+        session.add(old)
+        session.commit()
+        original = old.interpretation_meta_json
+        document = parse_website_md(MD.read_bytes(), MD.name)
+        document = replace(document, defense={**document.defense, "primary_line": primary, "previous_line": previous, "source_summary": "正式攻防线由3660下调至3650"},
+                           calendar_markers=[{"date": "2026-09-01", "mark": "休"}] if rest else [])
+        resolved = WebsiteMdImportService(session, None).resolve_defense(Report(id="new"), document)
+        assert resolved.primary_line == expected
+        assert resolved.previous_line == 3660
+        assert resolved.defense["line_status"] == status
+        assert old.interpretation_meta_json == original
+
+
+def test_no_history_nullable_defense(tmp_path):
+    from dataclasses import replace
+    from leopard_project.web.website_md import WebsiteMdImportService
+    sessions = create_session_factory(f"sqlite:///{tmp_path / 'empty.sqlite3'}")
+    text = MD.read_text().replace("primary_line: 3920", "primary_line: null").replace("previous_line: 3924.47", "previous_line: null")
+    document = parse_website_md(text.encode(), "empty.md")
+    with sessions() as session:
+        resolved = WebsiteMdImportService(session, None).resolve_defense(Report(id="new"), document)
+        assert resolved.primary_line is None and resolved.previous_line is None
+        assert resolved.defense["line_status"] == "unavailable"

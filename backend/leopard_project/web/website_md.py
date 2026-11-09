@@ -1,9 +1,10 @@
 from __future__ import annotations
 
 import hashlib
+import math
 import json
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import date, datetime, timezone
 from decimal import Decimal, InvalidOperation
 from typing import Any
@@ -79,12 +80,14 @@ def _required_list(value: Any, label: str) -> list[Any]:
     return [_plain(item) for item in value]
 
 
-def _number(value: Any, label: str) -> float:
+def _number(value: Any, label: str) -> float | None:
+    if value is None:
+        return None
     try:
         result = Decimal(str(value))
     except (InvalidOperation, TypeError, ValueError) as exc:
         raise WebDomainError("invalid_website_md", f"{label} 必须是有效数值", 422) from exc
-    if not result.is_finite() or result <= 0:
+    if not result.is_finite() or result <= 0 or not math.isfinite(float(result)):
         raise WebDomainError("invalid_website_md", f"{label} 必须是正数", 422)
     return float(result)
 
@@ -139,11 +142,11 @@ class WebsiteMdDocument:
         return date.fromisoformat(str(self.metadata["report_date"]))
 
     @property
-    def primary_line(self) -> float:
+    def primary_line(self) -> float | None:
         return _number(self.defense.get("primary_line"), "primary_line")
 
     @property
-    def previous_line(self) -> float:
+    def previous_line(self) -> float | None:
         return _number(self.defense.get("previous_line"), "previous_line")
 
     def validation_payload(self) -> dict[str, Any]:
@@ -230,6 +233,9 @@ def parse_website_md(payload: bytes, filename: str) -> WebsiteMdDocument:
     _number(defense["primary_line"], "primary_line")
     _number(defense["previous_line"], "previous_line")
     for key in defense_keys[2:]:
+        if defense[key] is None and defense["primary_line"] is None:
+            defense[key] = ""
+            continue
         if not isinstance(defense[key], str) or not str(defense[key]).strip():
             raise WebDomainError("invalid_website_md", f"攻防线字段缺失：{key}", 422)
 
@@ -333,9 +339,44 @@ class WebsiteMdImportService:
         self.report_service = report_service
         self.repo = ReportRepository(session)
 
+    def resolve_defense(self, report: Report, document: WebsiteMdDocument) -> WebsiteMdDocument:
+        previous = None
+        source_id = None
+        for prior in self.session.scalars(select(Report).where(
+            Report.status == "published", Report.is_current.is_(True),
+            Report.report_date < document.report_date, Report.id != report.id,
+        ).order_by(Report.report_date.desc(), Report.revision_number.desc())):
+            value = (json.loads(prior.interpretation_meta_json or "{}").get("defense_lines") or {}).get("primary_defense_line")
+            if value is not None:
+                previous = _number(value, "历史正式攻防线")
+                source_id = prior.id
+                break
+        if previous is not None and document.previous_line not in (None, previous):
+            raise WebDomainError("defense_previous_conflict", "previous_line 与历史正式攻防线不一致", 422)
+        if previous is None:
+            previous = document.previous_line
+        primary = document.primary_line
+        rest = any(str(m["date"]) == document.report_date.isoformat() for m in document.calendar_markers)
+        if rest and primary not in (None, previous):
+            raise WebDomainError("invalid_website_md", "休日期不能产生新攻防线", 422)
+        if primary is None or rest:
+            primary = previous
+        changed = previous is not None and primary != previous
+        if changed and not re.search(
+            r"(?:上调|下调|上移|下移|调整|改)(?:为|至|到)\s*" + re.escape(format(primary, "g")) + r"(?![\d.])",
+            document.defense["source_summary"],
+        ):
+            raise WebDomainError("defense_change_evidence_required", "新攻防线需要明确正式调整依据", 422)
+        status = "changed" if changed else "continued" if previous is not None else "established" if primary is not None else "unavailable"
+        return replace(document, defense={
+            **document.defense, "primary_line": primary, "previous_line": previous,
+            "line_status": status, "previous_source_report_id": source_id,
+        })
+
     def apply(self, report: Report, document: WebsiteMdDocument, filename: str, actor: str) -> Report:
         if report.status == "published":
             raise WebDomainError("published_report_read_only", "已发布报告不能覆盖导入", 409)
+        document = self.resolve_defense(report, document)
         self.report_service.transition(report, ReportStatus.PARSING)
         self.session.flush()
 
@@ -387,6 +428,8 @@ class WebsiteMdImportService:
             "defense_lines": {
                 "primary_defense_line": document.primary_line,
                 "secondary_defense_line": document.previous_line,
+                "line_status": document.defense["line_status"],
+                "previous_source_report_id": document.defense["previous_source_report_id"],
                 "stand_above_condition": document.defense["stand_above_condition"],
                 "break_below_condition": document.defense["break_below_condition"],
                 "validation_condition": document.defense["validation_condition"],
