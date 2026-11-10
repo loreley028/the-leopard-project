@@ -92,6 +92,37 @@ def _number(value: Any, label: str) -> float | None:
     return float(result)
 
 
+
+def _has_formal_defense_change(summary: str, previous: float, primary: float) -> bool:
+    """Recognize affirmative old/new declarations, never isolated market levels."""
+    number = r"(?<![\d.])(?P<{name}>\d+(?:\.\d+)?)(?![\d.])"
+    old = number.format(name="old")
+    new = number.format(name="new")
+    label = r"(?:核心)?(?:攻防线|攻防点|正式有效线|旧线|新线|原线)"
+    old_first = re.compile(
+        label + r"\s*(?:由|从)\s*" + old + r"\s*点?\s*"
+        r"(?:上调|下调|上移|下移|调整|改)(?:为|至|到)\s*" + new + r"\s*点?"
+    )
+    new_first = re.compile(
+        r"明确(?:公布|宣布|新报)\s*(?:" + label + r")?\s*(?:为|是)?\s*" + new
+        + r"\s*点?\s*[，,]?\s*(?:替代|取代)\s*"
+        r"(?:\d{1,2}月\d{1,2}日)?\s*(?:继续)?(?:沿用的)?"
+        r"(?:原有|原|此前|上一条)?\s*(?:" + label + r")?\s*" + old + r"\s*点?"
+    )
+    for sentence in re.split(r"[。；;！!？?\n]", summary):
+        # Fail closed on proposals, negation, and market-level descriptions.
+        if re.search(
+            r"未|没有|不|否认|如果|若|假设|可能|考虑|拟|计划|建议|将|预计|支撑|压力|目标|高点|低点|最高|最低",
+            sentence,
+        ):
+            continue
+        for pattern in (old_first, new_first):
+            for match in pattern.finditer(sentence):
+                if (Decimal(match["old"]) == Decimal(str(previous))
+                        and Decimal(match["new"]) == Decimal(str(primary))):
+                    return True
+    return False
+
 def _integer(value: Any, label: str) -> int:
     try:
         result = int(value)
@@ -362,9 +393,8 @@ class WebsiteMdImportService:
         if primary is None or rest:
             primary = previous
         changed = previous is not None and primary != previous
-        if changed and not re.search(
-            r"(?:上调|下调|上移|下移|调整|改)(?:为|至|到)\s*" + re.escape(format(primary, "g")) + r"(?![\d.])",
-            document.defense["source_summary"],
+        if changed and not _has_formal_defense_change(
+            document.defense["source_summary"], previous, primary,
         ):
             raise WebDomainError("defense_change_evidence_required", "新攻防线需要明确正式调整依据", 422)
         status = "changed" if changed else "continued" if previous is not None else "established" if primary is not None else "unavailable"

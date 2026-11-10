@@ -419,3 +419,60 @@ def test_concurrent_zero_update_upload_and_publish_retry(tmp_path, monkeypatch):
         rows = list(session.scalars(select(SectorPathHistoryEntry)))
         assert len(rows) == 71
         assert {row.path_status for row in rows} == {"not_mentioned"}
+
+
+@pytest.mark.parametrize("summary,accepted", [
+    ("11月9日主播在直播中明确新报3659点，替代11月8日继续沿用的3660点", True),
+    ("正式攻防线由3660点调整为3659点", True),
+    ("核心攻防线从3660下调至3659", True),
+    ("主播明确公布新线3659点替代旧线3660点", True),
+    ("主播明确新报3659点，取代原线3660点", True),
+    ("明确宣布攻防线为3659.00点，替代原攻防线3660.0点", True),
+    ("正式攻防线由3661点调整为3659点", False),
+    ("正式攻防线由3660点调整为3658点", False),
+    ("明确新报3659点，替代原3661点", False),
+    ("明确新报3658点，替代原3660点", False),
+    ("正式攻防线由13660点调整为3659点", False),
+    ("正式攻防线由3660点调整为36590点", False),
+    ("3659点是普通支撑位，原攻防线3660点", False),
+    ("目标位由3660调整为3659", False),
+    ("盘中最低3659点，最高3660点", False),
+    ("明确新报目标位3659点，替代原3660点", False),
+    ("明确新报3659点，替代原3660点作为盘中支撑", False),
+    ("未明确新报3659点，替代原3660点", False),
+    ("若正式攻防线由3660调整为3659，则等待确认", False),
+    ("计划明确公布新线3659点替代旧线3660点", False),
+    ("明确新报3659点", False),
+    ("正式攻防线调整为3659点", False),
+])
+def test_formal_defense_change_evidence(tmp_path, summary, accepted):
+    from dataclasses import replace
+    from leopard_project.web.website_md import WebsiteMdImportService
+    sessions = create_session_factory(f"sqlite:///{tmp_path / 'evidence.sqlite3'}")
+    with sessions() as session:
+        prior = Report(id="prior", title="prior", created_by="test", status="published",
+                       is_current=True, report_date=date(2026, 11, 8),
+                       interpretation_meta_json=json.dumps({"defense_lines": {"primary_defense_line": 3660}}))
+        session.add(prior)
+        session.commit()
+        original = prior.interpretation_meta_json
+        document = parse_website_md(MD.read_bytes(), MD.name)
+        document = replace(document, metadata={**document.metadata, "report_date": "2026-11-09"},
+                           defense={**document.defense, "primary_line": 3659, "previous_line": 3660,
+                                    "source_summary": summary})
+        service = WebsiteMdImportService(session, None)
+        if accepted:
+            resolved = service.resolve_defense(Report(id="new"), document)
+            assert (resolved.previous_line, resolved.primary_line) == (3660, 3659)
+            assert resolved.defense["line_status"] == "changed"
+            assert resolved.defense["source_summary"] == summary
+            # Text cannot override the last published line.
+            wrong = replace(document, defense={**document.defense, "previous_line": 3661})
+            with pytest.raises(WebDomainError) as exc:
+                service.resolve_defense(Report(id="new"), wrong)
+            assert exc.value.code == "defense_previous_conflict"
+        else:
+            with pytest.raises(WebDomainError) as exc:
+                service.resolve_defense(Report(id="new"), document)
+            assert exc.value.code == "defense_change_evidence_required"
+        assert prior.interpretation_meta_json == original
