@@ -11,7 +11,7 @@ from uuid import uuid4
 from zoneinfo import ZoneInfo
 from fastapi import Cookie, Depends, FastAPI, File, Form, Query, Request, Response, UploadFile
 from fastapi.responses import FileResponse, JSONResponse, Response
-from sqlalchemy import func, select
+from sqlalchemy import func, select, text
 from sqlalchemy.orm import Session, sessionmaker
 
 from leopard_project.config import PROJECT_ROOT
@@ -500,21 +500,22 @@ def create_app(settings: WebSettings | None = None, session_factory: sessionmake
 
     @app.post("/api/v1/admin/reports", status_code=201)
     @app.post("/api/v1/admin/reports/interpret", status_code=201)
-    async def upload_report(
+    def upload_report(
         current: Principal = Depends(admin),
         session: Session = Depends(db_session),
         file: UploadFile = File(...),
         md_file: UploadFile | None = File(default=None),
         report_date_hint: date | None = Form(default=None),
+        confirm_md_revision: bool = Form(default=False),
     ) -> dict:
-        payload = await file.read()
+        payload = file.file.read()
         repo = ReportRepository(session)
         service = ReportService(repo, settings.upload_dir)
         document = None
         md_validation = None
         if md_file is not None:
             validate_pdf(file.filename or "upload.pdf", file.content_type or "", payload, service.policy)
-            md_payload = await md_file.read()
+            md_payload = md_file.file.read()
             document = parse_website_md(md_payload, md_file.filename or "upload.md")
             pdf_text = extract_text_layer(payload)
             if not pdf_text:
@@ -528,21 +529,39 @@ def create_app(settings: WebSettings | None = None, session_factory: sessionmake
         report, duplicate = service.upload(file.filename or "upload.pdf", file.content_type or "", payload, current.username)
         interpretation_error = None
         if document is not None:
+            # Serialize SQLite writers through validation and publication. Re-read
+            # after acquiring the lock so concurrent requests see the committed result.
+            session.rollback()
+            session.execute(text("BEGIN IMMEDIATE"))
+            report = repo.by_id(report.id)
+            was_published = report.status == ReportStatus.PUBLISHED.value
             existing_metadata = json.loads(report.interpretation_meta_json or "{}")
             existing_md = existing_metadata.get("website_md") or {}
-            if duplicate and existing_md.get("sha256") != document.sha256:
+            different = existing_md.get("sha256") != document.sha256
+            if report.status in {"published", "withdrawn"} and different:
                 raise WebDomainError(
-                    "duplicate_pdf_website_md_conflict",
-                    "该 PDF 已存在，但网站 MD 身份不同；系统不会静默覆盖结构化事实",
+                    "published_pdf_md_conflict",
+                    "该 PDF 已有正式报告，新 MD 与归档版本不同。不能覆盖，请使用正式修订流程。",
                     409,
                 )
-            should_import_md = not duplicate or existing_md.get("sha256") != document.sha256
+            if existing_md.get("sha256") and different and not confirm_md_revision:
+                raise WebDomainError(
+                    "pending_md_revision_confirmation_required",
+                    "上次报告尚未发布。本次 MD 有变化，请确认修订待发布版本后重试；历史正式报告不会改变。",
+                    409,
+                )
+            should_import_md = report.status not in {"published", "withdrawn"}
             if should_import_md:
+                if existing_md.get("sha256") and different:
+                    repo.audit(current.username, "website_md_pending_revision", "report", report.id, {
+                        "previous_sha256": existing_md["sha256"],
+                        "new_sha256": document.sha256,
+                        "previous_raw_text": report.raw_text,
+                        "previous_metadata": existing_metadata,
+                    })
                 report = WebsiteMdImportService(session, service).apply(
-                    report,
-                    document,
-                    md_file.filename or "upload.md",
-                    current.username,
+                    report, document, md_file.filename or "upload.md", current.username,
+                    commit=False,
                 )
             if settings.auto_publish_uploads and report.status != ReportStatus.PUBLISHED.value:
                 try:
@@ -570,14 +589,16 @@ def create_app(settings: WebSettings | None = None, session_factory: sessionmake
                         raise
                     interpretation_error = {"code": exc.code, "message": str(exc)}
                     report = repo.by_id(report.id) or report
+            session.commit()
             enhanced = EnhancedReportService(session)
             interpretation = enhanced.interpretation(report)
             interpretation["review_workflow"] = ReviewWorkflowService(session).payload(report, interpretation["path_entry_count"])
-            return {
+            session.commit()
+            result = {
                 "report": report_payload(report, admin=True),
                 "interpretation": interpretation,
                 "duplicate": duplicate,
-                "publication": "already_published" if duplicate and report.status == ReportStatus.PUBLISHED.value else (
+                "publication": "already_published" if was_published else (
                     "published" if report.status == ReportStatus.PUBLISHED.value else "needs_review"
                 ),
                 "interpretation_error": interpretation_error,
@@ -590,6 +611,8 @@ def create_app(settings: WebSettings | None = None, session_factory: sessionmake
                     "解读完成" if report.interpretation_status != "failed" else "解读失败",
                 ],
             }
+            session.commit()
+            return result
         should_interpret = not duplicate or report.status in {
             ReportStatus.UPLOADED.value,
             ReportStatus.PARSING.value,

@@ -373,11 +373,12 @@ class WebsiteMdImportService:
             "line_status": status, "previous_source_report_id": source_id,
         })
 
-    def apply(self, report: Report, document: WebsiteMdDocument, filename: str, actor: str) -> Report:
+    def apply(self, report: Report, document: WebsiteMdDocument, filename: str, actor: str, *, commit: bool = True) -> Report:
         if report.status == "published":
             raise WebDomainError("published_report_read_only", "已发布报告不能覆盖导入", 409)
         document = self.resolve_defense(report, document)
-        self.report_service.transition(report, ReportStatus.PARSING)
+        if report.status != ReportStatus.PARSING.value:
+            self.report_service.transition(report, ReportStatus.PARSING)
         self.session.flush()
 
         registry = load_report_registry()
@@ -529,7 +530,10 @@ class WebsiteMdImportService:
             "active_object_count": len(active_keys),
             "pdf_history_matrix_parsed": False,
         })
-        self.session.commit()
+        if commit:
+            self.session.commit()
+        else:
+            self.session.flush()
         return self.repo.by_id(report.id) or report
 
     def stage_incremental_history(self, report: Report, document: WebsiteMdDocument, actor: str) -> dict[str, int]:

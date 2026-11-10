@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from sqlalchemy.exc import IntegrityError
+
 import hashlib
 import json
 import re
@@ -2345,7 +2347,16 @@ class ReportService:
             content_type=content_type,
             size_bytes=len(payload),
         )
-        created = self.repo.create(report, report_file)
+        try:
+            created = self.repo.create(report, report_file)
+        except Exception as exc:
+            self.repo.session.rollback()
+            (self.upload_dir / storage_name).unlink(missing_ok=True)
+            if isinstance(exc, IntegrityError):
+                existing = self.repo.by_sha256(digest)
+                if existing:
+                    return existing, True
+            raise
         self.repo.audit(actor, "report_uploaded", "report", created.id, {"sha256": digest, "duplicate": False})
         self.repo.commit()
         return created, False

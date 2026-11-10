@@ -326,3 +326,96 @@ def test_no_history_nullable_defense(tmp_path):
         resolved = WebsiteMdImportService(session, None).resolve_defense(Report(id="new"), document)
         assert resolved.primary_line is None and resolved.previous_line is None
         assert resolved.defense["line_status"] == "unavailable"
+
+@pytest.mark.parametrize("initial_failure", [False, True])
+def test_retry_revision_and_published_conflict(tmp_path, monkeypatch, initial_failure):
+    from leopard_project.web.website_md import WebsiteMdImportService
+    sessions = create_session_factory(f"sqlite:///{tmp_path / 'retry.sqlite3'}")
+    settings = WebSettings(
+        database_url=f"sqlite:///{tmp_path / 'retry.sqlite3'}", upload_dir=tmp_path / "uploads",
+        session_secret="retry-test-session-32-characters-long", admin_username="admin",
+        admin_password="admin-test-password", viewer_username="viewer",
+        viewer_password="viewer-test-password", auto_publish_uploads=False,
+    )
+    original_apply = WebsiteMdImportService.apply
+    def files(md=None):
+        return {"file": (PDF.name, PDF.read_bytes(), "application/pdf"),
+                "md_file": (MD.name, md or MD.read_bytes(), "text/markdown")}
+    with TestClient(create_app(settings, sessions)) as client:
+        login(client)
+        if initial_failure:
+            def fail(*args, **kwargs):
+                raise WebDomainError("injected_failure", "injected failure", 422)
+            monkeypatch.setattr(WebsiteMdImportService, "apply", fail)
+            assert client.post("/api/v1/admin/reports/interpret", files=files()).status_code == 422
+            with sessions() as session:
+                pending = session.scalar(select(Report))
+                assert pending.status == "uploaded"
+                assert not json.loads(pending.interpretation_meta_json or "{}").get("website_md")
+            monkeypatch.setattr(WebsiteMdImportService, "apply", original_apply)
+        first = client.post("/api/v1/admin/reports/interpret", files=files())
+        assert first.status_code == 201, first.text
+        report_id = first.json()["report"]["id"]
+        changed = MD.read_bytes() + b"\n<!-- formatting revision -->\n"
+        refused = client.post("/api/v1/admin/reports/interpret", files=files(changed))
+        assert refused.status_code == 409
+        assert refused.json()["error"]["code"] == "pending_md_revision_confirmation_required"
+        revised = client.post("/api/v1/admin/reports/interpret", files=files(changed),
+                              data={"confirm_md_revision": "true"})
+        assert revised.status_code == 201, revised.text
+        assert revised.json()["report"]["id"] == report_id
+        assert client.post(f"/api/v1/admin/reports/{report_id}/publish").status_code == 200
+        again = client.post("/api/v1/admin/reports/interpret", files=files(changed))
+        assert again.status_code == 201, again.text
+        assert again.json()["publication"] == "already_published"
+        assert client.post("/api/v1/admin/reports/interpret", files=files(),
+                           data={"confirm_md_revision": "true"}).status_code == 409
+    with sessions() as session:
+        assert session.scalar(select(func.count()).select_from(Report)) == 1
+        assert session.scalar(select(func.count()).select_from(SectorPathHistoryEntry)) == 71
+
+
+def test_concurrent_zero_update_upload_and_publish_retry(tmp_path, monkeypatch):
+    import re
+    import yaml
+    from concurrent.futures import ThreadPoolExecutor
+    from leopard_project.web.website_md import WebsiteMdImportService
+    text = MD.read_text()
+    document = parse_website_md(text.encode(), MD.name)
+    names = [item["sector"] for item in document.sector_updates] + document.unmentioned_sectors
+    text = re.sub(r"sector_updates:\n.*?(?=\n```)", "sector_updates: []", text, flags=re.S)
+    text = re.sub(r"unmentioned_sectors:\n.*?(?=\n```)",
+                  yaml.safe_dump({"unmentioned_sectors": names}, allow_unicode=True).strip(), text, flags=re.S)
+    assert len(parse_website_md(text.encode(), "zero.md").sector_updates) == 0
+    sessions = create_session_factory(f"sqlite:///{tmp_path / 'concurrent.sqlite3'}")
+    settings = WebSettings(
+        database_url=f"sqlite:///{tmp_path / 'concurrent.sqlite3'}", upload_dir=tmp_path / "uploads",
+        session_secret="test-only-concurrent-session-32-characters", admin_username="admin",
+        admin_password="admin-test-password", viewer_username="viewer",
+        viewer_password="viewer-test-password", auto_publish_uploads=True,
+    )
+    with TestClient(create_app(settings, sessions)) as client:
+        login(client)
+        def upload():
+            return client.post("/api/v1/admin/reports/interpret", files={
+                "file": (PDF.name, PDF.read_bytes(), "application/pdf"),
+                "md_file": ("zero.md", text.encode(), "text/markdown")})
+        original = WebsiteMdImportService.stage_incremental_history
+        def fail_after_history(self, *args, **kwargs):
+            original(self, *args, **kwargs)
+            raise WebDomainError("injected_history_failure", "retry", 409)
+        monkeypatch.setattr(WebsiteMdImportService, "stage_incremental_history", fail_after_history)
+        failed = upload()
+        assert failed.json()["interpretation_error"]["code"] == "injected_history_failure"
+        with sessions() as session:
+            assert session.scalar(select(func.count()).select_from(SectorPathHistoryEntry)) == 0
+        monkeypatch.setattr(WebsiteMdImportService, "stage_incremental_history", original)
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            results = list(pool.map(lambda _: upload(), range(2)))
+        assert all(result.status_code == 201 for result in results), [r.text for r in results]
+        assert {r.json()["publication"] for r in results} == {"published", "already_published"}
+    with sessions() as session:
+        assert session.scalar(select(func.count()).select_from(Report)) == 1
+        rows = list(session.scalars(select(SectorPathHistoryEntry)))
+        assert len(rows) == 71
+        assert {row.path_status for row in rows} == {"not_mentioned"}

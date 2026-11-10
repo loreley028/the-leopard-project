@@ -80,7 +80,7 @@ export function AdminNewReportPage() {
     catch { setMdPreview(undefined); setMessage("无法读取 MD metadata"); }
   };
 
-  const upload = async () => {
+  const upload = async (confirmRevision = false) => {
     if (!pdfFile || !mdFile || !mdPreview) {
       setMessage("请选择正式 PDF 和网站 MD");
       return;
@@ -93,7 +93,7 @@ export function AdminNewReportPage() {
     setStep(0);
     const timers = [450, 900, 1350].map((delay, index) => window.setTimeout(() => setStep(index + 1), delay));
     try {
-      const result = await api.interpret(pdfFile, selectedReportDate, mdFile);
+      const result = await api.interpret(pdfFile, selectedReportDate, mdFile, confirmRevision);
       timers.forEach(window.clearTimeout);
       setStep(4);
       if (result.publication === "published" || result.publication === "already_published") {
@@ -106,6 +106,11 @@ export function AdminNewReportPage() {
     } catch (error) {
       timers.forEach(window.clearTimeout);
       setStep(-1);
+      if (error instanceof ApiError && error.code === "pending_md_revision_confirmation_required"
+          && window.confirm(error.message)) {
+        await upload(true);
+        return;
+      }
       setMessage(error instanceof ApiError ? error.message : "上传或导入失败，原始文件不会被删除");
     }
   };
